@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Typography, Button } from "antd";
 import { FileTextOutlined, CalculatorOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { useIsMobile } from "../lib/useIsMobile";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -25,14 +26,15 @@ const SYSTEMS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "48px 24px" }}>
-      <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <Title level={2} style={{ marginBottom: 8, fontWeight: 700 }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "24px 16px" : "48px 24px" }}>
+      <div style={{ textAlign: "center", marginBottom: isMobile ? 32 : 48 }}>
+        <Title level={isMobile ? 3 : 2} style={{ marginBottom: 8, fontWeight: 700 }}>
           特澳科技业务工具平台
         </Title>
-        <Text type="secondary" style={{ fontSize: 15 }}>
+        <Text type="secondary" style={{ fontSize: isMobile ? 13 : 15 }}>
           东莞市特澳电子科技有限公司 · 内部业务系统
         </Text>
       </div>

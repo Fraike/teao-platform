@@ -2,12 +2,14 @@ import React from "react";
 import { Card, Form, Input, DatePicker, Select } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
 import { useQuotationStore } from "../lib/store";
+import { useIsMobile } from "../lib/useIsMobile";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 
 export default function QuoteMetaCard() {
   const meta = useQuotationStore((s) => s.quotation.quoteMeta);
   const setMeta = useQuotationStore((s) => s.setQuoteMeta);
+  const isMobile = useIsMobile();
 
   return (
     <Card
@@ -18,10 +20,10 @@ export default function QuoteMetaCard() {
         </span>
       }
       size="small"
-      styles={{ body: { padding: "12px 16px" } }}
+      styles={{ body: { padding: isMobile ? "10px 12px" : "12px 16px" } }}
     >
       <Form layout="vertical" size="small">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0 16px" }}>
           <Form.Item label="报价单号" style={{ marginBottom: 8 }}>
             <Input
               value={meta.no}

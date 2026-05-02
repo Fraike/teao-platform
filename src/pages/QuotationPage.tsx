@@ -15,8 +15,14 @@ import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
 import { useQuotationStore } from "../lib/store";
 import { exportPDF } from "../lib/pdf";
+import { useIsMobile } from "../lib/useIsMobile";
 
-export default function QuotationPage() {
+interface Props {
+  headerHeight: number;
+}
+
+export default function QuotationPage({ headerHeight }: Props) {
+  const isMobile = useIsMobile();
   const previewRef = useRef<HTMLDivElement>(null);
   const quotation = useQuotationStore((s) => s.quotation);
   const resetToSample = useQuotationStore((s) => s.resetToSample);
@@ -72,7 +78,7 @@ export default function QuotationPage() {
   };
 
   return (
-    <div style={{ height: "calc(100vh - 56px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: `calc(100vh - ${headerHeight}px)`, display: "flex", flexDirection: "column" }}>
       {contextHolder}
       <input
         ref={fileRef}
@@ -87,7 +93,7 @@ export default function QuotationPage() {
         style={{
           background: "#fff",
           borderBottom: "1px solid #f0f0f0",
-          padding: "8px 24px",
+          padding: isMobile ? "8px 12px" : "8px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -96,42 +102,43 @@ export default function QuotationPage() {
         <span style={{ fontSize: 13, fontWeight: 500, color: "#1e293b" }}>
           报价单编辑
         </span>
-        <Space size="small">
+        <Space size={isMobile ? 4 : "small"}>
           <Button size="small" icon={<FileAddOutlined />} onClick={() => {
             if (window.confirm("确定新建报价单？")) resetToSample();
           }}>
-            新建
+            {!isMobile && "新建"}
           </Button>
           <Button size="small" icon={<ImportOutlined />} onClick={handleImport}>
-            导入
+            {!isMobile && "导入"}
           </Button>
           <Button size="small" icon={<ExportOutlined />} onClick={handleExport}>
-            导出
+            {!isMobile && "导出"}
           </Button>
           <Button size="small" icon={<SaveOutlined />} onClick={handleSave}>
-            保存草稿
+            {!isMobile && "保存草稿"}
           </Button>
           <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
-            导出 PDF
+            {!isMobile && "导出 PDF"}
           </Button>
         </Space>
       </div>
 
-      {/* 主体：分屏 */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* 主体 */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", flexDirection: isMobile ? "column" : "row" }}>
         {/* 左侧录入区 */}
         <div
           style={{
-            width: "40%",
-            minWidth: 420,
-            maxWidth: 560,
+            width: isMobile ? "100%" : "40%",
+            minWidth: isMobile ? 0 : 420,
+            maxWidth: isMobile ? undefined : 560,
             overflowY: "auto",
-            padding: "16px 20px",
+            padding: isMobile ? "12px" : "16px 20px",
             background: "#fafafa",
-            borderRight: "1px solid #f0f0f0",
+            borderRight: isMobile ? "none" : "1px solid #f0f0f0",
+            borderBottom: isMobile ? "1px solid #f0f0f0" : "none",
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            gap: isMobile ? 10 : 14,
           }}
         >
           <CustomerCard />
@@ -142,27 +149,29 @@ export default function QuotationPage() {
           <div style={{ height: 16 }} />
         </div>
 
-        {/* 右侧预览区 */}
-        <div
-          style={{
-            flex: 1,
-            overflow: "auto",
-            background: "#e2e2e2",
-            display: "flex",
-            justifyContent: "center",
-            padding: "28px 20px",
-          }}
-        >
+        {/* 右侧预览区（移动端隐藏） */}
+        {!isMobile && (
           <div
             style={{
-              boxShadow: "0 4px 32px rgba(0,0,0,0.18)",
-              borderRadius: 2,
-              height: "fit-content",
+              flex: 1,
+              overflow: "auto",
+              background: "#e2e2e2",
+              display: "flex",
+              justifyContent: "center",
+              padding: "28px 20px",
             }}
           >
-            <PreviewPanel ref={previewRef} />
+            <div
+              style={{
+                boxShadow: "0 4px 32px rgba(0,0,0,0.18)",
+                borderRadius: 2,
+                height: "fit-content",
+              }}
+            >
+              <PreviewPanel ref={previewRef} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

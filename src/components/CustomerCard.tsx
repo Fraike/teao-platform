@@ -2,10 +2,12 @@ import React from "react";
 import { Card, Form, Input } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 import { useQuotationStore } from "../lib/store";
+import { useIsMobile } from "../lib/useIsMobile";
 
 export default function CustomerCard() {
   const customer = useQuotationStore((s) => s.quotation.customer);
   const setCustomer = useQuotationStore((s) => s.setCustomer);
+  const isMobile = useIsMobile();
 
   return (
     <Card
@@ -16,10 +18,10 @@ export default function CustomerCard() {
         </span>
       }
       size="small"
-      styles={{ body: { padding: "12px 16px" } }}
+      styles={{ body: { padding: isMobile ? "10px 12px" : "12px 16px" } }}
     >
       <Form layout="vertical" size="small">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0 16px" }}>
           <Form.Item label="客户名称" style={{ marginBottom: 8 }}>
             <Input
               placeholder="请输入客户名称"

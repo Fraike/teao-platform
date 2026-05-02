@@ -49,7 +49,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
       style={{
         width: A4_WIDTH,
         height: A4_HEIGHT,
-        padding: "34px 44px",
+        padding: "42px 44px 70px",
         boxSizing: "border-box",
         fontFamily: S.font,
         color: S.color,
@@ -75,28 +75,30 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
           {logoSrc ? (
             <div
               style={{
-                width: 110,
-                height: 70,
-                overflow: "hidden",
+                width: 120,
+                height: 72,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                overflow: "visible",
                 flexShrink: 0,
               }}
             >
               <img
                 src={logoSrc}
-                alt="Logo"
+                alt="TEAO Logo"
                 style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
+                  maxWidth: 120,
+                  maxHeight: 72,
+                  width: "auto",
+                  height: "auto",
                   objectFit: "contain",
-                  transform: "scale(1.2)",
+                  display: "block",
                 }}
               />
             </div>
           ) : (
-            <div style={{ width: 110, height: 70, flexShrink: 0 }} />
+            <div style={{ width: 120, height: 72, flexShrink: 0 }} />
           )}
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
@@ -139,8 +141,8 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
       {/* ========== 分隔线 ========== */}
       <div style={{ height: 1, background: S.border, marginBottom: 14 }} />
 
-      {/* ========== 内容区域（flex:1 填充剩余空间） ========== */}
-      <div style={{ flex: 1 }}>
+      {/* ========== 内容区域 ========== */}
+      <div style={{ flex: "0 0 auto" }}>
         {/* ========== 客户信息 ========== */}
         <div style={{ background: "#f8fafc", padding: "10px 16px", marginBottom: 14, border: "1px solid #f1f5f9" }}>
           <div style={{ fontSize: 9, color: S.light, textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>
@@ -271,35 +273,41 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
         )}
       </div>
 
-      {/* ========== 签章区域（固定底部） ========== */}
-      <div style={{ borderTop: `1px solid ${S.border}`, paddingTop: 16 }}>
+      {/* ========== 签章区弹性间距 ========== */}
+      <div style={{ flex: 1, minHeight: 80, maxHeight: 180 }} />
+
+      {/* ========== 签章区域 ========== */}
+      <div style={{ flex: "0 0 auto", borderTop: `1px solid ${S.border}`, paddingTop: 20 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
           <tbody>
             <tr>
-              <td style={{ width: "55%", verticalAlign: "bottom", position: "relative", paddingRight: 24 }}>
-                <div style={{ fontWeight: 600, color: S.dark, marginBottom: 4 }}>
-                  报价方：{COMPANY_INFO.name}
-                </div>
-                {COMPANY_INFO.contact && (
-                  <div style={{ color: S.muted, fontSize: 9 }}>联系人：{COMPANY_INFO.contact}</div>
-                )}
-                <div style={{ color: S.muted, fontSize: 9, marginTop: 2 }}>
-                  日期：{quoteMeta.date}
-                </div>
+              <td style={{ width: "55%", verticalAlign: "bottom", position: "relative", paddingRight: 24, minHeight: 96 }}>
                 {showStamp && stampSrc && (
                   <img
                     src={stampSrc}
                     alt="公章"
                     style={{
                       position: "absolute",
-                      left: 140,
-                      bottom: 18,
-                      width: 86,
+                      left: 135,
+                      top: -28,
+                      width: 82,
+                      height: 82,
                       opacity: 0.85,
                       pointerEvents: "none",
                     }}
                   />
                 )}
+                <div style={{ paddingTop: 42 }}>
+                  <div style={{ fontWeight: 600, color: S.dark, marginBottom: 4 }}>
+                    报价方：{COMPANY_INFO.name}
+                  </div>
+                  {COMPANY_INFO.contact && (
+                    <div style={{ color: S.muted, fontSize: 9 }}>联系人：{COMPANY_INFO.contact}</div>
+                  )}
+                  <div style={{ color: S.muted, fontSize: 9, marginTop: 2 }}>
+                    日期：{quoteMeta.date}
+                  </div>
+                </div>
               </td>
               <td style={{ width: "45%", verticalAlign: "bottom", textAlign: "right" }}>
                 <div style={{ color: S.muted, fontSize: 9, marginBottom: 4 }}>客户确认 / Customer Confirmation</div>

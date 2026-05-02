@@ -7,12 +7,14 @@ import {
   CameraOutlined,
 } from "@ant-design/icons";
 import { useQuotationStore } from "../lib/store";
+import { useIsMobile } from "../lib/useIsMobile";
 import type { Product } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 
 type ProductRow = Product & { index: number };
 
 export default function ProductCard() {
+  const isMobile = useIsMobile();
   const products = useQuotationStore((s) => s.quotation.products);
   const addProduct = useQuotationStore((s) => s.addProduct);
   const removeProduct = useQuotationStore((s) => s.removeProduct);
@@ -237,7 +239,7 @@ export default function ProductCard() {
         dataSource={dataSource}
         pagination={false}
         size="small"
-        scroll={{ x: 1100 }}
+        scroll={{ x: isMobile ? 700 : 1100 }}
         bordered
         summary={() => (
           <Table.Summary.Row style={{ fontWeight: 600, background: "#fafafa" }}>

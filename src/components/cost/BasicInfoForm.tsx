@@ -1,18 +1,20 @@
 import { Card, Input, InputNumber, DatePicker } from "antd";
 import { useQuoteStore } from "../../lib/costStore";
+import { useIsMobile } from "../../lib/useIsMobile";
 import dayjs from "dayjs";
 
 export default function BasicInfoForm() {
   const basicInfo = useQuoteStore((s) => s.quote.basicInfo);
   const update = useQuoteStore((s) => s.updateBasicInfo);
+  const isMobile = useIsMobile();
 
   return (
     <Card
       title={<span style={{ fontSize: 14, fontWeight: 600 }}>基础信息</span>}
       size="small"
-      styles={{ body: { padding: "12px 16px" } }}
+      styles={{ body: { padding: isMobile ? "10px 12px" : "12px 16px" } }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, fontSize: 13 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)", gap: 12, fontSize: 13 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ color: "#64748b" }}>产品名称</span>
           <Input

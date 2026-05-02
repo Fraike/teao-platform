@@ -9,3 +9,18 @@ body {
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* 移动端全局适配 */
+@media (max-width: 768px) {
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  .mobile-full-width {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+  .mobile-hide {
+    display: none !important;
+  }
+}

@@ -8,16 +8,23 @@ import PackagingSection from "../components/cost/PackagingSection";
 import TransportSection from "../components/cost/TransportSection";
 import MarkupSection from "../components/cost/MarkupSection";
 import CostSummaryPanel from "../components/cost/CostSummaryPanel";
+import { useIsMobile } from "../lib/useIsMobile";
 
-export default function CostCalculatorPage() {
+interface Props {
+  headerHeight: number;
+}
+
+export default function CostCalculatorPage({ headerHeight }: Props) {
+  const isMobile = useIsMobile();
+
   return (
-    <div style={{ height: "calc(100vh - 56px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: `calc(100vh - ${headerHeight}px)`, display: "flex", flexDirection: "column" }}>
       {/* 子工具栏 */}
       <div
         style={{
           background: "#fff",
           borderBottom: "1px solid #f0f0f0",
-          padding: "8px 24px",
+          padding: isMobile ? "8px 12px" : "8px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -29,20 +36,21 @@ export default function CostCalculatorPage() {
         <QuoteToolbar />
       </div>
 
-      {/* 主体：左右分屏 */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* 左侧录入区 */}
+      {/* 主体：桌面左右分屏，移动端上下堆叠 */}
+      <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        {/* 录入区 */}
         <div
           style={{
-            width: "65%",
-            minWidth: 600,
+            width: isMobile ? "100%" : "65%",
+            minWidth: isMobile ? 0 : 600,
             overflowY: "auto",
-            padding: "16px 20px",
+            padding: isMobile ? "12px" : "16px 20px",
             background: "#f5f5f5",
-            borderRight: "1px solid #f0f0f0",
+            borderRight: isMobile ? "none" : "1px solid #f0f0f0",
+            borderBottom: isMobile ? "1px solid #e0e0e0" : "none",
             display: "flex",
             flexDirection: "column",
-            gap: 14,
+            gap: isMobile ? 10 : 14,
           }}
         >
           <BasicInfoForm />
@@ -56,14 +64,14 @@ export default function CostCalculatorPage() {
           <div style={{ height: 16 }} />
         </div>
 
-        {/* 右侧汇总面板 */}
+        {/* 汇总面板 */}
         <div
           style={{
-            width: "35%",
-            minWidth: 300,
-            maxWidth: 420,
+            width: isMobile ? "100%" : "35%",
+            minWidth: isMobile ? 0 : 300,
+            maxWidth: isMobile ? undefined : 420,
             overflowY: "auto",
-            padding: "16px 20px",
+            padding: isMobile ? "12px" : "16px 20px",
             background: "#fafafa",
           }}
         >
