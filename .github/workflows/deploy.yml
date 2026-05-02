@@ -19,8 +19,8 @@ jobs:
       - run: npm run build
 
       - name: Deploy to server
-        uses: easingthemes/ssh-deploy@v5
-        with:
+        uses: easingthemes/ssh-deploy@v5.1.1
+        env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           ARGS: "-rlgoDzvc -i --delete"
           REMOTE_HOST: 8.134.18.9
