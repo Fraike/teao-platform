@@ -7,7 +7,7 @@ export const COMPANY_INFO = {
   contact: "",
 };
 
-export const LOGO_PATH = "/assets/company-logo.png";
+export const LOGO_PATH = "/assets/company-logo-clean.png";
 export const STAMP_PATH = "/assets/company-stamp.png";
 
 export const DEFAULT_TERMS = [
