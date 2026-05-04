@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Card, Form, Input, DatePicker, Select } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
-import { useQuotationStore } from "../lib/store";
+import { quoteNoForDate, useQuotationStore } from "../lib/store";
 import { useIsMobile } from "../lib/useIsMobile";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -10,6 +10,13 @@ export default function QuoteMetaCard() {
   const meta = useQuotationStore((s) => s.quotation.quoteMeta);
   const setMeta = useQuotationStore((s) => s.setQuoteMeta);
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    const syncedNo = quoteNoForDate(meta.no, meta.date);
+    if (syncedNo !== meta.no) {
+      setMeta((prev) => ({ ...prev, no: quoteNoForDate(prev.no, prev.date) }));
+    }
+  }, [meta.date, meta.no, setMeta]);
 
   return (
     <Card
@@ -53,6 +60,20 @@ export default function QuoteMetaCard() {
               value={meta.taxNote}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMeta((prev) => ({ ...prev, taxNote: e.target.value }))}
               placeholder="如：不含税"
+            />
+          </Form.Item>
+          <Form.Item label="报价人" style={{ marginBottom: 8 }}>
+            <Input
+              value={meta.salesName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMeta((prev) => ({ ...prev, salesName: e.target.value }))}
+              placeholder="报价人"
+            />
+          </Form.Item>
+          <Form.Item label="联系方式" style={{ marginBottom: 8 }}>
+            <Input
+              value={meta.salesTel}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMeta((prev) => ({ ...prev, salesTel: e.target.value }))}
+              placeholder="联系电话"
             />
           </Form.Item>
         </div>

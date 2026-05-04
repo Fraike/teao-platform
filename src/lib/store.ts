@@ -1,16 +1,49 @@
 import { create } from "zustand";
 import type { Quotation, Product } from "../types/quotation";
 import { sampleQuotation } from "./sample";
-import { DEFAULT_TERMS } from "./constants";
+import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_TERMS } from "./constants";
 
 const STORAGE_KEY = "quotation-data-v2";
+
+export function quoteNoForDate(no: string, date: string): string {
+  const suffix = date && date.length >= 10 ? `${date.slice(5, 7)}${date.slice(8, 10)}` : "";
+  if (!suffix) return no;
+  if (/\d{4}$/.test(no)) return no.replace(/\d{4}$/, suffix);
+  return no ? `${no}-${suffix}` : `Q-${date.slice(0, 4)}-${suffix}`;
+}
+
+function normalizeQuotation(data: Quotation): Quotation {
+  const quoteMeta = {
+    ...data.quoteMeta,
+    salesName: data.quoteMeta.salesName || "王文涛",
+    salesTel: data.quoteMeta.salesTel || "18617094202",
+  };
+
+  return {
+    ...data,
+    quoteMeta: {
+      ...quoteMeta,
+      no: quoteNoForDate(quoteMeta.no, quoteMeta.date),
+      showAmount: false,
+      tableColumnWidths: {
+        ...DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS,
+        ...(quoteMeta.tableColumnWidths || {}),
+      },
+    },
+    products: data.products.map((product) => ({
+      ...product,
+      partNo: product.partNo || "",
+      unit: !product.unit || product.unit === "个" ? "PCS" : product.unit,
+    })),
+  };
+}
 
 function load(): Quotation {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Quotation;
+    if (raw) return normalizeQuotation(JSON.parse(raw) as Quotation);
   } catch { /* ignore */ }
-  return structuredClone(sampleQuotation);
+  return normalizeQuotation(structuredClone(sampleQuotation));
 }
 
 function save(state: Quotation) {
@@ -52,7 +85,8 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
 
   setQuoteMeta: (fn) =>
     set((s) => {
-      const next = { ...s.quotation, quoteMeta: fn(s.quotation.quoteMeta) };
+      const quoteMeta = fn(s.quotation.quoteMeta);
+      const next = normalizeQuotation({ ...s.quotation, quoteMeta });
       save(next);
       return { quotation: next };
     }),
@@ -68,7 +102,7 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
     set((s) => {
       const products = [
         ...s.quotation.products,
-        { id: genId(), name: "", spec: "", unit: "个", price: 0, qty: 1 },
+        { id: genId(), name: "", partNo: "", spec: "", unit: "PCS", price: 0 },
       ];
       const next = { ...s.quotation, products };
       save(next);
@@ -112,6 +146,7 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
 
   resetToSample: () => {
     const next = structuredClone(sampleQuotation);
+    next.quoteMeta.no = quoteNoForDate(next.quoteMeta.no, next.quoteMeta.date);
     save(next);
     set({ quotation: next });
   },
@@ -130,8 +165,9 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
     try {
       const data = JSON.parse(json);
       if (data.customer && data.products) {
-        save(data);
-        set({ quotation: data });
+        const next = normalizeQuotation(data);
+        save(next);
+        set({ quotation: next });
         return true;
       }
       return false;

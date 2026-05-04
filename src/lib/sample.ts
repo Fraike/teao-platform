@@ -1,5 +1,8 @@
 import type { Quotation } from "../types/quotation";
-import { DEFAULT_TERMS } from "./constants";
+import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_TERMS } from "./constants";
+
+const today = new Date().toISOString().slice(0, 10);
+const quoteNoForDate = (date: string) => `Q-${date.slice(0, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}`;
 
 export const sampleQuotation: Quotation = {
   customer: {
@@ -9,44 +12,44 @@ export const sampleQuotation: Quotation = {
     address: "",
   },
   quoteMeta: {
-    no: "Q-2026-0501",
-    date: new Date().toISOString().slice(0, 10),
+    no: quoteNoForDate(today),
+    date: today,
+    salesName: "王文涛",
+    salesTel: "18617094202",
     currency: "CNY",
     taxNote: "不含税",
     showStamp: true,
-    showAmount: true,
+    showAmount: false,
+    tableColumnWidths: { ...DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS },
   },
   products: [
     {
       id: "p1",
       name: "齿轮阻尼器",
+      partNo: "",
       spec: "RD-T022",
-      unit: "个",
+      unit: "PCS",
       price: 1.35,
-      qty: 10000,
-      amount: 13500,
       torque: "2.0±0.5 N·m",
       remark: "符合RoHS标准",
     },
     {
       id: "p2",
       name: "阻尼齿轮A型",
+      partNo: "",
       spec: "DZ-A012",
-      unit: "个",
+      unit: "PCS",
       price: 0.98,
-      qty: 20000,
-      amount: 19600,
       torque: "1.5±0.3 N·m",
       remark: "",
     },
     {
       id: "p3",
       name: "硅油阻尼器",
+      partNo: "",
       spec: "GY-RD005",
-      unit: "个",
+      unit: "PCS",
       price: 2.15,
-      qty: 5000,
-      amount: 10750,
       remark: "耐高温-40~120°C",
     },
   ],

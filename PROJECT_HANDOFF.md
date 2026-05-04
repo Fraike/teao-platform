@@ -91,7 +91,7 @@ COMPANY_INFO = {
   name: '东莞市特澳电子科技有限公司',
   address: '东莞市黄江镇黄江北三街2号',
   tel: '0769-82937929',
-  email: 'chinateao@163.com',
+  email: 'info@chinateao.com',
 }
 ```
 

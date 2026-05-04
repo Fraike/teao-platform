@@ -28,24 +28,34 @@ export async function exportPDF(
 
   await waitForImages(previewEl);
 
-  // 导出时确保截取的是 A4 白纸本身，不受外层滚动、阴影、缩放影响
-  const originalTransform = previewEl.style.transform;
-  const originalMargin = previewEl.style.margin;
-  previewEl.style.transform = "none";
-  previewEl.style.margin = "0";
+  // 在屏幕外复制一份原始 A4 节点导出，避免右侧预览缩放、阴影、滚动容器影响 html2canvas 排版。
+  const exportEl = previewEl.cloneNode(true) as HTMLElement;
+  Object.assign(exportEl.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    margin: "0",
+    transform: "none",
+    transformOrigin: "top left",
+    boxShadow: "none",
+    zIndex: "-1",
+  });
+  document.body.appendChild(exportEl);
 
   try {
-    const canvas = await html2canvas(previewEl, {
+    await waitForImages(exportEl);
+
+    const canvas = await html2canvas(exportEl, {
       scale: 2,
       useCORS: true,
       allowTaint: false,
       backgroundColor: "#ffffff",
       scrollX: 0,
       scrollY: 0,
-      windowWidth: previewEl.offsetWidth,
-      windowHeight: previewEl.offsetHeight,
-      width: previewEl.offsetWidth,
-      height: previewEl.offsetHeight,
+      windowWidth: exportEl.offsetWidth,
+      windowHeight: exportEl.offsetHeight,
+      width: exportEl.offsetWidth,
+      height: exportEl.offsetHeight,
     });
 
     const imgData = canvas.toDataURL("image/png");
@@ -80,7 +90,6 @@ export async function exportPDF(
     const filename = `报价单_${safeNo}_${safeCustomer}_${quoteMeta.date}.pdf`;
     pdf.save(filename);
   } finally {
-    previewEl.style.transform = originalTransform;
-    previewEl.style.margin = originalMargin;
+    exportEl.remove();
   }
 }

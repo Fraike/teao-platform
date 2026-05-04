@@ -23,11 +23,7 @@ export default function ProductCard() {
 
   const update = (id: string, field: keyof Product, value: unknown) => {
     updateProduct(id, (prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === "price" || field === "qty") {
-        next.amount = (next.price || 0) * (next.qty || 0);
-      }
-      return next;
+      return { ...prev, [field]: value };
     });
   };
 
@@ -41,8 +37,6 @@ export default function ProductCard() {
     };
     reader.readAsDataURL(file);
   };
-
-  const grandTotal = products.reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
   const columns: ColumnsType<ProductRow> = [
     {
@@ -67,6 +61,21 @@ export default function ProductCard() {
       ),
     },
     {
+      title: "料号",
+      dataIndex: "partNo",
+      width: 110,
+      render: (_partNo: string | undefined, r: ProductRow) => (
+        <Input
+          size="small"
+          variant="borderless"
+          placeholder="料号"
+          value={r.partNo ?? ""}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "partNo", e.target.value)}
+          style={{ padding: "2px 4px" }}
+        />
+      ),
+    },
+    {
       title: "规格",
       dataIndex: "spec",
       width: 80,
@@ -84,7 +93,7 @@ export default function ProductCard() {
     {
       title: "单位",
       dataIndex: "unit",
-      width: 60,
+      width: 70,
       render: (_unit: string, r: ProductRow) => (
         <Input
           size="small"
@@ -111,33 +120,6 @@ export default function ProductCard() {
       ),
     },
     {
-      title: "数量",
-      dataIndex: "qty",
-      width: 80,
-      render: (_qty: number | undefined, r: ProductRow) => (
-        <InputNumber
-          size="small"
-          style={{ width: "100%" }}
-          value={r.qty}
-          onChange={(v: number | null) => update(r.id, "qty", v ?? 0)}
-          min={0}
-        />
-      ),
-    },
-    {
-      title: "金额",
-      dataIndex: "amount",
-      width: 100,
-      render: (_amount: number | undefined, r: ProductRow) => {
-        const amt = (r.price || 0) * (r.qty || 0);
-        return (
-          <span style={{ fontWeight: 500, fontFamily: "monospace" }}>
-            {amt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        );
-      },
-    },
-    {
       title: "扭矩/参数",
       dataIndex: "torque",
       width: 110,
@@ -153,28 +135,13 @@ export default function ProductCard() {
       ),
     },
     {
-      title: "备注",
-      dataIndex: "remark",
-      width: 100,
-      render: (_remark: string | undefined, r: ProductRow) => (
-        <Input
-          size="small"
-          variant="borderless"
-          placeholder="备注"
-          value={r.remark ?? ""}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "remark", e.target.value)}
-          style={{ padding: "2px 4px" }}
-        />
-      ),
-    },
-    {
       title: "图片",
       dataIndex: "image",
-      width: 60,
+      width: 86,
       render: (_image: string | undefined, r: ProductRow) =>
         r.image ? (
-          <Tooltip title={<img src={r.image} style={{ maxWidth: 200 }} alt="" />}>
-            <img src={r.image} style={{ height: 28, width: "auto", borderRadius: 4 }} alt="" />
+          <Tooltip title={<img src={r.image} style={{ maxWidth: 260 }} alt="" />}>
+            <img src={r.image} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4 }} alt="" />
           </Tooltip>
         ) : (
           <label style={{ cursor: "pointer", color: "#bbb" }}>
@@ -191,6 +158,21 @@ export default function ProductCard() {
             />
           </label>
         ),
+    },
+    {
+      title: "备注",
+      dataIndex: "remark",
+      width: 100,
+      render: (_remark: string | undefined, r: ProductRow) => (
+        <Input
+          size="small"
+          variant="borderless"
+          placeholder="备注"
+          value={r.remark ?? ""}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "remark", e.target.value)}
+          style={{ padding: "2px 4px" }}
+        />
+      ),
     },
     {
       title: "操作",
@@ -239,24 +221,8 @@ export default function ProductCard() {
         dataSource={dataSource}
         pagination={false}
         size="small"
-        scroll={{ x: isMobile ? 700 : 1100 }}
+        scroll={{ x: isMobile ? 700 : 900 }}
         bordered
-        summary={() => (
-          <Table.Summary.Row style={{ fontWeight: 600, background: "#fafafa" }}>
-            <Table.Summary.Cell index={0} colSpan={6} align="right">
-              合计 Total
-            </Table.Summary.Cell>
-            <Table.Summary.Cell index={1} align="right">
-              <span style={{ fontFamily: "monospace", fontSize: 14 }}>
-                {grandTotal.toLocaleString("zh-CN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </Table.Summary.Cell>
-            <Table.Summary.Cell index={2} colSpan={4} />
-          </Table.Summary.Row>
-        )}
       />
     </Card>
   );

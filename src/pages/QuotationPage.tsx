@@ -21,6 +21,10 @@ interface Props {
   headerHeight: number;
 }
 
+const A4_WIDTH = 794;
+const A4_HEIGHT = 1122;
+const DESKTOP_PREVIEW_SCALE = 0.88;
+
 export default function QuotationPage({ headerHeight }: Props) {
   const isMobile = useIsMobile();
   const previewRef = useRef<HTMLDivElement>(null);
@@ -128,11 +132,11 @@ export default function QuotationPage({ headerHeight }: Props) {
         {/* 左侧录入区 */}
         <div
           style={{
-            width: isMobile ? "100%" : "40%",
-            minWidth: isMobile ? 0 : 420,
-            maxWidth: isMobile ? undefined : 560,
+            width: isMobile ? "100%" : "46%",
+            minWidth: isMobile ? 0 : 520,
+            maxWidth: isMobile ? undefined : 720,
             overflowY: "auto",
-            padding: isMobile ? "12px" : "16px 20px",
+            padding: isMobile ? "12px" : "18px 24px",
             background: "#fafafa",
             borderRight: isMobile ? "none" : "1px solid #f0f0f0",
             borderBottom: isMobile ? "1px solid #f0f0f0" : "none",
@@ -158,17 +162,30 @@ export default function QuotationPage({ headerHeight }: Props) {
               background: "#e2e2e2",
               display: "flex",
               justifyContent: "center",
-              padding: "28px 20px",
+              padding: "24px 16px",
             }}
           >
             <div
               style={{
-                boxShadow: "0 4px 32px rgba(0,0,0,0.18)",
-                borderRadius: 2,
-                height: "fit-content",
+                width: A4_WIDTH * DESKTOP_PREVIEW_SCALE,
+                height: A4_HEIGHT * DESKTOP_PREVIEW_SCALE,
+                position: "relative",
+                flex: "0 0 auto",
               }}
             >
-              <PreviewPanel ref={previewRef} />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "50%",
+                  transform: `translateX(-50%) scale(${DESKTOP_PREVIEW_SCALE})`,
+                  transformOrigin: "top center",
+                  boxShadow: "0 4px 32px rgba(0,0,0,0.18)",
+                  borderRadius: 2,
+                }}
+              >
+                <PreviewPanel ref={previewRef} />
+              </div>
             </div>
           </div>
         )}

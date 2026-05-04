@@ -36,8 +36,7 @@ function useBase64Image(path: string) {
 const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
   const { customer, quoteMeta, products, terms } = useQuotationStore((s) => s.quotation);
   const showStamp = quoteMeta.showStamp;
-  const showAmount = quoteMeta.showAmount;
-  const grandTotal = products.reduce((sum, p) => sum + (p.price || 0) * (p.qty || 0), 0);
+  const columnWidths = quoteMeta.tableColumnWidths;
 
   const logoSrc = useBase64Image(LOGO_PATH);
   const stampSrc = useBase64Image(STAMP_PATH);
@@ -49,7 +48,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
       style={{
         width: A4_WIDTH,
         height: A4_HEIGHT,
-        padding: "42px 44px 70px",
+        padding: "42px 44px 64px",
         boxSizing: "border-box",
         fontFamily: S.font,
         color: S.color,
@@ -103,7 +102,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: 700,
                 color: S.dark,
                 whiteSpace: "nowrap",
@@ -113,23 +112,25 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
             >
               {COMPANY_INFO.name}
             </div>
-            <div style={{ fontSize: 10, color: S.muted, lineHeight: 1.75, marginTop: 5 }}>
+            <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.75, marginTop: 5 }}>
               <div>地址：{COMPANY_INFO.address}</div>
               <div>电话：{COMPANY_INFO.tel}</div>
               <div>邮箱：{COMPANY_INFO.email}</div>
+              <div>报价人：{quoteMeta.salesName || "-"}</div>
+              <div>联系方式：{quoteMeta.salesTel || "-"}</div>
             </div>
           </div>
         </div>
 
         {/* 右侧：QUOTATION 标题 + 报价信息 */}
         <div style={{ textAlign: "right", paddingTop: 2 }}>
-          <div style={{ fontSize: 32, fontWeight: 800, color: S.dark, marginBottom: 2, letterSpacing: 1 }}>
+          <div style={{ fontSize: 34, fontWeight: 800, color: S.dark, marginBottom: 2, letterSpacing: 1 }}>
             QUOTATION
           </div>
-          <div style={{ fontSize: 12, color: S.muted, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, color: S.muted, marginBottom: 14 }}>
             报 价 单
           </div>
-          <div style={{ fontSize: 10, color: S.muted, lineHeight: 2.1, display: "inline-block", textAlign: "left" }}>
+          <div style={{ fontSize: 11, color: S.muted, lineHeight: 2.1, display: "inline-block", textAlign: "left" }}>
             <div>报价单号：{quoteMeta.no || "-"}</div>
             <div>日期：{quoteMeta.date || "-"}</div>
             <div>币种：{quoteMeta.currency || "-"}</div>
@@ -145,28 +146,30 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
       <div style={{ flex: "0 0 auto" }}>
         {/* ========== 客户信息 ========== */}
         <div style={{ background: "#f8fafc", padding: "10px 16px", marginBottom: 14, border: "1px solid #f1f5f9" }}>
-          <div style={{ fontSize: 9, color: S.light, textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>
-            客户信息 / Customer Information
+          <div style={sectionTitle()}>
+            <span>客户信息</span>
+            <span>/</span>
+            <span>CUSTOMER INFORMATION</span>
           </div>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <tbody>
               <tr>
-                <td style={{ width: "50%", fontSize: 11, lineHeight: 2 }}>
-                  <span style={{ color: S.muted }}>客户名称　</span>
+                <td style={{ width: "50%", fontSize: 12, lineHeight: 2 }}>
+                  <span style={{ color: S.muted, marginRight: 6 }}>客户名称</span>
                   <span style={{ fontWeight: 600, color: S.dark }}>{customer.name || "-"}</span>
                 </td>
-                <td style={{ width: "50%", fontSize: 11, lineHeight: 2 }}>
-                  <span style={{ color: S.muted }}>联系人　</span>
+                <td style={{ width: "50%", fontSize: 12, lineHeight: 2 }}>
+                  <span style={{ color: S.muted, marginRight: 6 }}>联系人</span>
                   <span>{customer.contact || "-"}</span>
                 </td>
               </tr>
               <tr>
-                <td style={{ fontSize: 11, lineHeight: 2 }}>
-                  <span style={{ color: S.muted }}>电话　</span>
+                <td style={{ fontSize: 12, lineHeight: 2 }}>
+                  <span style={{ color: S.muted, marginRight: 6 }}>电话</span>
                   <span>{customer.tel || "-"}</span>
                 </td>
-                <td style={{ fontSize: 11, lineHeight: 2 }}>
-                  <span style={{ color: S.muted }}>地址　</span>
+                <td style={{ fontSize: 12, lineHeight: 2 }}>
+                  <span style={{ color: S.muted, marginRight: 6 }}>地址</span>
                   <span>{customer.address || "-"}</span>
                 </td>
               </tr>
@@ -175,96 +178,85 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
         </div>
 
         {/* ========== 产品表格 ========== */}
-        <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", marginBottom: 14, fontSize: 10 }}>
+        <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", marginBottom: 14, fontSize: 11 }}>
           <colgroup>
-            <col style={{ width: 28 }} />
-            <col style={{ width: 132 }} />
-            <col style={{ width: 72 }} />
-            <col style={{ width: 48 }} />
-            {showAmount && <col style={{ width: 64 }} />}
-            {showAmount && <col style={{ width: 66 }} />}
-            {showAmount && <col style={{ width: 86 }} />}
-            <col style={{ width: 86 }} />
-            <col />
+            <col style={{ width: columnWidths.index }} />
+            <col style={{ width: columnWidths.name }} />
+            <col style={{ width: columnWidths.partNo }} />
+            <col style={{ width: columnWidths.spec }} />
+            <col style={{ width: columnWidths.unit }} />
+            <col style={{ width: columnWidths.price }} />
+            <col style={{ width: columnWidths.torque }} />
+            <col style={{ width: columnWidths.image }} />
+            <col style={{ width: columnWidths.remark }} />
           </colgroup>
           <thead>
             <tr style={{ background: S.headerBg }}>
               <th style={th("center")}>#</th>
               <th style={th("left")}>产品名称</th>
+              <th style={th("left")}>料号</th>
               <th style={th("left")}>规格</th>
               <th style={th("left")}>单位</th>
-              {showAmount && (
-                <>
-                  <th style={th("right")}>单价</th>
-                  <th style={th("right")}>数量</th>
-                  <th style={th("right")}>金额</th>
-                </>
-              )}
+              <th style={th("right")}>单价</th>
               <th style={th("left")}>参数/扭矩</th>
+              <th style={th("center")}>图片</th>
               <th style={th("left")}>备注</th>
             </tr>
           </thead>
           <tbody>
             {products.map((p, idx) => (
               <tr key={p.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                <td style={td("center", "#94a3b8", 9)}>{idx + 1}</td>
+                <td style={td("center", "#94a3b8", 10)}>{idx + 1}</td>
                 <td style={tdName()}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {p.image && (
-                      <img src={p.image} alt="" style={{ width: 28, height: 28, objectFit: "cover", border: "1px solid #e2e8f0", flexShrink: 0 }} />
-                    )}
-                    <span style={{ fontWeight: 600, wordBreak: "keep-all", whiteSpace: "normal", overflowWrap: "normal" }}>{p.name || "-"}</span>
-                  </div>
+                  <span style={{ fontWeight: 600, wordBreak: "keep-all", whiteSpace: "normal", overflowWrap: "normal" }}>{p.name || "-"}</span>
                 </td>
-                <td style={td("left", S.muted, 9)}>{p.spec || "-"}</td>
-                <td style={td("left", S.muted, 9)}>{p.unit}</td>
-                {showAmount && (
-                  <>
-                    <td style={td("right", "#334155", 10, "monospace")}>
-                      {(p.price ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    <td style={td("right", "#334155", 10, "monospace")}>
-                      {(p.qty ?? 0).toLocaleString()}
-                    </td>
-                    <td style={td("right", S.dark, 10, "monospace", 600)}>
-                      {((p.price || 0) * (p.qty || 0)).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                  </>
-                )}
-                <td style={td("left", S.muted, 9)}>{p.torque || ""}</td>
-                <td style={td("left", S.light, 9)}>{p.remark || ""}</td>
+                <td style={td("left", S.muted, 10)}>{p.partNo || "-"}</td>
+                <td style={td("left", S.muted, 10)}>{p.spec || "-"}</td>
+                <td style={td("left", S.muted, 10)}>{p.unit}</td>
+                <td style={td("right", "#334155", 11, "monospace")}>
+                  {(p.price ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td style={td("left", S.muted, 10)}>{p.torque || ""}</td>
+                <td style={td("center", S.muted, 10)}>
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt=""
+                      style={{
+                        width: 48,
+                        height: 48,
+                        objectFit: "cover",
+                        border: "1px solid #e2e8f0",
+                        display: "block",
+                        margin: "0 auto",
+                      }}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td style={td("left", S.light, 10)}>{p.remark || ""}</td>
               </tr>
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={showAmount ? 9 : 6} style={{ padding: 24, textAlign: "center", color: "#cbd5e1", fontSize: 10 }}>
+                <td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#cbd5e1", fontSize: 11 }}>
                   暂无产品数据
                 </td>
               </tr>
             )}
           </tbody>
-          {showAmount && products.length > 0 && (
-            <tfoot>
-              <tr>
-                <td colSpan={6} style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, color: S.dark, borderTop: `2px solid ${S.border}`, fontSize: 10 }}>
-                  合计 Total
-                </td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: S.dark, borderTop: `2px solid ${S.border}` }}>
-                  {grandTotal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td colSpan={2} style={{ borderTop: `2px solid ${S.border}` }} />
-              </tr>
-            </tfoot>
-          )}
         </table>
 
         {/* ========== 条款 ========== */}
         {terms.length > 0 && (
           <div style={{ marginBottom: 0 }}>
-            <div style={{ fontSize: 9, color: S.light, textTransform: "uppercase", marginBottom: 8, borderBottom: `1px solid ${S.border}`, paddingBottom: 6, fontWeight: 500 }}>
-              条款与备注 / Terms &amp; Remarks
+            <div style={{ ...sectionTitle(), borderBottom: `1px solid ${S.border}`, paddingBottom: 6 }}>
+              <span>条款与备注</span>
+              <span>/</span>
+              <span>TERMS &amp; REMARKS</span>
             </div>
-            <div style={{ fontSize: 9, color: S.muted, lineHeight: 2, paddingLeft: 2 }}>
+            <div style={{ fontSize: 10, color: S.muted, lineHeight: 2, paddingLeft: 2 }}>
               {terms.map((t, idx) => (
                 <div key={idx}>{t}</div>
               ))}
@@ -274,11 +266,11 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
       </div>
 
       {/* ========== 签章区弹性间距 ========== */}
-      <div style={{ flex: 1, minHeight: 80, maxHeight: 180 }} />
+      <div style={{ flex: 1, minHeight: 36, maxHeight: 96 }} />
 
       {/* ========== 签章区域 ========== */}
-      <div style={{ flex: "0 0 auto", borderTop: `1px solid ${S.border}`, paddingTop: 20 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+      <div style={{ flex: "0 0 auto", borderTop: `1px solid ${S.border}`, paddingTop: 16 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
           <tbody>
             <tr>
               <td style={{ width: "55%", verticalAlign: "bottom", position: "relative", paddingRight: 24, minHeight: 96 }}>
@@ -286,33 +278,39 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                   <img
                     src={stampSrc}
                     alt="公章"
-                    style={{
-                      position: "absolute",
-                      left: 135,
-                      top: -28,
-                      width: 82,
-                      height: 82,
-                      opacity: 0.85,
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
-                <div style={{ paddingTop: 42 }}>
+	                    style={{
+	                      position: "absolute",
+	                      left: 120,
+	                      top: -46,
+	                      width: 116,
+	                      height: 116,
+	                      opacity: 0.82,
+	                      transform: "rotate(-7deg)",
+	                      pointerEvents: "none",
+	                      zIndex: 2,
+	                    }}
+	                  />
+	                )}
+                <div style={{ paddingTop: 36, position: "relative", zIndex: 1 }}>
                   <div style={{ fontWeight: 600, color: S.dark, marginBottom: 4 }}>
                     报价方：{COMPANY_INFO.name}
                   </div>
                   {COMPANY_INFO.contact && (
-                    <div style={{ color: S.muted, fontSize: 9 }}>联系人：{COMPANY_INFO.contact}</div>
+                    <div style={{ color: S.muted, fontSize: 10 }}>联系人：{COMPANY_INFO.contact}</div>
                   )}
-                  <div style={{ color: S.muted, fontSize: 9, marginTop: 2 }}>
+                  <div style={{ color: S.muted, fontSize: 10, marginTop: 2 }}>
                     日期：{quoteMeta.date}
                   </div>
                 </div>
               </td>
-              <td style={{ width: "45%", verticalAlign: "bottom", textAlign: "right" }}>
-                <div style={{ color: S.muted, fontSize: 9, marginBottom: 4 }}>客户确认 / Customer Confirmation</div>
-                <div style={{ color: S.light, fontSize: 9, marginBottom: 24 }}>签字 / 盖章：</div>
-                <div style={{ color: S.light, fontSize: 9 }}>日期：</div>
+              <td style={{ width: "45%", verticalAlign: "bottom", textAlign: "left", paddingLeft: 88 }}>
+                <div style={{ ...inlineTextGroup(6), color: S.muted, fontSize: 10, marginBottom: 4, justifyContent: "flex-start" }}>
+                  <span>客户确认</span>
+                  <span>/</span>
+                  <span>Customer Confirmation</span>
+                </div>
+                <div style={{ color: S.light, fontSize: 10, marginBottom: 24 }}>签字 / 盖章：</div>
+                <div style={{ color: S.light, fontSize: 10 }}>日期：</div>
               </td>
             </tr>
           </tbody>
@@ -324,22 +322,42 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
 
 function th(align: "left" | "right" | "center" = "left"): React.CSSProperties {
   return {
-    padding: "7px 10px",
+    padding: "10px 10px",
     textAlign: align,
     fontWeight: 600,
     color: "#475569",
     borderBottom: "2px solid #e2e8f0",
-    fontSize: 9,
+    fontSize: 10,
     whiteSpace: "nowrap",
+  };
+}
+
+function sectionTitle(): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 10,
+    color: S.light,
+    marginBottom: 8,
+    fontWeight: 500,
+  };
+}
+
+function inlineTextGroup(gap: number): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap,
   };
 }
 
 function tdName(): React.CSSProperties {
   return {
-    padding: "7px 10px",
+    padding: "10px 10px",
     textAlign: "left",
     color: "#0f172a",
-    fontSize: 10,
+    fontSize: 11,
     verticalAlign: "middle",
     wordBreak: "keep-all",
     whiteSpace: "normal",
@@ -350,12 +368,12 @@ function tdName(): React.CSSProperties {
 function td(
   align: "left" | "right" | "center",
   color: string,
-  fontSize = 10,
+  fontSize = 11,
   fontFamily?: string,
   fontWeight?: number
 ): React.CSSProperties {
   return {
-    padding: "7px 10px",
+    padding: "10px 10px",
     textAlign: align,
     color,
     fontSize,

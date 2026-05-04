@@ -1,6 +1,7 @@
 export interface Product {
   id: string;
   name: string;
+  partNo?: string;
   spec?: string;
   unit: string;
   price: number;
@@ -21,10 +22,13 @@ export interface CustomerInfo {
 export interface QuoteMeta {
   no: string;
   date: string;
+  salesName: string;
+  salesTel: string;
   currency: string;
   taxNote: string;
   showStamp: boolean;
   showAmount: boolean;
+  tableColumnWidths: ProductTableColumnWidths;
 }
 
 export interface Quotation {
@@ -32,4 +36,16 @@ export interface Quotation {
   quoteMeta: QuoteMeta;
   products: Product[];
   terms: string[];
+}
+
+export interface ProductTableColumnWidths {
+  index: number;
+  image: number;
+  name: number;
+  partNo: number;
+  spec: number;
+  unit: number;
+  price: number;
+  torque: number;
+  remark: number;
 }
