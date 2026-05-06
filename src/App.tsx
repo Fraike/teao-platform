@@ -6,10 +6,12 @@ import {
   FileTextOutlined,
   CalculatorOutlined,
   MenuOutlined,
+  ReadOutlined,
 } from "@ant-design/icons";
 import Dashboard from "./pages/Dashboard";
 import QuotationPage from "./pages/QuotationPage";
 import CostCalculatorPage from "./pages/CostCalculatorPage";
+import ProcessCenter from "./pages/ProcessCenter";
 import { useIsMobile } from "./lib/useIsMobile";
 
 const { Header, Content } = Layout;
@@ -19,6 +21,7 @@ const NAV_ITEMS = [
   { key: "/", icon: <HomeOutlined />, label: "首页" },
   { key: "/quotation", icon: <FileTextOutlined />, label: "报价系统" },
   { key: "/cost", icon: <CalculatorOutlined />, label: "成本计算" },
+  { key: "/process", icon: <ReadOutlined />, label: "流程查阅中心" },
 ];
 
 function AppLayout() {
@@ -129,6 +132,7 @@ function AppLayout() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/quotation" element={<QuotationPage headerHeight={headerHeight} />} />
           <Route path="/cost" element={<CostCalculatorPage headerHeight={headerHeight} />} />
+          <Route path="/process" element={<ProcessCenter />} />
         </Routes>
       </Content>
     </Layout>
