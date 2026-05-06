@@ -168,7 +168,8 @@ export default function FlowChart({ steps }: Props) {
         height: n.height,
         shape: n.shape,
         attrs: {
-          body: n.body,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          body: n.body as any,
           label: {
             text: n.label,
             fill: "#333",
