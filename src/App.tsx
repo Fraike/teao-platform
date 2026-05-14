@@ -14,7 +14,7 @@ import CostCalculatorPage from "./pages/CostCalculatorPage";
 import ProcessCenter from "./pages/ProcessCenter";
 import { useIsMobile } from "./lib/useIsMobile";
 
-const { Header, Content } = Layout;
+const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
 
 const NAV_ITEMS = [
@@ -135,6 +135,25 @@ function AppLayout() {
           <Route path="/process" element={<ProcessCenter />} />
         </Routes>
       </Content>
+
+      <Footer
+        style={{
+          textAlign: "center",
+          background: "#f5f5f5",
+          padding: "12px 16px",
+          fontSize: 12,
+          color: "#999",
+        }}
+      >
+        <a
+          href="http://beian.miit.gov.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "#999", textDecoration: "none" }}
+        >
+          粤ICP备13044030号-7
+        </a>
+      </Footer>
     </Layout>
   );
 }
