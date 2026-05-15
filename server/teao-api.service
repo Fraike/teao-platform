@@ -1,0 +1,14 @@
+[Unit]
+Description=Teao API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/teao-platform/server
+ExecStart=/usr/bin/node /var/www/teao-platform/server/server.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

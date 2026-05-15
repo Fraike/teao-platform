@@ -7,14 +7,17 @@
 - **服务器**: 8.134.18.9 (阿里云 ECS, cn-guangzhou)
 - **目标路径**: /var/www/teao-platform/
 - **域名**: https://teao.work/
+- **API**: Express on port 3899, proxied via nginx `/api/*`
 - **Workflow**: `.github/workflows/deploy.yml`
 
 ## 工作流程
 
 1. `git push origin main` 触发 GitHub Actions
 2. CI 执行 `npm ci` → `npm run build`
-3. 通过 rsync (ssh-deploy@v5.1.1) 同步 `dist/` 到服务器
-4. Nginx 直接对外提供静态文件
+3. rsync `dist/` → `/var/www/teao-platform/`
+4. rsync `server/` → `/var/www/teao-platform/server/`
+5. Remote: `npm install` → `systemctl restart teao-api`
+6. Nginx 静态文件 + API 反向代理
 
 ## 部署后检查
 
@@ -24,6 +27,9 @@ gh run list --limit 3
 
 # 检查网站是否可访问
 curl -s -o /dev/null -w "%{http_code}" https://teao.work/
+
+# 检查 API 是否正常
+curl -s https://teao.work/api/history -H "X-Auth-Password: teao123"
 ```
 
 ## 手动部署（备用）
@@ -33,6 +39,8 @@ curl -s -o /dev/null -w "%{http_code}" https://teao.work/
 ```bash
 npm run build
 rsync -rlgoDzvc -i --delete -e "ssh" dist/ root@8.134.18.9:/var/www/teao-platform/
+rsync -rlgoDzvc -i -e "ssh" server/ root@8.134.18.9:/var/www/teao-platform/server/
+ssh root@8.134.18.9 "cd /var/www/teao-platform/server && npm install --production && systemctl restart teao-api"
 ```
 
 ## Skill 执行步骤

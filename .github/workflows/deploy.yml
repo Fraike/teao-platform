@@ -18,7 +18,7 @@ jobs:
 
       - run: npm run build
 
-      - name: Deploy to server
+      - name: Deploy static files
         uses: easingthemes/ssh-deploy@v5.1.1
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -27,3 +27,24 @@ jobs:
           REMOTE_USER: root
           SOURCE: "dist/"
           TARGET: "/var/www/teao-platform/"
+
+      - name: Deploy API server
+        uses: easingthemes/ssh-deploy@v5.1.1
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          ARGS: "-rlgoDzvc -i"
+          REMOTE_HOST: 8.134.18.9
+          REMOTE_USER: root
+          SOURCE: "server/"
+          TARGET: "/var/www/teao-platform/server/"
+          SCRIPT_AFTER: |
+            cd /var/www/teao-platform/server && npm install --production
+            cp -f /var/www/teao-platform/server/teao-api.service /etc/systemd/system/teao-api.service
+            systemctl daemon-reload
+            systemctl enable teao-api
+            systemctl restart teao-api
+            # Setup nginx proxy if not already configured
+            grep -q "location /api/" /etc/nginx/sites-available/teao-platform || {
+              sed -i 's|location / {|location /api/ {\n        proxy_pass http://127.0.0.1:3899;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n    location / {|' /etc/nginx/sites-available/teao-platform
+              nginx -t && systemctl reload nginx
+            }

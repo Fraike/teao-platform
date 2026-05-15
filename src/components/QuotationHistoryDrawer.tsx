@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Drawer,
   Table,
@@ -17,12 +17,13 @@ import {
   LockOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
-import { useQuotationHistoryStore, historyPassword, setHistoryPassword } from "../lib/historyStore";
+import { useQuotationHistoryStore, historyPassword } from "../lib/historyStore";
 import type { QuotationRecord, Product, MoldItem } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
+const FIXED_PASSWORD = historyPassword();
 
 interface Props {
   open: boolean;
@@ -34,84 +35,66 @@ export default function QuotationHistoryDrawer({ open, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
-  const savedPwd = historyPassword();
-
-  const handleAuth = useCallback((pw: string) => {
-    if (!savedPwd) {
-      if (pw.length !== 6 || !/^\d{6}$/.test(pw)) {
-        message.error("密码需为 6 位数字");
-        return false;
-      }
-      setHistoryPassword(pw);
-      setAuthenticated(true);
-      return true;
-    }
-    if (pw === savedPwd) {
+  const handleAuth = (pw: string) => {
+    if (pw === FIXED_PASSWORD) {
       setAuthenticated(true);
       return true;
     }
     message.error("密码错误");
     return false;
-  }, [savedPwd]);
+  };
+
+  const handleCancel = () => {
+    setAuthenticated(false);
+    onClose();
+  };
 
   if (!authenticated) {
     return (
-      <PasswordGate
+      <Modal
+        title={<Space><LockOutlined />请输入访问密码</Space>}
         open={open}
-        isNew={!savedPwd}
-        onVerify={handleAuth}
-        onCancel={onClose}
-      />
+        onOk={() => {
+          // handled by onPressEnter
+        }}
+        onCancel={handleCancel}
+        okText="确认"
+        cancelText="取消"
+        width={320}
+        footer={null}
+      >
+        <PasswordForm onVerify={handleAuth} />
+      </Modal>
     );
   }
 
-  return <HistoryPanel open={open} onClose={onClose} search={search} setSearch={setSearch} dateRange={dateRange} setDateRange={setDateRange} />;
+  return <HistoryPanel open={open} onClose={handleCancel} search={search} setSearch={setSearch} dateRange={dateRange} setDateRange={setDateRange} />;
 }
 
-function PasswordGate({
-  open,
-  isNew,
-  onVerify,
-  onCancel,
-}: {
-  open: boolean;
-  isNew: boolean;
-  onVerify: (pw: string) => boolean;
-  onCancel: () => void;
-}) {
+function PasswordForm({ onVerify }: { onVerify: (pw: string) => boolean }) {
   const [pw, setPw] = useState("");
 
   const handleOk = () => {
-    if (onVerify(pw)) setPw("");
+    onVerify(pw);
+    setPw("");
   };
 
   return (
-    <Modal
-      title={
-        <Space>
-          <LockOutlined />
-          {isNew ? "设置访问密码" : "请输入访问密码"}
-        </Space>
-      }
-      open={open}
-      onOk={handleOk}
-      onCancel={onCancel}
-      okText="确认"
-      cancelText="取消"
-      width={320}
-    >
+    <>
       <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
-        {isNew ? "首次访问，请设置 6 位数字密码" : "请输入 6 位数字密码查看报价汇总"}
+        请输入密码查看报价汇总
       </Text>
       <Input.Password
         value={pw}
         onChange={(e) => setPw(e.target.value)}
-        maxLength={6}
-        placeholder="6位数字密码"
+        placeholder="请输入密码"
         onPressEnter={handleOk}
         autoFocus
       />
-    </Modal>
+      <Button type="primary" block style={{ marginTop: 12 }} onClick={handleOk}>
+        确认
+      </Button>
+    </>
   );
 }
 
@@ -131,7 +114,13 @@ function HistoryPanel({
   setDateRange: (v: [dayjs.Dayjs, dayjs.Dayjs] | null) => void;
 }) {
   const records = useQuotationHistoryStore((s) => s.records);
+  const loading = useQuotationHistoryStore((s) => s.loading);
+  const loadRecords = useQuotationHistoryStore((s) => s.loadRecords);
   const removeRecord = useQuotationHistoryStore((s) => s.removeRecord);
+
+  useEffect(() => {
+    if (open) loadRecords();
+  }, [open, loadRecords]);
 
   const filtered = useMemo(() => {
     return records.filter((r) => {
@@ -243,6 +232,7 @@ function HistoryPanel({
         dataSource={filtered}
         rowKey="id"
         size="small"
+        loading={loading}
         pagination={{ pageSize: 20, showSizeChanger: false }}
         expandable={{
           expandedRowRender: (r) => <RecordDetail record={r} />,

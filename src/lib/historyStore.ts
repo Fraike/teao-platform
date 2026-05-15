@@ -1,56 +1,74 @@
 import { create } from "zustand";
 import type { QuotationRecord } from "../types/quotation";
 
-const STORAGE_KEY = "quotation-history";
-const PASSWORD_KEY = "quotation-history-pwd";
+const API_BASE = "/api/history";
+const HISTORY_PASSWORD = "teao123";
 
-function loadRecords(): QuotationRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as QuotationRecord[];
-  } catch { /* ignore */ }
-  return [];
-}
-
-function saveRecords(records: QuotationRecord[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch { /* ignore */ }
-}
-
-function loadPassword(): string | null {
-  return localStorage.getItem(PASSWORD_KEY);
+function apiHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Auth-Password": HISTORY_PASSWORD,
+  };
 }
 
 interface HistoryStore {
   records: QuotationRecord[];
-  addRecord: (r: QuotationRecord) => void;
-  removeRecord: (id: string) => void;
+  loading: boolean;
+  loadRecords: () => Promise<void>;
+  addRecord: (r: QuotationRecord) => Promise<void>;
+  removeRecord: (id: string) => Promise<void>;
 }
 
 export const useQuotationHistoryStore = create<HistoryStore>((set, get) => ({
-  records: loadRecords(),
+  records: [],
+  loading: false,
 
-  addRecord: (record) => {
-    const records = [
-      record,
-      ...get().records.filter((r) => r.quoteNo !== record.quoteNo),
-    ];
-    saveRecords(records);
-    set({ records });
+  loadRecords: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetch(API_BASE, { headers: apiHeaders() });
+      if (res.ok) {
+        const data = (await res.json()) as QuotationRecord[];
+        set({ records: data, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
   },
 
-  removeRecord: (id) => {
-    const records = get().records.filter((r) => r.id !== id);
-    saveRecords(records);
-    set({ records });
+  addRecord: async (record) => {
+    try {
+      const res = await fetch(API_BASE, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ record }),
+      });
+      if (res.ok) {
+        const records = [
+          record,
+          ...get().records.filter((r) => r.quoteNo !== record.quoteNo),
+        ];
+        set({ records });
+      }
+    } catch { /* ignore */ }
+  },
+
+  removeRecord: async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: apiHeaders(),
+      });
+      if (res.ok) {
+        const records = get().records.filter((r) => r.id !== id);
+        set({ records });
+      }
+    } catch { /* ignore */ }
   },
 }));
 
-export function historyPassword(): string | null {
-  return loadPassword();
-}
-
-export function setHistoryPassword(pw: string): void {
-  localStorage.setItem(PASSWORD_KEY, pw);
+export function historyPassword(): string {
+  return HISTORY_PASSWORD;
 }
