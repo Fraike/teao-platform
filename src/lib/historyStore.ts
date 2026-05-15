@@ -39,20 +39,22 @@ export const useQuotationHistoryStore = create<HistoryStore>((set, get) => ({
   },
 
   addRecord: async (record) => {
-    try {
-      const res = await fetch(API_BASE, {
-        method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify({ record }),
-      });
-      if (res.ok) {
-        const records = [
-          record,
-          ...get().records.filter((r) => r.quoteNo !== record.quoteNo),
-        ];
-        set({ records });
-      }
-    } catch { /* ignore */ }
+    const res = await fetch(API_BASE, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({ record }),
+    });
+    if (!res.ok) {
+      const msg = res.status === 413
+        ? "报价数据过大，请减少产品图片"
+        : `保存失败 (${res.status})`;
+      throw new Error(msg);
+    }
+    const records = [
+      record,
+      ...get().records.filter((r) => r.quoteNo !== record.quoteNo),
+    ];
+    set({ records });
   },
 
   removeRecord: async (id) => {

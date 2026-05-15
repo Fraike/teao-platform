@@ -61,6 +61,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       await exportPDF(previewRef.current, quotation);
 
       const totalAmount = quotation.products.reduce((sum, p) => sum + (p.price ?? 0), 0);
+      const cleanProducts = quotation.products.map(({ image: _, ...rest }) => rest);
       addRecord({
         id: `${Date.now()}_${quotation.quoteMeta.no}`,
         createdAt: new Date().toISOString(),
@@ -69,7 +70,7 @@ export default function QuotationPage({ headerHeight }: Props) {
         customerName: quotation.customer.name,
         contact: quotation.customer.contact || "",
         currency: quotation.quoteMeta.currency,
-        products: quotation.products,
+        products: cleanProducts,
         molds: quotation.molds || [],
         terms: quotation.terms,
         salesName: quotation.quoteMeta.salesName,
@@ -79,7 +80,8 @@ export default function QuotationPage({ headerHeight }: Props) {
       messageApi.success("PDF 导出成功，已保存至报价汇总");
     } catch (err) {
       console.error("PDF export failed:", err);
-      messageApi.error("PDF 导出失败，请重试");
+      const msg = err instanceof Error ? err.message : "PDF 导出失败，请重试";
+      messageApi.error(msg);
     }
   }, [quotation, messageApi, addRecord]);
 

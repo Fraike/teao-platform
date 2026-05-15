@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { App as AntApp, Layout, Menu, Typography, Drawer, Button } from "antd";
 import {
@@ -8,11 +8,13 @@ import {
   MenuOutlined,
   ReadOutlined,
 } from "@ant-design/icons";
-import Dashboard from "./pages/Dashboard";
-import QuotationPage from "./pages/QuotationPage";
-import CostCalculatorPage from "./pages/CostCalculatorPage";
-import ProcessCenter from "./pages/ProcessCenter";
 import { useIsMobile } from "./lib/useIsMobile";
+import "./components/PageLoader.css";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const QuotationPage = lazy(() => import("./pages/QuotationPage"));
+const CostCalculatorPage = lazy(() => import("./pages/CostCalculatorPage"));
+const ProcessCenter = lazy(() => import("./pages/ProcessCenter"));
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -23,6 +25,10 @@ const NAV_ITEMS = [
   { key: "/cost", icon: <CalculatorOutlined />, label: "成本计算" },
   { key: "/process", icon: <ReadOutlined />, label: "流程查阅中心" },
 ];
+
+function PageLoader() {
+  return <div className="page-loader" />;
+}
 
 function AppLayout() {
   const location = useLocation();
@@ -128,12 +134,14 @@ function AppLayout() {
       </Header>
 
       <Content style={{ background: "#f5f5f5" }}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/quotation" element={<QuotationPage headerHeight={headerHeight} />} />
-          <Route path="/cost" element={<CostCalculatorPage headerHeight={headerHeight} />} />
-          <Route path="/process" element={<ProcessCenter />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/quotation" element={<QuotationPage headerHeight={headerHeight} />} />
+            <Route path="/cost" element={<CostCalculatorPage headerHeight={headerHeight} />} />
+            <Route path="/process" element={<ProcessCenter />} />
+          </Routes>
+        </Suspense>
       </Content>
 
       <Footer

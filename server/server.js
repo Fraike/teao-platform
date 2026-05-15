@@ -8,7 +8,7 @@ const DATA_FILE = path.join(DATA_DIR, "history.json");
 const PASSWORD = "teao123";
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 function auth(req, res, next) {
   const pw = req.headers["x-auth-password"];
