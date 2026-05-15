@@ -10,9 +10,17 @@
 - **API**: Express on port 3899, proxied via nginx `/api/*`
 - **Workflow**: `.github/workflows/deploy.yml`
 
+## 触发方式
+
+**手动触发**（推荐）：
+
+```bash
+gh workflow run "Deploy to Server" --ref main
+```
+
 ## 工作流程
 
-1. `git push origin main` 触发 GitHub Actions
+1. 手动触发后 GitHub Actions 开始执行
 2. CI 执行 `npm ci` → `npm run build`
 3. rsync `dist/` → `/var/www/teao-platform/`
 4. rsync `server/` → `/var/www/teao-platform/server/`
@@ -32,9 +40,7 @@ curl -s -o /dev/null -w "%{http_code}" https://teao.work/
 curl -s https://teao.work/api/history -H "X-Auth-Password: teao123"
 ```
 
-## 手动部署（备用）
-
-如果 GitHub Actions 不可用，可直接用 rsync 部署：
+## 手动 rsync 部署（备用）
 
 ```bash
 npm run build
@@ -47,8 +53,7 @@ ssh root@8.134.18.9 "cd /var/www/teao-platform/server && npm install --productio
 
 当用户说"部署"或"deploy"时：
 
-1. 检查本地是否有未提交改动
-2. 如有改动，先 commit 再 push
-3. 如无改动且需要强制部署，触发空提交: `git commit --allow-empty -m "trigger deploy" && git push`
-4. 等待 GitHub Actions 完成
-5. 确认部署成功后告知用户
+1. 检查本地是否有未提交改动，如有则 commit + push
+2. 触发手动部署: `gh workflow run "Deploy to Server" --ref main`
+3. 等待 GitHub Actions 完成
+4. 确认部署成功后告知用户
