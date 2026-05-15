@@ -140,9 +140,31 @@ export default function ProductCard() {
       width: 86,
       render: (_image: string | undefined, r: ProductRow) =>
         r.image ? (
-          <Tooltip title={<img src={r.image} style={{ maxWidth: 260 }} alt="" />}>
-            <img src={r.image} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4 }} alt="" />
-          </Tooltip>
+          <div style={{ position: "relative", display: "inline-block" }}>
+            <Tooltip title={<img src={r.image} style={{ maxWidth: 260 }} alt="" />}>
+              <img src={r.image} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4 }} alt="" />
+            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => update(r.id, "image", undefined)}
+              style={{
+                position: "absolute",
+                top: -6,
+                right: -6,
+                width: 18,
+                height: 18,
+                minWidth: 18,
+                padding: 0,
+                fontSize: 10,
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }}
+            />
+          </div>
         ) : (
           <label style={{ cursor: "pointer", color: "#bbb" }}>
             <CameraOutlined />

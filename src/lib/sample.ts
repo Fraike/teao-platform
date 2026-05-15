@@ -19,6 +19,7 @@ export const sampleQuotation: Quotation = {
     currency: "CNY",
     taxNote: "不含税",
     showStamp: true,
+    showMold: false,
     showAmount: false,
     tableColumnWidths: { ...DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS },
   },
@@ -54,4 +55,5 @@ export const sampleQuotation: Quotation = {
     },
   ],
   terms: [...DEFAULT_TERMS],
+  molds: [],
 };

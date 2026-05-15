@@ -27,8 +27,16 @@ export interface QuoteMeta {
   currency: string;
   taxNote: string;
   showStamp: boolean;
+  showMold: boolean;
   showAmount: boolean;
   tableColumnWidths: ProductTableColumnWidths;
+}
+
+export interface MoldItem {
+  id: string;
+  name: string;
+  totalCost: number;
+  amortizeQty: number;
 }
 
 export interface Quotation {
@@ -36,6 +44,22 @@ export interface Quotation {
   quoteMeta: QuoteMeta;
   products: Product[];
   terms: string[];
+  molds: MoldItem[];
+}
+
+export interface QuotationRecord {
+  id: string;
+  createdAt: string;
+  quoteNo: string;
+  date: string;
+  customerName: string;
+  contact: string;
+  currency: string;
+  products: Product[];
+  molds: MoldItem[];
+  terms: string[];
+  salesName: string;
+  totalAmount: number;
 }
 
 export interface ProductTableColumnWidths {

@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type { Quotation, Product } from "../types/quotation";
+import type { Quotation, Product, MoldItem } from "../types/quotation";
 import { sampleQuotation } from "./sample";
-import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_TERMS } from "./constants";
+import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_AMORTIZE_QTY, DEFAULT_TERMS } from "./constants";
 
 const STORAGE_KEY = "quotation-data-v2";
 
@@ -25,6 +25,7 @@ function normalizeQuotation(data: Quotation): Quotation {
       ...quoteMeta,
       no: quoteNoForDate(quoteMeta.no, quoteMeta.date),
       showAmount: false,
+      showMold: quoteMeta.showMold ?? false,
       tableColumnWidths: {
         ...DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS,
         ...(quoteMeta.tableColumnWidths || {}),
@@ -35,6 +36,7 @@ function normalizeQuotation(data: Quotation): Quotation {
       partNo: product.partNo || "",
       unit: !product.unit || product.unit === "个" ? "PCS" : product.unit,
     })),
+    molds: data.molds || [],
   };
 }
 
@@ -67,6 +69,9 @@ interface QuotationStore {
   duplicateProduct: (id: string) => void;
   updateProduct: (id: string, fn: (prev: Product) => Product) => void;
   setTerms: (terms: string[]) => void;
+  addMold: () => void;
+  removeMold: (id: string) => void;
+  updateMold: (id: string, fn: (prev: MoldItem) => MoldItem) => void;
   resetToSample: () => void;
   resetTerms: () => void;
   exportJSON: () => string;
@@ -140,6 +145,35 @@ export const useQuotationStore = create<QuotationStore>((set, get) => ({
   setTerms: (terms) =>
     set((s) => {
       const next = { ...s.quotation, terms };
+      save(next);
+      return { quotation: next };
+    }),
+
+  addMold: () =>
+    set((s) => {
+      const molds = [
+        ...s.quotation.molds,
+        { id: genId(), name: "", totalCost: 0, amortizeQty: DEFAULT_AMORTIZE_QTY },
+      ];
+      const next = { ...s.quotation, molds };
+      save(next);
+      return { quotation: next };
+    }),
+
+  removeMold: (id) =>
+    set((s) => {
+      const molds = s.quotation.molds.filter((m) => m.id !== id);
+      const next = { ...s.quotation, molds };
+      save(next);
+      return { quotation: next };
+    }),
+
+  updateMold: (id, fn) =>
+    set((s) => {
+      const molds = s.quotation.molds.map((m) =>
+        m.id === id ? fn(m) : m
+      );
+      const next = { ...s.quotation, molds };
       save(next);
       return { quotation: next };
     }),

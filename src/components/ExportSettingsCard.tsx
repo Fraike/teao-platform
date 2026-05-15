@@ -52,6 +52,25 @@ export default function ExportSettingsCard() {
             onChange={(v: boolean) => setMeta((prev) => ({ ...prev, showStamp: v }))}
           />
         </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <Text strong style={{ fontSize: 13 }}>显示模具报价</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              在报价单中显示模具费用摊销明细
+            </Text>
+          </div>
+          <Switch
+            checked={meta.showMold}
+            onChange={(v: boolean) => setMeta((prev) => ({ ...prev, showMold: v }))}
+          />
+        </div>
         <div>
           <Text strong style={{ fontSize: 13 }}>报价单列宽</Text>
           <br />

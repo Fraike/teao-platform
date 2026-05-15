@@ -34,8 +34,9 @@ function useBase64Image(path: string) {
 }
 
 const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
-  const { customer, quoteMeta, products, terms } = useQuotationStore((s) => s.quotation);
+  const { customer, quoteMeta, products, terms, molds } = useQuotationStore((s) => s.quotation);
   const showStamp = quoteMeta.showStamp;
+  const showMold = quoteMeta.showMold;
   const columnWidths = quoteMeta.tableColumnWidths;
 
   const logoSrc = useBase64Image(LOGO_PATH);
@@ -247,6 +248,46 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
             )}
           </tbody>
         </table>
+
+        {/* ========== 模具费用摊销 ========== */}
+        {showMold && molds.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ ...sectionTitle(), borderBottom: `1px solid ${S.border}`, paddingBottom: 6, marginBottom: 8 }}>
+              <span>模具费用摊销</span>
+              <span>/</span>
+              <span>MOLD TOOLING COST</span>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+              <thead>
+                <tr style={{ background: S.headerBg }}>
+                  <th style={th("left")}>模具名称</th>
+                  <th style={th("right")}>模具总费用</th>
+                  <th style={th("right")}>分摊数量</th>
+                  <th style={th("right")}>模具单价</th>
+                </tr>
+              </thead>
+              <tbody>
+                {molds.map((m) => {
+                  const unitCost = m.amortizeQty > 0 ? m.totalCost / m.amortizeQty : 0;
+                  return (
+                    <tr key={m.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={td("left", S.color, 10)}>{m.name || "-"}</td>
+                      <td style={td("right", "#334155", 10, "monospace")}>
+                        ¥{m.totalCost.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={td("right", S.muted, 10)}>
+                        {m.amortizeQty.toLocaleString()} PCS
+                      </td>
+                      <td style={td("right", "#1677ff", 10, "monospace", 600)}>
+                        ¥{unitCost.toFixed(4)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* ========== 条款 ========== */}
         {terms.length > 0 && (

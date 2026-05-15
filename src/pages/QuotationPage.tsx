@@ -1,19 +1,23 @@
-import { useRef, useCallback } from "react";
-import { Button, Space, message } from "antd";
+import { useRef, useCallback, useState } from "react";
+import { Button, Space, message, Modal } from "antd";
 import {
   FilePdfOutlined,
   SaveOutlined,
   ImportOutlined,
   ExportOutlined,
   FileAddOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import CustomerCard from "../components/CustomerCard";
 import QuoteMetaCard from "../components/QuoteMetaCard";
 import ProductCard from "../components/ProductCard";
 import TermsCard from "../components/TermsCard";
+import MoldCard from "../components/MoldCard";
 import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
+import QuotationHistoryDrawer from "../components/QuotationHistoryDrawer";
 import { useQuotationStore } from "../lib/store";
+import { useQuotationHistoryStore } from "../lib/historyStore";
 import { exportPDF } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 
@@ -34,17 +38,50 @@ export default function QuotationPage({ headerHeight }: Props) {
   const importJSON = useQuotationStore((s) => s.importJSON);
   const fileRef = useRef<HTMLInputElement>(null);
   const [messageApi, contextHolder] = message.useMessage();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const addRecord = useQuotationHistoryStore((s) => s.addRecord);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
+
+    const hasCustomer = quotation.customer.name.trim() !== "";
+    const hasPrice = quotation.products.some((p) => (p.price ?? 0) > 0);
+    if (!hasCustomer || !hasPrice) {
+      Modal.warning({
+        title: "报价信息不完整",
+        content: [!hasCustomer && "客户名称不能为空", !hasPrice && "至少需要一个产品单价大于 0"]
+          .filter(Boolean)
+          .join("；"),
+        okText: "知道了",
+      });
+      return;
+    }
+
     try {
       await exportPDF(previewRef.current, quotation);
-      messageApi.success("PDF 导出成功");
+
+      const totalAmount = quotation.products.reduce((sum, p) => sum + (p.price ?? 0), 0);
+      addRecord({
+        id: `${Date.now()}_${quotation.quoteMeta.no}`,
+        createdAt: new Date().toISOString(),
+        quoteNo: quotation.quoteMeta.no,
+        date: quotation.quoteMeta.date,
+        customerName: quotation.customer.name,
+        contact: quotation.customer.contact || "",
+        currency: quotation.quoteMeta.currency,
+        products: quotation.products,
+        molds: quotation.molds || [],
+        terms: quotation.terms,
+        salesName: quotation.quoteMeta.salesName,
+        totalAmount,
+      });
+
+      messageApi.success("PDF 导出成功，已保存至报价汇总");
     } catch (err) {
       console.error("PDF export failed:", err);
       messageApi.error("PDF 导出失败，请重试");
     }
-  }, [quotation, messageApi]);
+  }, [quotation, messageApi, addRecord]);
 
   const handleSave = () => {
     exportJSON();
@@ -124,6 +161,9 @@ export default function QuotationPage({ headerHeight }: Props) {
           <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
             {!isMobile && "导出 PDF"}
           </Button>
+          <Button size="small" icon={<HistoryOutlined />} onClick={() => setDrawerOpen(true)}>
+            {!isMobile && "报价汇总"}
+          </Button>
         </Space>
       </div>
 
@@ -148,6 +188,7 @@ export default function QuotationPage({ headerHeight }: Props) {
           <CustomerCard />
           <QuoteMetaCard />
           <ProductCard />
+          {quotation.quoteMeta.showMold && <MoldCard />}
           <TermsCard />
           <ExportSettingsCard />
           <div style={{ height: 16 }} />
@@ -190,6 +231,8 @@ export default function QuotationPage({ headerHeight }: Props) {
           </div>
         )}
       </div>
+
+      <QuotationHistoryDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

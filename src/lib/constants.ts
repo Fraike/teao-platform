@@ -22,6 +22,8 @@ export const DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS = {
   remark: 106,
 };
 
+export const DEFAULT_AMORTIZE_QTY = 50000;
+
 export const DEFAULT_TERMS = [
   "1. 以上产品价格为不含13%税单价。",
   "2. 包装方式：纸箱。",
