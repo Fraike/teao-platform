@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Typography, Button } from "antd";
-import { FileTextOutlined, CalculatorOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { FileTextOutlined, CalculatorOutlined, ReadOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
 
 const { Title, Paragraph, Text } = Typography;
@@ -22,6 +22,14 @@ const SYSTEMS = [
     color: "#f6ffed",
     path: "/cost",
   },
+  {
+    key: "process",
+    title: "流程查阅中心",
+    description: "查阅产品开发、质量控制、生产制造等标准作业流程，支持流程图交互查看，方便快速了解各环节规范。",
+    icon: <ReadOutlined style={{ fontSize: 40, color: "#fa8c16" }} />,
+    color: "#fff7e6",
+    path: "/process",
+  },
 ];
 
 export default function Dashboard() {
@@ -41,7 +49,7 @@ export default function Dashboard() {
 
       <Row gutter={[24, 24]}>
         {SYSTEMS.map((sys) => (
-          <Col xs={24} sm={12} key={sys.key}>
+          <Col xs={24} sm={8} key={sys.key}>
             <Card
               hoverable
               style={{ height: "100%", borderRadius: 8 }}
