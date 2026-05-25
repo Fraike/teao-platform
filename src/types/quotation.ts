@@ -10,6 +10,7 @@ export interface Product {
   torque?: string;
   image?: string;
   remark?: string;
+  packaging?: string;
 }
 
 export interface CustomerInfo {
@@ -17,6 +18,9 @@ export interface CustomerInfo {
   contact?: string;
   tel?: string;
   address?: string;
+  email?: string;
+  postalCode?: string;
+  country?: string;
 }
 
 export interface QuoteMeta {
@@ -30,6 +34,9 @@ export interface QuoteMeta {
   showMold: boolean;
   showAmount: boolean;
   tableColumnWidths: ProductTableColumnWidths;
+  tradeTerm?: string;
+  paymentTerm?: string;
+  bankInfo?: string;
 }
 
 export interface MoldItem {

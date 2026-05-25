@@ -31,3 +31,46 @@ export const DEFAULT_TERMS = [
   "4. 付款方式：月结。",
   "5. 报价有效期：本报价单自发出之日起30天内有效。",
 ];
+
+export const COMPANY_INFO_EN = {
+  name: "Dongguan Teao Electronic Technology Co., Ltd.",
+  address: "No. 2, Huangjiang North Third Street, Huangjiang Town, Dongguan City, Guangdong Province",
+  postalCode: "523750",
+  country: "China",
+  tel: "0769-82937929",
+  whatsapp: "+86 18813935128",
+  email: "mark@chinateao.com",
+  website: "teao-damper.com",
+};
+
+export const DEFAULT_TRADE_TERMS = [
+  "EXW",
+  "FOB",
+  "CIF",
+  "DDP",
+];
+
+export const DEFAULT_PAYMENT_TERMS = [
+  "50% deposit, 50% balance before shipment",
+  "100% T/T before shipment",
+  "T/T 30 days after B/L date",
+  "L/C at sight",
+];
+
+export const DEFAULT_BANK_INFO = `SWIFT/BIC: ABOCCNBJ190
+Account Number: 44292214040000121
+Account Name: Dongguan Teao Electronic Technology Co., Ltd.
+Bank Name: AGRICULTURAL BANK OF CHINA DONGGUAN BRANCH HUANGJIANG SUB
+Bank Address: NO.176 HUANGJIANG ROAD HUANGJIANG TOWN DONGGUAN CITY GUANGDONG PROV, P.R.CHINA (523750)
+Country/Region: CHINA`;
+
+export const DEFAULT_TERMS_EN = [
+  "1. Product unit price is based on EXW term.",
+  "2. Trade term: 50% deposit, 50% balance before shipment.",
+  "3. Price valid one month.",
+  "4. Bank information as below: (USD Currency Only)",
+  DEFAULT_BANK_INFO,
+  "",
+  "Please write our full company name: Dongguan Teao Electronic Technology Co., Ltd.",
+  "If the account name cannot write with full name, please remark full name on the notes place.",
+];

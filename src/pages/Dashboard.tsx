@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Typography, Button } from "antd";
-import { FileTextOutlined, CalculatorOutlined, ReadOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
 
 const { Title, Paragraph, Text } = Typography;
@@ -8,11 +8,19 @@ const { Title, Paragraph, Text } = Typography;
 const SYSTEMS = [
   {
     key: "quotation",
-    title: "报价单生成系统",
+    title: "国内报价系统",
     description: "快速录入客户、产品、价格信息，生成专业商务报价单，一键导出 A4 格式 PDF。支持公章叠加、产品图片、条款自定义。",
     icon: <FileTextOutlined style={{ fontSize: 40, color: "#1677ff" }} />,
     color: "#e6f4ff",
     path: "/quotation",
+  },
+  {
+    key: "quotation-intl",
+    title: "International Quotation",
+    description: "Generate professional English quotation for overseas customers. Supports USD/HKD/EUR, EXW/FOB trade terms, T/T payment, packaging details, and bank information.",
+    icon: <GlobalOutlined style={{ fontSize: 40, color: "#722ed1" }} />,
+    color: "#f9f0ff",
+    path: "/quotation-intl",
   },
   {
     key: "cost",
@@ -49,7 +57,7 @@ export default function Dashboard() {
 
       <Row gutter={[24, 24]}>
         {SYSTEMS.map((sys) => (
-          <Col xs={24} sm={8} key={sys.key}>
+          <Col xs={24} sm={12} key={sys.key}>
             <Card
               hoverable
               style={{ height: "100%", borderRadius: 8 }}

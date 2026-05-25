@@ -7,12 +7,14 @@ import {
   CalculatorOutlined,
   MenuOutlined,
   ReadOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import { useIsMobile } from "./lib/useIsMobile";
 import "./components/PageLoader.css";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const QuotationPage = lazy(() => import("./pages/QuotationPage"));
+const QuotationPageIntl = lazy(() => import("./pages/QuotationPageIntl"));
 const CostCalculatorPage = lazy(() => import("./pages/CostCalculatorPage"));
 const ProcessCenter = lazy(() => import("./pages/ProcessCenter"));
 
@@ -21,9 +23,10 @@ const { Text } = Typography;
 
 const NAV_ITEMS = [
   { key: "/", icon: <HomeOutlined />, label: "首页" },
-  { key: "/quotation", icon: <FileTextOutlined />, label: "报价系统" },
+  { key: "/quotation", icon: <FileTextOutlined />, label: "国内报价" },
+  { key: "/quotation-intl", icon: <GlobalOutlined />, label: "国际报价" },
   { key: "/cost", icon: <CalculatorOutlined />, label: "成本计算" },
-  { key: "/process", icon: <ReadOutlined />, label: "流程查阅中心" },
+  { key: "/process", icon: <ReadOutlined />, label: "流程查阅" },
 ];
 
 function PageLoader() {
@@ -37,7 +40,7 @@ function AppLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const selectedKey = NAV_ITEMS.find((item) =>
-    item.key === "/" ? location.pathname === "/" : location.pathname.startsWith(item.key)
+    item.key === "/" ? location.pathname === "/" : location.pathname === item.key || location.pathname.startsWith(item.key + "/")
   )?.key ?? "/";
 
   const headerHeight = isMobile ? 48 : 56;
@@ -138,6 +141,7 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/quotation" element={<QuotationPage headerHeight={headerHeight} />} />
+            <Route path="/quotation-intl" element={<QuotationPageIntl headerHeight={headerHeight} />} />
             <Route path="/cost" element={<CostCalculatorPage headerHeight={headerHeight} />} />
             <Route path="/process" element={<ProcessCenter />} />
           </Routes>
