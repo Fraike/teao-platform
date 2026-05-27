@@ -8,6 +8,7 @@ import {
   MenuOutlined,
   ReadOutlined,
   GlobalOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useIsMobile } from "./lib/useIsMobile";
 import "./components/PageLoader.css";
@@ -17,6 +18,7 @@ const QuotationPage = lazy(() => import("./pages/QuotationPage"));
 const QuotationPageIntl = lazy(() => import("./pages/QuotationPageIntl"));
 const CostCalculatorPage = lazy(() => import("./pages/CostCalculatorPage"));
 const ProcessCenter = lazy(() => import("./pages/ProcessCenter"));
+const ProductionReportPage = lazy(() => import("./pages/ProductionReportPage"));
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -26,6 +28,7 @@ const NAV_ITEMS = [
   { key: "/quotation", icon: <FileTextOutlined />, label: "国内报价" },
   { key: "/quotation-intl", icon: <GlobalOutlined />, label: "国际报价" },
   { key: "/cost", icon: <CalculatorOutlined />, label: "成本计算" },
+  { key: "/production-report", icon: <BarChartOutlined />, label: "生产日报" },
   { key: "/process", icon: <ReadOutlined />, label: "流程查阅" },
 ];
 
@@ -143,6 +146,7 @@ function AppLayout() {
             <Route path="/quotation" element={<QuotationPage headerHeight={headerHeight} />} />
             <Route path="/quotation-intl" element={<QuotationPageIntl headerHeight={headerHeight} />} />
             <Route path="/cost" element={<CostCalculatorPage headerHeight={headerHeight} />} />
+            <Route path="/production-report" element={<ProductionReportPage />} />
             <Route path="/process" element={<ProcessCenter />} />
           </Routes>
         </Suspense>

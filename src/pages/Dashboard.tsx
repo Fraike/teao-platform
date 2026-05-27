@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Typography, Button } from "antd";
-import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, BarChartOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
 
 const { Title, Paragraph, Text } = Typography;
@@ -29,6 +29,14 @@ const SYSTEMS = [
     icon: <CalculatorOutlined style={{ fontSize: 40, color: "#52c41a" }} />,
     color: "#f6ffed",
     path: "/cost",
+  },
+  {
+    key: "production-report",
+    title: "生产日报",
+    description: "自动从维格表拉取装配部、注塑部每日生产数据，汇总产量、达成率、合格率、不良数，支持一键推送到企业微信群。",
+    icon: <BarChartOutlined style={{ fontSize: 40, color: "#13c2c2" }} />,
+    color: "#e6fffb",
+    path: "/production-report",
   },
   {
     key: "process",
