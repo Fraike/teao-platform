@@ -31,6 +31,7 @@ interface LineSummary {
 }
 
 interface ProductRecord {
+  date?: string;
   name: string;
   spec?: string;
   customer?: string;
@@ -43,6 +44,7 @@ interface ProductRecord {
   backorder: number;
   batchNo: string;
   operator?: string;
+  remark?: string;
 }
 
 interface MachineSummary {
@@ -153,41 +155,46 @@ export default function ProductionReportPage() {
 
   // ===================== Assembly table =====================
   const assemblyColumns = [
-    { title: "产线", dataIndex: "line", key: "line", width: 100 },
+    { title: "日期", dataIndex: "date", key: "date", width: 90 },
+    { title: "产线", dataIndex: "line", key: "line", width: 90 },
     { title: "品名", dataIndex: "name", key: "name", width: 120 },
-    { title: "规格", dataIndex: "spec", key: "spec", width: 100 },
+    { title: "规格", dataIndex: "spec", key: "spec", width: 90 },
     { title: "客户", dataIndex: "customer", key: "customer", width: 100 },
-    { title: "生产批号", dataIndex: "batchNo", key: "batchNo", width: 130 },
+    { title: "生产批号", dataIndex: "batchNo", key: "batchNo", width: 120 },
     {
-      title: "计划数量", dataIndex: "planQty", key: "planQty", width: 90,
+      title: "计划数量", dataIndex: "planQty", key: "planQty", width: 85,
       render: (v: number) => v.toLocaleString(),
     },
     {
-      title: "实际数量", dataIndex: "actualQty", key: "actualQty", width: 90,
+      title: "实际数量", dataIndex: "actualQty", key: "actualQty", width: 85,
       render: (v: number) => v.toLocaleString(),
     },
     {
-      title: "达成率", dataIndex: "achievementRate", key: "achievementRate", width: 80,
+      title: "达成率", dataIndex: "achievementRate", key: "achievementRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
           <Tag color={rateColor(v)}>{(v * 100).toFixed(0)}%</Tag>
         ) : "-",
     },
     {
-      title: "不良数", dataIndex: "defects", key: "defects", width: 70,
+      title: "不良数", dataIndex: "defects", key: "defects", width: 65,
       render: (v: number) => (v > 0 ? <span style={{ color: "#ff4d4f" }}>{v}</span> : "0"),
     },
     {
-      title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 80,
+      title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
           <Tag color={rateColor(v)}>{(v * 100).toFixed(1)}%</Tag>
         ) : "-",
     },
     {
-      title: "欠数", dataIndex: "backorder", key: "backorder", width: 80,
+      title: "欠数", dataIndex: "backorder", key: "backorder", width: 75,
       render: (v: number) =>
         v > 0 ? <span style={{ color: "#faad14" }}>{v.toLocaleString()}</span> : "-",
+    },
+    {
+      title: "备注", dataIndex: "remark", key: "remark", width: 150,
+      render: (v: string) => v || "",
     },
   ];
 
@@ -202,39 +209,44 @@ export default function ProductionReportPage() {
 
   // ===================== Injection table =====================
   const injectionColumns = [
-    { title: "机台", dataIndex: "machine", key: "machine", width: 70 },
-    { title: "班次", dataIndex: "shift", key: "shift", width: 60,
+    { title: "日期", dataIndex: "date", key: "date", width: 90 },
+    { title: "机台", dataIndex: "machine", key: "machine", width: 65 },
+    { title: "班次", dataIndex: "shift", key: "shift", width: 55,
       render: (v: string) => (
         <Tag color={v === "白班" ? "blue" : "purple"}>{v}</Tag>
       ),
     },
-    { title: "品名", dataIndex: "name", key: "name", width: 120 },
-    { title: "原材料", dataIndex: "material", key: "material", width: 80 },
-    { title: "批号", dataIndex: "batchNo", key: "batchNo", width: 130 },
-    { title: "操作人", dataIndex: "operator", key: "operator", width: 80 },
+    { title: "品名", dataIndex: "name", key: "name", width: 110 },
+    { title: "原材料", dataIndex: "material", key: "material", width: 70 },
+    { title: "批号", dataIndex: "batchNo", key: "batchNo", width: 120 },
+    { title: "操作人", dataIndex: "operator", key: "operator", width: 70 },
     {
-      title: "订单数量", dataIndex: "planQty", key: "planQty", width: 90,
+      title: "订单数量", dataIndex: "planQty", key: "planQty", width: 85,
       render: (v: number) => v.toLocaleString(),
     },
     {
-      title: "当天产量", dataIndex: "actualQty", key: "actualQty", width: 90,
+      title: "当天产量", dataIndex: "actualQty", key: "actualQty", width: 85,
       render: (v: number) => v.toLocaleString(),
     },
     {
-      title: "不良数", dataIndex: "defects", key: "defects", width: 70,
+      title: "不良数", dataIndex: "defects", key: "defects", width: 65,
       render: (v: number) => (v > 0 ? <span style={{ color: "#ff4d4f" }}>{v}</span> : "0"),
     },
     {
-      title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 80,
+      title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
           <Tag color={rateColor(v)}>{(v * 100).toFixed(1)}%</Tag>
         ) : "-",
     },
     {
-      title: "欠数", dataIndex: "backorder", key: "backorder", width: 80,
+      title: "欠数", dataIndex: "backorder", key: "backorder", width: 75,
       render: (v: number) =>
         v > 0 ? <span style={{ color: "#faad14" }}>{v.toLocaleString()}</span> : "-",
+    },
+    {
+      title: "备注", dataIndex: "remark", key: "remark", width: 150,
+      render: (v: string) => v || "",
     },
   ];
 
@@ -381,7 +393,7 @@ export default function ProductionReportPage() {
                   dataSource={assemblyDataSource}
                   pagination={false}
                   size="small"
-                  scroll={{ x: 1100 }}
+                  scroll={{ x: 1300 }}
                   bordered
                 />
               </Tabs.TabPane>
@@ -415,7 +427,7 @@ export default function ProductionReportPage() {
                   dataSource={injectionDataSource}
                   pagination={false}
                   size="small"
-                  scroll={{ x: 1000 }}
+                  scroll={{ x: 1200 }}
                   bordered
                 />
               </Tabs.TabPane>

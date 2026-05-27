@@ -3,8 +3,8 @@ import path from "node:path";
 import express from "express";
 import cron from "node-cron";
 
-const PORT = 3899;
-const DATA_DIR = "/var/www/teao-platform/data";
+const PORT = process.env.PORT || 3899;
+const DATA_DIR = process.env.DATA_DIR || "/var/www/teao-platform/data";
 const DATA_FILE = path.join(DATA_DIR, "history.json");
 const CONFIG_FILE = path.join(DATA_DIR, "production-config.json");
 const REPORTS_DIR = path.join(DATA_DIR, "production-reports");
@@ -84,17 +84,41 @@ function writeReport(date, data) {
   fs.writeFileSync(path.join(REPORTS_DIR, `${date}.json`), JSON.stringify(data, null, 2), "utf-8");
 }
 
-function dateToTimestamps(dateStr) {
-  const start = new Date(`${dateStr}T00:00:00+08:00`).getTime();
-  const end = new Date(`${dateStr}T23:59:59.999+08:00`).getTime();
-  return { start, end };
+// ===================== Value Parsers (cellFormat=string → numbers) =====================
+
+function parseNum(v) {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v.replace(/,/g, "").replace(/%/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+}
+
+function parseRate(v) {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    if (v.includes("%")) return parseFloat(v) / 100;
+    return parseFloat(v);
+  }
+  return null;
+}
+
+function extractDateStr(v) {
+  // "2024/09/24 08:42 PM" → "2024-09-24"
+  // "2026/03/28" → "2026-03-28"
+  if (!v) return null;
+  const m = String(v).match(/(\d{4})\/(\d{2})\/(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
 // ===================== Vika API =====================
 
 async function fetchVikaRecords(datasheetId, viewId, token, sortField, sortOrder) {
-  const url = new URL(`https://vika.cn/fusion/v1/datasheets/${datasheetId}/records`);
+  const url = new URL(`https://api.vika.cn/fusion/v1/datasheets/${datasheetId}/records`);
   url.searchParams.set("viewId", viewId);
+  url.searchParams.set("fieldKey", "name");
   url.searchParams.set("cellFormat", "string");
   url.searchParams.set("pageSize", "500");
   url.searchParams.set("sort[0][field]", sortField);
@@ -130,10 +154,10 @@ async function sendWecomMessage(webhook, content) {
 
 // ===================== Report Logic =====================
 
-function aggregateAssembly(records, { start, end }) {
+function aggregateAssembly(records, dateStr) {
   const filtered = records.filter((r) => {
-    const ts = r.fields["创建时间"];
-    return ts && ts >= start && ts <= end;
+    const d = extractDateStr(r.fields["日期"]) || extractDateStr(r.fields["创建时间"]);
+    return d === dateStr;
   });
 
   const lines = new Map();
@@ -151,22 +175,28 @@ function aggregateAssembly(records, { start, end }) {
       });
     }
     const line = lines.get(lineName);
+    const planQty = parseNum(r.fields["计划生产数量"]);
+    const actualQty = parseNum(r.fields["当天生产数量"]);
+    const defects = parseNum(r.fields["不良数"]);
+    const backorder = parseNum(r.fields["订单累计欠数"]);
     line.products.push({
+      date: extractDateStr(r.fields["日期"]) || extractDateStr(r.fields["创建时间"]) || dateStr,
       name: r.fields["品名"] || "-",
       spec: r.fields["规格"] || "-",
       customer: r.fields["客户名称"] || "-",
-      planQty: r.fields["计划生产数量"] || 0,
-      actualQty: r.fields["当天生产数量"] || 0,
-      achievementRate: r.fields["计划达成率"] ?? null,
-      defects: r.fields["不良数"] || 0,
-      qualifiedRate: r.fields["合格率"] ?? null,
-      backorder: r.fields["订单累计欠数"] || 0,
+      planQty,
+      actualQty,
+      achievementRate: parseRate(r.fields["计划达成率"]),
+      defects,
+      qualifiedRate: parseRate(r.fields["合格率"]),
+      backorder,
       batchNo: r.fields["生产批号"] || "-",
+      remark: r.fields["备注"] || "",
     });
-    line.totalPlan += r.fields["计划生产数量"] || 0;
-    line.totalActual += r.fields["当天生产数量"] || 0;
-    line.totalDefects += r.fields["不良数"] || 0;
-    line.totalBackorder += r.fields["订单累计欠数"] || 0;
+    line.totalPlan += planQty;
+    line.totalActual += actualQty;
+    line.totalDefects += defects;
+    line.totalBackorder += backorder;
     line.recordCount++;
   }
 
@@ -193,10 +223,10 @@ function aggregateAssembly(records, { start, end }) {
   return { records: lineList, summary, rawCount: filtered.length };
 }
 
-function aggregateInjection(records, { start, end }) {
+function aggregateInjection(records, dateStr) {
   const filtered = records.filter((r) => {
-    const ts = r.fields["日期"];
-    return ts && ts >= start && ts <= end;
+    const d = extractDateStr(r.fields["日期"]);
+    return d === dateStr;
   });
 
   const machines = new Map();
@@ -216,20 +246,25 @@ function aggregateInjection(records, { start, end }) {
       });
     }
     const m = machines.get(key);
+    const actualQty = parseNum(r.fields["当天生产数量"]);
+    const defects = parseNum(r.fields["不良数"]);
+    const backorder = parseNum(r.fields["订单累计欠数"]);
     m.products.push({
+      date: extractDateStr(r.fields["日期"]) || dateStr,
       name: r.fields["品名/型号"] || "-",
       material: r.fields["原材料"] || "-",
-      planQty: r.fields["订单数量"] || 0,
-      actualQty: r.fields["当天生产数量"] || 0,
-      defects: r.fields["不良数"] || 0,
-      qualifiedRate: r.fields["合格率"] ?? null,
-      backorder: r.fields["订单累计欠数"] || 0,
+      planQty: parseNum(r.fields["订单数量"]),
+      actualQty,
+      defects,
+      qualifiedRate: parseRate(r.fields["合格率"]),
+      backorder,
       batchNo: r.fields["半成品生产批号"] || "-",
       operator: r.fields["操作人"] || "-",
+      remark: r.fields["备注"] || "",
     });
-    m.totalQty += r.fields["当天生产数量"] || 0;
-    m.totalDefects += r.fields["不良数"] || 0;
-    m.totalBackorder += r.fields["订单累计欠数"] || 0;
+    m.totalQty += actualQty;
+    m.totalDefects += defects;
+    m.totalBackorder += backorder;
     m.recordCount++;
   }
 
@@ -255,73 +290,128 @@ function aggregateInjection(records, { start, end }) {
 
 function buildWecomContent(date, assembly, injection) {
   const lines = [];
+  const asm = assembly.summary;
+  const inj = injection.summary;
+
+  // Title + top-level summary
   lines.push(`## 📊 生产日报 — ${date}`);
+  lines.push(`> 装配 ${asm.lines} 线 | 产量 **${asm.totalActualQty.toLocaleString()}** PCS | 达成 **${(asm.avgAchievementRate * 100).toFixed(0)}%** | 合格 **${(asm.avgQualifiedRate * 100).toFixed(1)}%** | 不良 ${asm.totalDefects}`);
+  const injectionMachineCount = new Set(injection.records.map(m => m.machine)).size;
+  lines.push(`> 注塑 ${injectionMachineCount} 机台（${inj.machines} 班次）| 产量 **${inj.totalQty.toLocaleString()}** PCS | 合格 **${(inj.avgQualifiedRate * 100).toFixed(1)}%** | 不良 ${inj.totalDefects}`);
   lines.push("");
 
-  // Assembly section
-  lines.push(`### 装配部（${assembly.summary.lines} 条产线）`);
-  lines.push("| 产线 | 品名 | 计划 | 实际 | 达成率 | 合格率 | 不良 | 欠数 |");
-  lines.push("|------|------|------|------|--------|--------|------|------|");
+  // Assembly: line + product name, qty, defects
+  lines.push("### 装配部");
+  lines.push("| 产线 | 品名 | 产量 | 不良 |");
+  lines.push("|------|------|------|------|");
   for (const line of assembly.records) {
     for (const p of line.products) {
-      const ach = p.achievementRate != null ? `${(p.achievementRate * 100).toFixed(0)}%` : "-";
-      const qual = p.qualifiedRate != null ? `${(p.qualifiedRate * 100).toFixed(1)}%` : "-";
-      lines.push(`| ${line.line} | ${p.name} | ${p.planQty.toLocaleString()} | ${p.actualQty.toLocaleString()} | ${ach} | ${qual} | ${p.defects} | ${p.backorder.toLocaleString()} |`);
+      lines.push(`| ${line.line} | ${p.name} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
     }
   }
-  lines.push(`| **合计** | | **${assembly.summary.totalPlanQty.toLocaleString()}** | **${assembly.summary.totalActualQty.toLocaleString()}** | **${(assembly.summary.avgAchievementRate * 100).toFixed(0)}%** | **${(assembly.summary.avgQualifiedRate * 100).toFixed(1)}%** | **${assembly.summary.totalDefects}** | **${assembly.summary.totalBackorder.toLocaleString()}** |`);
   lines.push("");
 
-  // Injection section
-  lines.push(`### 注塑部（${injection.summary.machines} 个机台班次）`);
-  lines.push("| 机台 | 班次 | 品名 | 产量 | 合格率 | 不良 | 欠数 |");
-  lines.push("|------|------|------|------|--------|------|------|");
+  // Injection: combine day/night per machine
+  lines.push("### 注塑部");
+  lines.push("| 机台 | 产量 | 不良 |");
+  lines.push("|------|------|------|");
+  const machineMap = new Map();
+  for (const m of injection.records) {
+    const key = m.machine;
+    if (!machineMap.has(key)) {
+      machineMap.set(key, { qty: 0, defects: 0 });
+    }
+    const entry = machineMap.get(key);
+    entry.qty += m.totalQty;
+    entry.defects += m.totalDefects;
+  }
+  const sortedMachines = [...machineMap.entries()].sort((a, b) => b[1].qty - a[1].qty);
+  for (const [name, data] of sortedMachines) {
+    lines.push(`| ${name} | ${data.qty.toLocaleString()} | ${data.defects > 0 ? data.defects.toString() : "-"} |`);
+  }
+  lines.push("");
+
+  // Remarks from both departments
+  const remarks = [];
+  for (const line of assembly.records) {
+    for (const p of line.products) {
+      if (p.remark) remarks.push(`> 🔧 装配-${line.line}（${p.name}）：${p.remark}`);
+    }
+  }
   for (const m of injection.records) {
     for (const p of m.products) {
-      const qual = p.qualifiedRate != null ? `${(p.qualifiedRate * 100).toFixed(1)}%` : "-";
-      lines.push(`| ${m.machine} | ${m.shift} | ${p.name} | ${p.actualQty.toLocaleString()} | ${qual} | ${p.defects} | ${p.backorder.toLocaleString()} |`);
+      if (p.remark) remarks.push(`> 🔧 注塑-${m.machine}${m.shift}（${p.name}）：${p.remark}`);
     }
   }
-  lines.push(`| **合计** | | | **${injection.summary.totalQty.toLocaleString()}** | **${(injection.summary.avgQualifiedRate * 100).toFixed(1)}%** | **${injection.summary.totalDefects}** | **${injection.summary.totalBackorder.toLocaleString()}** |`);
-  lines.push("");
-
-  // Alert: backorders
-  const alerts = [];
-  for (const line of assembly.records) {
-    if (line.totalBackorder > 0) {
-      alerts.push(`⚠️ 装配-${line.line} 欠数 ${line.totalBackorder.toLocaleString()}`);
-    }
-  }
-  for (const m of injection.records) {
-    if (m.totalBackorder > 0) {
-      alerts.push(`⚠️ 注塑-${m.machine}${m.shift} 欠数 ${m.totalBackorder.toLocaleString()}`);
-    }
-  }
-  if (alerts.length > 0) {
-    lines.push(`### ⚠️ 订单积压预警`);
-    for (const a of alerts) lines.push(`> ${a}`);
+  if (remarks.length > 0) {
+    lines.push("### 📝 产线备注");
+    for (const r of remarks) lines.push(r);
     lines.push("");
   }
 
-  lines.push(`> 数据来源：维格表 · 自动推送 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
+  // Daily summary
+  const anomalies = [];
+  // Check for high defect lines
+  for (const line of assembly.records) {
+    const total = line.totalActual + line.totalDefects;
+    const rate = total > 0 ? line.totalActual / total : 1;
+    if (rate < 0.98) anomalies.push(`装配${line.line}合格率偏低(${(rate * 100).toFixed(1)}%)`);
+    if (line.totalDefects > 50) anomalies.push(`装配${line.line}不良数偏高(${line.totalDefects})`);
+  }
+  for (const m of injection.records) {
+    const total = m.totalQty + m.totalDefects;
+    const rate = total > 0 ? m.totalQty / total : 1;
+    if (rate < 0.995) anomalies.push(`注塑${m.machine}合格率偏低(${(rate * 100).toFixed(1)}%)`);
+  }
+  if (remarks.length > 0) anomalies.push(`${remarks.length} 条产线备注（停线/异常）`);
+
+  lines.push("### 📋 昨日总结");
+  if (anomalies.length > 0) {
+    lines.push(`> ⚠️ 发现 ${anomalies.length} 项异常：`);
+    for (const a of anomalies) lines.push(`> - ${a}`);
+  } else {
+    lines.push("> ✅ 昨日生产正常，无异常");
+  }
+  lines.push("");
+
+  lines.push(`> 数据来源：维格表 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
+  lines.push(`> 详情查阅：[teao.work/production-report](https://teao.work/production-report)`);
 
   return lines.join("\n");
+}
+
+function buildEmptyContent(date) {
+  return [
+    `## 📊 生产日报 — ${date}`,
+    "",
+    "> ⚠️ **暂无生产数据**",
+    "> ",
+    "> 装配部和注塑部昨日均无生产记录。",
+    "> 请相关人员及时前往维格表录入生产数据！",
+    "> ",
+    `> 推送时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
+    "> 录入入口：[维格表](https://vika.cn)",
+  ].join("\n");
+}
+
+function hasProductionData(report) {
+  const asm = report.assembly.summary;
+  const inj = report.injection.summary;
+  return (asm.totalActualQty > 0 || inj.totalQty > 0);
 }
 
 async function fetchAndStoreReport(date) {
   const config = readConfig();
   if (!config.enabled) throw new Error("生产日报功能未启用");
 
-  const { start, end } = dateToTimestamps(date);
-
   // Fetch both departments in parallel
   const [assemblyRaw, injectionRaw] = await Promise.all([
-    fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "创建时间", "desc"),
+    fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
     fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
   ]);
 
-  const assembly = aggregateAssembly(assemblyRaw, { start, end });
-  const injection = aggregateInjection(injectionRaw, { start, end });
+  const assembly = aggregateAssembly(assemblyRaw, date);
+  const injection = aggregateInjection(injectionRaw, date);
 
   const report = {
     date,
@@ -428,7 +518,9 @@ app.post("/api/production/send", auth, async (req, res) => {
     }
     const config = readConfig();
     if (!config.wecomWebhook) throw new Error("未配置企微 Webhook");
-    const content = buildWecomContent(date, report.assembly, report.injection);
+    const content = hasProductionData(report)
+      ? buildWecomContent(date, report.assembly, report.injection)
+      : buildEmptyContent(date);
     await sendWecomMessage(config.wecomWebhook, content);
     res.json({ ok: true, date, message: "已推送到企业微信群" });
   } catch (err) {
@@ -444,8 +536,10 @@ app.post("/api/production/preview", auth, async (req, res) => {
     if (!report) {
       report = await fetchAndStoreReport(date);
     }
-    const content = buildWecomContent(date, report.assembly, report.injection);
-    res.json({ ok: true, date, content });
+    const content = hasProductionData(report)
+      ? buildWecomContent(date, report.assembly, report.injection)
+      : buildEmptyContent(date);
+    res.json({ ok: true, date, content, hasData: hasProductionData(report) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -478,9 +572,11 @@ function setupCron() {
       if (!report) {
         report = await fetchAndStoreReport(date);
       }
-      const content = buildWecomContent(date, report.assembly, report.injection);
+      const content = hasProductionData(report)
+        ? buildWecomContent(date, report.assembly, report.injection)
+        : buildEmptyContent(date);
       await sendWecomMessage(config.wecomWebhook, content);
-      console.log(`[production] cron: sent report for ${date}`);
+      console.log(`[production] cron: sent ${hasProductionData(report) ? "report" : "empty reminder"} for ${date}`);
     } catch (err) {
       console.error(`[production] cron error: ${err.message}`);
     }
