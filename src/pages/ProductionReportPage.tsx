@@ -124,7 +124,7 @@ export default function ProductionReportPage() {
   }, []);
 
   useEffect(() => {
-    fetchReport(dateStr);
+    fetchReport(dateStr, true);
   }, [dateStr, fetchReport]);
 
   const handleRefresh = () => fetchReport(dateStr, true);
@@ -267,14 +267,23 @@ export default function ProductionReportPage() {
     <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px" : "24px" }}>
       {/* Header */}
       <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
+        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
         marginBottom: 20, flexWrap: "wrap", gap: 12,
       }}>
-        <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
-          生产日报
-        </Title>
-        <Space>
-          <DatePicker value={date} onChange={(d) => setDate(d || dayjs())} allowClear={false} />
+        <div>
+          <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
+            生产日报
+          </Title>
+          <DatePicker
+            value={date}
+            onChange={(d) => setDate(d || dayjs())}
+            allowClear={false}
+            size="large"
+            style={{ marginTop: 8, fontSize: 18 }}
+            format="YYYY年M月D日"
+          />
+        </div>
+        <Space style={{ marginTop: isMobile ? 0 : 8 }}>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
             刷新数据
           </Button>
