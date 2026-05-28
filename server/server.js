@@ -579,10 +579,7 @@ function setupCron() {
     const date = yesterday.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
     console.log(`[production] cron: fetching & sending report for ${date}`);
     try {
-      let report = readReport(date);
-      if (!report) {
-        report = await fetchAndStoreReport(date);
-      }
+      const report = await fetchAndStoreReport(date);
       const content = hasProductionData(report)
         ? buildWecomContent(date, report.assembly, report.injection)
         : buildEmptyContent(date);
