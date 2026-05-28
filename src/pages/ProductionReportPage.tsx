@@ -279,9 +279,20 @@ export default function ProductionReportPage() {
             onChange={(d) => setDate(d || dayjs())}
             allowClear={false}
             size="large"
-            style={{ marginTop: 8, fontSize: 18 }}
+            className="production-date-picker"
+            style={{ marginTop: 8, minWidth: 260 }}
             format="YYYY年M月D日"
+            inputReadOnly
           />
+          <style>{`
+            .production-date-picker.ant-picker-large input {
+              font-size: 22px !important;
+              font-weight: 600 !important;
+            }
+            .production-date-picker.ant-picker-large {
+              height: 48px !important;
+            }
+          `}</style>
         </div>
         <Space style={{ marginTop: isMobile ? 0 : 8 }}>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
