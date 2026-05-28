@@ -17,7 +17,7 @@ const DEFAULT_CONFIG = {
   injectionDatasheetId: "dstDYmU691edT0WS7D",
   injectionViewId: "viwu3b9OBA6AR",
   wecomWebhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=dc7a6457-1e01-4c34-b9bf-8c2405ed9116",
-  cronExpression: "0 30 8 * * *",
+  cronExpression: "0 0 13 * * *",
   enabled: true,
 };
 
@@ -293,30 +293,40 @@ function buildWecomContent(date, assembly, injection) {
   const asm = assembly.summary;
   const inj = injection.summary;
 
-  // Title + top-level summary
+  // Title
   lines.push(`## 📊 生产日报 — ${date}`);
-  lines.push(`> 装配 ${asm.lines} 线 | 产量 **${asm.totalActualQty.toLocaleString()}** PCS | 达成 **${(asm.avgAchievementRate * 100).toFixed(0)}%** | 合格 **${(asm.avgQualifiedRate * 100).toFixed(1)}%** | 不良 ${asm.totalDefects}`);
-  const injectionMachineCount = new Set(injection.records.map(m => m.machine)).size;
-  lines.push(`> 注塑 ${injectionMachineCount} 机台（${inj.machines} 班次）| 产量 **${inj.totalQty.toLocaleString()}** PCS | 合格 **${(inj.avgQualifiedRate * 100).toFixed(1)}%** | 不良 ${inj.totalDefects}`);
   lines.push("");
 
-  // Assembly: line + product name, qty, defects
+  // Top summary table
+  const injectionMachineCount = new Set(injection.records.map(m => m.machine)).size;
+  lines.push("| 部门 | 产线/机台 | 产量(PCS) | 达成率 | 合格率 | 不良 |");
+  lines.push("|------|----------|----------|--------|--------|------|");
+  lines.push(`| 装配 | ${asm.lines} 线 | ${asm.totalActualQty.toLocaleString()} | ${(asm.avgAchievementRate * 100).toFixed(0)}% | ${(asm.avgQualifiedRate * 100).toFixed(1)}% | ${asm.totalDefects} |`);
+  lines.push(`| 注塑 | ${injectionMachineCount} 机台(${inj.machines}班次) | ${inj.totalQty.toLocaleString()} | - | ${(inj.avgQualifiedRate * 100).toFixed(1)}% | ${inj.totalDefects} |`);
+  lines.push("");
+
+  // Helper: extract number from "X线" or "X#" for natural sort
+  const extractNum = (s) => {
+    const m = String(s).match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+
+  // Assembly: sorted by line number ascending
+  const sortedAssembly = [...assembly.records].sort((a, b) => extractNum(a.line) - extractNum(b.line));
   lines.push("### 装配部");
   lines.push("| 产线 | 品名 | 产量 | 不良 |");
   lines.push("|------|------|------|------|");
-  for (const line of assembly.records) {
+  for (const line of sortedAssembly) {
     for (const p of line.products) {
       lines.push(`| ${line.line} | ${p.name} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
     }
   }
   lines.push("");
 
-  // Injection: combine day/night per machine
-  lines.push("### 注塑部");
-  lines.push("| 机台 | 产量 | 不良 |");
-  lines.push("|------|------|------|");
+  // Injection: sorted by machine number ascending
+  const sortedInjection = [...injection.records].sort((a, b) => extractNum(a.machine) - extractNum(b.machine));
   const machineMap = new Map();
-  for (const m of injection.records) {
+  for (const m of sortedInjection) {
     const key = m.machine;
     if (!machineMap.has(key)) {
       machineMap.set(key, { qty: 0, defects: 0 });
@@ -325,20 +335,22 @@ function buildWecomContent(date, assembly, injection) {
     entry.qty += m.totalQty;
     entry.defects += m.totalDefects;
   }
-  const sortedMachines = [...machineMap.entries()].sort((a, b) => b[1].qty - a[1].qty);
-  for (const [name, data] of sortedMachines) {
+  lines.push("### 注塑部");
+  lines.push("| 机台 | 产量 | 不良 |");
+  lines.push("|------|------|------|");
+  for (const [name, data] of machineMap) {
     lines.push(`| ${name} | ${data.qty.toLocaleString()} | ${data.defects > 0 ? data.defects.toString() : "-"} |`);
   }
   lines.push("");
 
   // Remarks from both departments
   const remarks = [];
-  for (const line of assembly.records) {
+  for (const line of sortedAssembly) {
     for (const p of line.products) {
       if (p.remark) remarks.push(`> 🔧 装配-${line.line}（${p.name}）：${p.remark}`);
     }
   }
-  for (const m of injection.records) {
+  for (const m of sortedInjection) {
     for (const p of m.products) {
       if (p.remark) remarks.push(`> 🔧 注塑-${m.machine}${m.shift}（${p.name}）：${p.remark}`);
     }
@@ -351,14 +363,13 @@ function buildWecomContent(date, assembly, injection) {
 
   // Daily summary
   const anomalies = [];
-  // Check for high defect lines
-  for (const line of assembly.records) {
+  for (const line of sortedAssembly) {
     const total = line.totalActual + line.totalDefects;
     const rate = total > 0 ? line.totalActual / total : 1;
     if (rate < 0.98) anomalies.push(`装配${line.line}合格率偏低(${(rate * 100).toFixed(1)}%)`);
     if (line.totalDefects > 50) anomalies.push(`装配${line.line}不良数偏高(${line.totalDefects})`);
   }
-  for (const m of injection.records) {
+  for (const m of sortedInjection) {
     const total = m.totalQty + m.totalDefects;
     const rate = total > 0 ? m.totalQty / total : 1;
     if (rate < 0.995) anomalies.push(`注塑${m.machine}合格率偏低(${(rate * 100).toFixed(1)}%)`);

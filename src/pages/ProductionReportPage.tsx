@@ -85,7 +85,7 @@ interface ReportData {
 
 export default function ProductionReportPage() {
   const isMobile = useIsMobile();
-  const [date, setDate] = useState(() => dayjs());
+  const [date, setDate] = useState(() => dayjs().subtract(1, "day"));
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
