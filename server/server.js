@@ -113,6 +113,17 @@ function extractDateStr(v) {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
+function formatShanghaiDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 // ===================== Vika API =====================
 
 async function fetchVikaRecords(datasheetId, viewId, token, sortField, sortOrder) {
@@ -498,7 +509,7 @@ app.post("/api/production/config", auth, (req, res) => {
 // Fetch & store report for a date
 app.post("/api/production/fetch", auth, async (req, res) => {
   try {
-    const date = req.query.date || new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
+    const date = req.query.date || formatShanghaiDate();
     const report = await fetchAndStoreReport(date);
     res.json({
       ok: true,
@@ -513,7 +524,7 @@ app.post("/api/production/fetch", auth, async (req, res) => {
 
 // Get stored report
 app.get("/api/production/report", auth, (req, res) => {
-  const date = req.query.date || new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
+  const date = req.query.date || formatShanghaiDate();
   const report = readReport(date);
   if (!report) return res.json({ exists: false, date });
   res.json({ exists: true, ...report });
@@ -522,7 +533,7 @@ app.get("/api/production/report", auth, (req, res) => {
 // Manually send WeCom message for a date
 app.post("/api/production/send", auth, async (req, res) => {
   try {
-    const date = req.query.date || new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
+    const date = req.query.date || formatShanghaiDate();
     let report = readReport(date);
     if (!report) {
       report = await fetchAndStoreReport(date);
@@ -542,7 +553,7 @@ app.post("/api/production/send", auth, async (req, res) => {
 // Preview WeCom message content (without sending)
 app.post("/api/production/preview", auth, async (req, res) => {
   try {
-    const date = req.query.date || new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
+    const date = req.query.date || formatShanghaiDate();
     let report = readReport(date);
     if (!report) {
       report = await fetchAndStoreReport(date);
@@ -575,8 +586,7 @@ function setupCron() {
   }
 
   cronTask = cron.schedule(config.cronExpression, async () => {
-    const yesterday = new Date(Date.now() - 86400000);
-    const date = yesterday.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }).replace(/\//g, "-");
+    const date = formatShanghaiDate(new Date(Date.now() - 86400000));
     console.log(`[production] cron: fetching & sending report for ${date}`);
     try {
       const report = await fetchAndStoreReport(date);
