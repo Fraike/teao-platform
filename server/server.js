@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import cron from "node-cron";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3899;
 const DATA_DIR = process.env.DATA_DIR || "/var/www/teao-platform/data";
 const DATA_FILE = path.join(DATA_DIR, "history.json");
-const CONFIG_FILE = path.join(DATA_DIR, "production-config.json");
+const OLD_CONFIG_FILE = path.join(DATA_DIR, "production-config.json");
+const CONFIG_FILE = path.join(__dirname, "production-config.json");
 const REPORTS_DIR = path.join(DATA_DIR, "production-reports");
 const PASSWORD = "teao123";
 
@@ -19,6 +22,8 @@ const DEFAULT_CONFIG = {
   wecomWebhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=dc7a6457-1e01-4c34-b9bf-8c2405ed9116",
   cronExpression: "0 0 13 * * *",
   enabled: true,
+  restDays: [],
+  makeupWorkdays: [],
 };
 
 const app = express();
@@ -53,12 +58,24 @@ function writeData(data) {
 
 function readConfig() {
   try {
-    if (!fs.existsSync(CONFIG_FILE)) {
-      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2), "utf-8");
-      return { ...DEFAULT_CONFIG };
+    // 从新位置读取（server/ 目录，随代码部署）
+    if (fs.existsSync(CONFIG_FILE)) {
+      return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")) };
     }
-    return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")) };
+    // 迁移：旧位置有配置，复制到新位置
+    if (fs.existsSync(OLD_CONFIG_FILE)) {
+      const oldConfig = JSON.parse(fs.readFileSync(OLD_CONFIG_FILE, "utf-8"));
+      const configDir = path.dirname(CONFIG_FILE);
+      if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(oldConfig, null, 2), "utf-8");
+      console.log("[production] config migrated from data/ to server/");
+      return { ...DEFAULT_CONFIG, ...oldConfig };
+    }
+    // 都没有 → 写默认配置到新位置
+    const configDir = path.dirname(CONFIG_FILE);
+    if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2), "utf-8");
+    return { ...DEFAULT_CONFIG };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -122,6 +139,29 @@ function formatShanghaiDate(date = new Date()) {
   }).formatToParts(date);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+function isRestDay(dateStr, config) {
+  // 补班日优先级最高：即使周日/节假日也算工作日
+  if (config.makeupWorkdays?.includes(dateStr)) return false;
+  // 工厂额外休息日
+  if (config.restDays?.includes(dateStr)) return true;
+  // 周日自动判断
+  const d = new Date(dateStr + "T00:00:00+08:00");
+  return d.getDay() === 0;
+}
+
+function getLastWorkingDay(todayStr, config) {
+  // 从昨天开始，往回找最近的工作日
+  const d = new Date(todayStr + "T00:00:00+08:00");
+  d.setDate(d.getDate() - 1); // 昨天
+  // 安全阀：最多往回找 60 天
+  for (let i = 0; i < 60; i++) {
+    const dateStr = formatShanghaiDate(d);
+    if (!isRestDay(dateStr, config)) return dateStr;
+    d.setDate(d.getDate() - 1);
+  }
+  throw new Error("无法找到上一个工作日，请检查 restDays/makeupWorkdays 配置");
 }
 
 // ===================== Vika API =====================
@@ -498,6 +538,7 @@ app.post("/api/production/config", auth, (req, res) => {
     "vikaToken", "assemblyDatasheetId", "assemblyViewId",
     "injectionDatasheetId", "injectionViewId",
     "wecomWebhook", "cronExpression", "enabled",
+    "restDays", "makeupWorkdays",
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) config[f] = updates[f];
@@ -567,7 +608,7 @@ app.post("/api/production/preview", auth, async (req, res) => {
   }
 });
 
-// ===================== Cron: Daily 8:30 AM Push =====================
+// ===================== Cron: Daily 1:00 PM Push =====================
 
 let cronTask = null;
 
@@ -586,15 +627,28 @@ function setupCron() {
   }
 
   cronTask = cron.schedule(config.cronExpression, async () => {
-    const date = formatShanghaiDate(new Date(Date.now() - 86400000));
-    console.log(`[production] cron: fetching & sending report for ${date}`);
+    const today = formatShanghaiDate();
+    console.log(`[production] cron: triggered at ${today}`);
+
+    // 1. 今天休息日 → 跳过，不发任何消息
+    if (isRestDay(today, config)) {
+      console.log(`[production] cron: ${today} is rest day, skipped`);
+      return;
+    }
+
+    // 2. 找上一个工作日
+    const date = getLastWorkingDay(today, config);
+    console.log(`[production] cron: fetching report for last working day ${date}`);
+
     try {
       const report = await fetchAndStoreReport(date);
-      const content = hasProductionData(report)
-        ? buildWecomContent(date, report.assembly, report.injection)
-        : buildEmptyContent(date);
-      await sendWecomMessage(config.wecomWebhook, content);
-      console.log(`[production] cron: sent ${hasProductionData(report) ? "report" : "empty reminder"} for ${date}`);
+      if (hasProductionData(report)) {
+        const content = buildWecomContent(date, report.assembly, report.injection);
+        await sendWecomMessage(config.wecomWebhook, content);
+        console.log(`[production] cron: sent report for ${date}`);
+      } else {
+        console.log(`[production] cron: no data for ${date}, skipped`);
+      }
     } catch (err) {
       console.error(`[production] cron error: ${err.message}`);
     }
