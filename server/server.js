@@ -374,23 +374,15 @@ function buildWecomContent(date, assembly, injection) {
   }
   lines.push("");
 
-  // Injection: sorted by machine number ascending
+  // Injection: sorted by machine number ascending, show each product
   const sortedInjection = [...injection.records].sort((a, b) => extractNum(a.machine) - extractNum(b.machine));
-  const machineMap = new Map();
-  for (const m of sortedInjection) {
-    const key = m.machine;
-    if (!machineMap.has(key)) {
-      machineMap.set(key, { qty: 0, defects: 0 });
-    }
-    const entry = machineMap.get(key);
-    entry.qty += m.totalQty;
-    entry.defects += m.totalDefects;
-  }
   lines.push("### 注塑部");
-  lines.push("| 机台 | 产量 | 不良 |");
-  lines.push("|------|------|------|");
-  for (const [name, data] of machineMap) {
-    lines.push(`| ${name} | ${data.qty.toLocaleString()} | ${data.defects > 0 ? data.defects.toString() : "-"} |`);
+  lines.push("| 机台 | 品名 | 产量 | 不良 |");
+  lines.push("|------|------|------|------|");
+  for (const m of sortedInjection) {
+    for (const p of m.products) {
+      lines.push(`| ${m.machine} | ${p.name} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
+    }
   }
   lines.push("");
 
