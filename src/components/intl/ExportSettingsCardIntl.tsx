@@ -14,6 +14,7 @@ const COLUMN_LABELS: Array<{ key: keyof ProductTableColumnWidths; label: string 
   { key: "price", label: "Unit Price" },
   { key: "torque", label: "Torque" },
   { key: "image", label: "Image" },
+  { key: "packaging", label: "Packaging" },
   { key: "remark", label: "Note" },
 ];
 

@@ -19,6 +19,7 @@ export const DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS = {
   unit: 48,
   price: 74,
   torque: 98,
+  packaging: 120,
   remark: 106,
 };
 

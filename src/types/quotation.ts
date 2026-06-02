@@ -78,5 +78,6 @@ export interface ProductTableColumnWidths {
   unit: number;
   price: number;
   torque: number;
+  packaging: number;
   remark: number;
 }

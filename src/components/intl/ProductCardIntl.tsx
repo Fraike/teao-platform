@@ -148,30 +148,30 @@ export default function ProductCardIntl() {
     {
       title: "Packaging",
       dataIndex: "packaging",
-      width: 130,
+      width: 220,
       render: (_pkg: string | undefined, r: ProductRow) => (
-        <Input
+        <Input.TextArea
           size="small"
-          variant="borderless"
           placeholder="Packaging details"
           value={r.packaging ?? ""}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "packaging", e.target.value)}
-          style={{ padding: "2px 4px" }}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => update(r.id, "packaging", e.target.value)}
+          autoSize={{ minRows: 2, maxRows: 5 }}
+          style={{ minWidth: 200, padding: "4px 6px", lineHeight: 1.35 }}
         />
       ),
     },
     {
       title: "Note",
       dataIndex: "remark",
-      width: 100,
+      width: 180,
       render: (_remark: string | undefined, r: ProductRow) => (
-        <Input
+        <Input.TextArea
           size="small"
-          variant="borderless"
           placeholder="Note"
           value={r.remark ?? ""}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "remark", e.target.value)}
-          style={{ padding: "2px 4px" }}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => update(r.id, "remark", e.target.value)}
+          autoSize={{ minRows: 2, maxRows: 5 }}
+          style={{ minWidth: 160, padding: "4px 6px", lineHeight: 1.35 }}
         />
       ),
     },

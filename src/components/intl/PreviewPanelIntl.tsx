@@ -75,13 +75,32 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           {/* Left: Logo + Company Info */}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
             {logoSrc ? (
-              <img
-                src={logoSrc}
-                alt="TEAO"
-                style={{ width: 56, height: 34, objectFit: "contain", marginTop: 2 }}
-              />
+              <div
+                style={{
+                  width: 66,
+                  height: 34,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  flexShrink: 0,
+                  marginTop: 2,
+                }}
+              >
+                <img
+                  src={logoSrc}
+                  alt="TEAO"
+                  width={66}
+                  style={{
+                    maxWidth: 66,
+                    maxHeight: 34,
+                    width: "auto",
+                    height: "auto",
+                    display: "block",
+                  }}
+                />
+              </div>
             ) : (
-              <div style={{ width: 56, height: 34, background: C.bg, borderRadius: 3 }} />
+              <div style={{ width: 66, height: 34, background: C.bg, borderRadius: 3, flexShrink: 0 }} />
             )}
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: C.heading, letterSpacing: -0.2, marginBottom: 6 }}>
@@ -172,7 +191,8 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
             <col style={{ width: columnWidths.price + 10 }} />
             <col style={{ width: 44 }} />
             <col style={{ width: 60 }} />
-            <col style={{ width: columnWidths.remark + 20 }} />
+            <col style={{ width: columnWidths.packaging }} />
+            <col style={{ width: columnWidths.remark }} />
           </colgroup>
           <thead>
             <tr>
@@ -183,7 +203,8 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
               <th style={th("right")}>Unit Price</th>
               <th style={th("right")}>QTY</th>
               <th style={th("right")}>Amount</th>
-              <th style={th("left")}>Note / Packaging</th>
+              <th style={th("left")}>Packaging</th>
+              <th style={th("left")}>Note</th>
             </tr>
           </thead>
           <tbody>
@@ -208,9 +229,18 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                   {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td style={{ ...td("left", C.muted), wordBreak: "break-word" }}>
-                  {p.packaging && <div style={{ color: C.muted, fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.packaging}</div>}
-                  {p.remark && <div style={{ fontSize: 8.5, color: C.subtle, marginTop: p.packaging ? 2 : 0 }}>{p.remark}</div>}
-                  {!p.packaging && !p.remark && "—"}
+                  {p.packaging ? (
+                    <div style={{ color: C.muted, fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.packaging}</div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td style={{ ...td("left", C.subtle), wordBreak: "break-word" }}>
+                  {p.remark ? (
+                    <div style={{ fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.remark}</div>
+                  ) : (
+                    "—"
+                  )}
                 </td>
               </tr>
             ))}
