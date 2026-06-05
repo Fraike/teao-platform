@@ -271,12 +271,11 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                   {hasTiers && p.tiers!.map((tier, ti) => (
                     <tr key={`${p.id}-t${ti}`} style={{ background: C.bg }}>
                       <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
-                      <td style={{ ...td("left", C.muted), background: C.bg, paddingLeft: 24 }} colSpan={4}>
-                        <span style={{ fontSize: 7.5, color: C.muted }}>
-                          ≥ {tier.minQty.toLocaleString("en-US")} PCS
-                        </span>
-                      </td>
+                      <td style={{ ...td("left", C.muted), background: C.bg }} colSpan={3}></td>
                       <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}>
+                        <span style={{ fontSize: 7.5, color: C.muted, fontWeight: 400, fontFamily: "inherit" }}>
+                          ≥ {tier.minQty.toLocaleString("en-US")} PCS&nbsp;&nbsp;
+                        </span>
                         <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
                         <span style={{ fontSize: 8 }}>
                           {tier.price.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
