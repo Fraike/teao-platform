@@ -43,8 +43,8 @@ export default function ProductCardIntl() {
       update(product.id, "tiers", undefined);
     } else {
       update(product.id, "tiers", [
-        { minQty: 100, price: product.price || 0 },
         { minQty: 500, price: product.price || 0 },
+        { minQty: 100, price: product.price || 0 },
       ]);
     }
   };
