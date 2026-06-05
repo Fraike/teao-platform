@@ -31,7 +31,7 @@ jobs:
         uses: easingthemes/ssh-deploy@v5.1.1
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i"
+          ARGS: "-rlgoDzvc -i --exclude='production-config.json'"
           REMOTE_HOST: 8.134.18.9
           REMOTE_USER: root
           SOURCE: "server/"

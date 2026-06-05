@@ -37,3 +37,6 @@ trash_review/
 
 # Runtime data (production config is now in server/)
 data/
+
+# Server secrets (deployed separately)
+server/production-config.json
