@@ -152,12 +152,12 @@ export default function ProductCardIntl() {
     {
       title: "Unit Price",
       dataIndex: "price",
-      width: 180,
+      width: 230,
       render: (_price: number, r: ProductRow) => {
         const hasTiers = r.tiers && r.tiers.length > 0;
 
         return (
-          <div style={{ minWidth: 160 }}>
+          <div style={{ minWidth: 200 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: hasTiers ? 4 : 0 }}>
               <Button
                 type="text"
@@ -203,7 +203,7 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
                     <InputNumber
                       size="small"
-                      style={{ width: 80 }}
+                      style={{ width: 100 }}
                       value={tier.minQty}
                       onChange={(v: number | null) => updateTier(r.id, idx, "minQty", v ?? 0)}
                       precision={0}
@@ -213,7 +213,7 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 11, color: "#999" }}>$</span>
                     <InputNumber
                       size="small"
-                      style={{ width: 68 }}
+                      style={{ width: 85 }}
                       value={tier.price}
                       onChange={(v: number | null) => updateTier(r.id, idx, "price", v ?? 0)}
                       precision={4}
@@ -240,7 +240,7 @@ export default function ProductCardIntl() {
     {
       title: "QTY",
       dataIndex: "qty",
-      width: 85,
+      width: 100,
       render: (_qty: number | undefined, r: ProductRow) => {
         if (r.tiers && r.tiers.length > 0) {
           return <span style={{ color: "#ccc" }}>—</span>;
@@ -397,7 +397,7 @@ export default function ProductCardIntl() {
         dataSource={dataSource}
         pagination={false}
         size="small"
-        scroll={{ x: isMobile ? 1000 : 1200 }}
+        scroll={{ x: isMobile ? 1100 : 1300 }}
         bordered
       />
     </Card>
