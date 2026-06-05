@@ -53,14 +53,22 @@ export default function ProductCardIntl() {
     });
   };
 
-  // 更新单个 tier（通过 id 定位）
+  // 更新单个 tier（通过 id 定位，不排序避免焦点错位）
   const updateTier = (productId: string, tierId: string, field: keyof Tier, value: number) => {
     updateProduct(productId, (prev) => {
       if (!prev.tiers || prev.tiers.length === 0) return prev;
       const tiers = prev.tiers.map((t) =>
         t.id === tierId ? { ...t, [field]: value } : t
       );
-      tiers.sort((a, b) => b.minQty - a.minQty);
+      return { ...prev, tiers };
+    });
+  };
+
+  // 排序阶梯（在失焦时调用）
+  const sortTiers = (productId: string) => {
+    updateProduct(productId, (prev) => {
+      if (!prev.tiers || prev.tiers.length <= 1) return prev;
+      const tiers = [...prev.tiers].sort((a, b) => b.minQty - a.minQty);
       return { ...prev, tiers };
     });
   };
@@ -210,6 +218,7 @@ export default function ProductCardIntl() {
                       style={{ width: 100 }}
                       value={tier.minQty}
                       onChange={(v: number | null) => updateTier(r.id, tier.id, "minQty", v ?? 0)}
+                      onBlur={() => sortTiers(r.id)}
                       precision={0}
                       min={0}
                     />
