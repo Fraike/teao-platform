@@ -230,7 +230,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                       ) : (
                         <>
                           <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                         </>
                       )}
                     </td>
@@ -247,7 +247,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                       ) : (
                         <>
                           <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                          {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                         </>
                       )}
                     </td>
@@ -278,7 +278,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                         </span>
                         <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
                         <span style={{ fontSize: 8 }}>
-                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                         </span>
                       </td>
                       <td style={{ ...td("right", C.text), background: C.bg }}></td>
@@ -310,7 +310,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           )}
           <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginRight: 24 }}>Total Amount</span>
           <span style={{ fontSize: 15, fontWeight: 800, color: C.heading, fontFamily: "monospace" }}>
-            {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
           </span>
         </div>
       </div>
@@ -335,7 +335,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                   <tr key={m.id}>
                     <td style={td("left", C.text)}>{m.name || "—"}</td>
                     <td style={td("right", C.text, "monospace")}>
-                      $ {m.totalCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      $ {m.totalCost.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                     </td>
                     <td style={td("right", C.muted)}>{m.amortizeQty.toLocaleString()} PCS</td>
                     <td style={td("right", C.accent, "monospace", 600)}>$ {unitCost.toFixed(4)}</td>

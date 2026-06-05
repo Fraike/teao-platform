@@ -194,7 +194,7 @@ export default function ProductCardIntl() {
                   style={{ width: "100%" }}
                   value={r.price}
                   onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
-                  precision={4}
+                  precision={3}
                   min={0}
                 />
               )}
@@ -215,7 +215,7 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
                     <InputNumber
                       size="small"
-                      style={{ width: 100 }}
+                      style={{ width: 110 }}
                       value={tier.minQty}
                       onChange={(v: number | null) => updateTier(r.id, tier.id, "minQty", v ?? 0)}
                       onBlur={() => sortTiers(r.id)}
@@ -226,10 +226,10 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 11, color: "#999" }}>$</span>
                     <InputNumber
                       size="small"
-                      style={{ width: 85 }}
+                      style={{ width: 95 }}
                       value={tier.price}
                       onChange={(v: number | null) => updateTier(r.id, tier.id, "price", v ?? 0)}
-                      precision={4}
+                      precision={3}
                       min={0}
                     />
                   </div>
@@ -281,7 +281,7 @@ export default function ProductCardIntl() {
         const amt = (r.qty ?? 0) * (r.price ?? 0);
         return (
           <span style={{ color: "#1677ff", fontWeight: 500, fontFamily: "monospace" }}>
-            {amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {amt.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
           </span>
         );
       },
