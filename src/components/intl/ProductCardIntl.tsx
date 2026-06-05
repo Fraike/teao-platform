@@ -37,6 +37,9 @@ export default function ProductCardIntl() {
     reader.readAsDataURL(file);
   };
 
+  // 生成 tier 唯一 ID
+  const genTierId = () => "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
   // 切换阶梯模式
   const toggleTierMode = (productId: string) => {
     updateProduct(productId, (prev) => {
@@ -44,18 +47,19 @@ export default function ProductCardIntl() {
         return { ...prev, tiers: undefined };
       }
       return { ...prev, tiers: [
-        { minQty: 500, price: prev.price || 0 },
-        { minQty: 100, price: prev.price || 0 },
+        { id: genTierId(), minQty: 500, price: prev.price || 0 },
+        { id: genTierId(), minQty: 100, price: prev.price || 0 },
       ]};
     });
   };
 
-  // 更新单个 tier
-  const updateTier = (productId: string, tierIndex: number, field: keyof Tier, value: number) => {
+  // 更新单个 tier（通过 id 定位）
+  const updateTier = (productId: string, tierId: string, field: keyof Tier, value: number) => {
     updateProduct(productId, (prev) => {
       if (!prev.tiers || prev.tiers.length === 0) return prev;
-      const tiers = [...prev.tiers];
-      tiers[tierIndex] = { ...tiers[tierIndex], [field]: value };
+      const tiers = prev.tiers.map((t) =>
+        t.id === tierId ? { ...t, [field]: value } : t
+      );
       tiers.sort((a, b) => b.minQty - a.minQty);
       return { ...prev, tiers };
     });
@@ -64,18 +68,18 @@ export default function ProductCardIntl() {
   // 添加阶梯
   const addTier = (productId: string) => {
     updateProduct(productId, (prev) => {
-      const tiers = prev.tiers ? [...prev.tiers] : [{ minQty: 100, price: prev.price || 0 }];
+      const tiers = prev.tiers ? [...prev.tiers] : [{ id: genTierId(), minQty: 100, price: prev.price || 0 }];
       const maxMinQty = tiers.length > 0 ? tiers[0].minQty : 0;
-      tiers.push({ minQty: maxMinQty + 500, price: tiers[tiers.length - 1].price || 0 });
+      tiers.push({ id: genTierId(), minQty: maxMinQty + 500, price: tiers[tiers.length - 1].price || 0 });
       tiers.sort((a, b) => b.minQty - a.minQty);
       return { ...prev, tiers };
     });
   };
 
-  // 删除阶梯
-  const removeTier = (productId: string, tierIndex: number) => {
+  // 删除阶梯（通过 id 定位）
+  const removeTier = (productId: string, tierId: string) => {
     updateProduct(productId, (prev) => {
-      const tiers = prev.tiers?.filter((_, i) => i !== tierIndex) || [];
+      const tiers = prev.tiers?.filter((t) => t.id !== tierId) || [];
       if (tiers.length === 0) {
         return { ...prev, tiers: undefined };
       }
@@ -191,13 +195,13 @@ export default function ProductCardIntl() {
             {hasTiers && (
               <div style={{ background: "#fafafa", borderRadius: 4, padding: "4px 6px" }}>
                 {r.tiers!.map((tier, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: idx < r.tiers!.length - 1 ? 4 : 0 }}>
+                  <div key={tier.id} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: idx < r.tiers!.length - 1 ? 4 : 0 }}>
                     <Button
                       type="text"
                       size="small"
                       danger
                       icon={<DeleteOutlined />}
-                      onClick={() => removeTier(r.id, idx)}
+                      onClick={() => removeTier(r.id, tier.id)}
                       style={{ width: 20, height: 20, minWidth: 20, padding: 0, fontSize: 10 }}
                     />
                     <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
@@ -205,7 +209,7 @@ export default function ProductCardIntl() {
                       size="small"
                       style={{ width: 100 }}
                       value={tier.minQty}
-                      onChange={(v: number | null) => updateTier(r.id, idx, "minQty", v ?? 0)}
+                      onChange={(v: number | null) => updateTier(r.id, tier.id, "minQty", v ?? 0)}
                       precision={0}
                       min={0}
                     />
@@ -215,7 +219,7 @@ export default function ProductCardIntl() {
                       size="small"
                       style={{ width: 85 }}
                       value={tier.price}
-                      onChange={(v: number | null) => updateTier(r.id, idx, "price", v ?? 0)}
+                      onChange={(v: number | null) => updateTier(r.id, tier.id, "price", v ?? 0)}
                       precision={4}
                       min={0}
                     />

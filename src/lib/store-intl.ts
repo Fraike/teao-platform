@@ -15,11 +15,11 @@ export function quoteNoForDate(no: string, date: string): string {
 function normalizeQuotation(data: Quotation): Quotation {
   const quoteMeta = {
     ...data.quoteMeta,
-    salesName: data.quoteMeta.salesName || "Mark",
-    salesTel: data.quoteMeta.salesTel || "+86 18813935128",
-    tradeTerm: data.quoteMeta.tradeTerm || "EXW",
-    paymentTerm: data.quoteMeta.paymentTerm || "50% deposit, 50% balance before shipment",
-    taxNote: data.quoteMeta.taxNote || "EXW",
+    salesName: data.quoteMeta.salesName ?? "Mark",
+    salesTel: data.quoteMeta.salesTel ?? "+86 18813935128",
+    tradeTerm: data.quoteMeta.tradeTerm ?? "EXW",
+    paymentTerm: data.quoteMeta.paymentTerm ?? "50% deposit, 50% balance before shipment",
+    taxNote: data.quoteMeta.taxNote ?? "EXW",
   };
 
   return {

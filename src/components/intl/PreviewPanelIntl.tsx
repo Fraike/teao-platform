@@ -230,7 +230,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                       ) : (
                         <>
                           <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                         </>
                       )}
                     </td>
@@ -269,7 +269,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
 
                   {/* Tier sub-rows */}
                   {hasTiers && p.tiers!.map((tier, ti) => (
-                    <tr key={`${p.id}-t${ti}`} style={{ background: C.bg }}>
+                    <tr key={tier.id} style={{ background: C.bg }}>
                       <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }} colSpan={3}></td>
                       <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}>
@@ -278,7 +278,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                         </span>
                         <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
                         <span style={{ fontSize: 8 }}>
-                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                         </span>
                       </td>
                       <td style={{ ...td("right", C.text), background: C.bg }}></td>

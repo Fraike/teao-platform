@@ -1,6 +1,7 @@
 export interface Tier {
-  minQty: number;   // 阶梯起始数量，如 100, 500, 1000
-  price: number;    // 该阶梯对应单价
+  id: string;      // 唯一标识
+  minQty: number;  // 阶梯起始数量，如 100, 500, 1000
+  price: number;   // 该阶梯对应单价
 }
 
 export interface Product {

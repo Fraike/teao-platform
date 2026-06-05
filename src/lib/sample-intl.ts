@@ -37,9 +37,9 @@ export const sampleIntlQuotation: Quotation = {
       unit: "PCS",
       price: 0,
       tiers: [
-        { minQty: 1000, price: 0.12 },
-        { minQty: 500, price: 0.14 },
-        { minQty: 100, price: 0.15 },
+        { id: "t1", minQty: 1000, price: 0.12 },
+        { id: "t2", minQty: 500, price: 0.14 },
+        { id: "t3", minQty: 100, price: 0.15 },
       ],
       torque: "",
       packaging: "1g/pcs, 500 pcs / opp bag packing\nCTN: 32*38*26.5 CM",
