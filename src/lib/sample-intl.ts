@@ -35,7 +35,12 @@ export const sampleIntlQuotation: Quotation = {
       partNo: "",
       spec: "RD-02",
       unit: "PCS",
-      price: 0.15,
+      price: 0,
+      tiers: [
+        { minQty: 1000, price: 0.12 },
+        { minQty: 500, price: 0.14 },
+        { minQty: 100, price: 0.15 },
+      ],
       torque: "",
       packaging: "1g/pcs, 500 pcs / opp bag packing\nCTN: 32*38*26.5 CM",
       remark: "Freight Cost: $230",
