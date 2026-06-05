@@ -1,16 +1,63 @@
 import { Card, Table, Button, Input, InputNumber, Popconfirm } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
-import { useQuotationStore } from "../lib/store";
 import type { MoldItem } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
+import { useQuotationStore, useIntlQuotationStore } from "../lib/store";
 
 type MoldRow = MoldItem & { index: number };
 
-export default function MoldCard() {
-  const molds = useQuotationStore((s) => s.quotation.molds);
-  const addMold = useQuotationStore((s) => s.addMold);
-  const removeMold = useQuotationStore((s) => s.removeMold);
-  const updateMold = useQuotationStore((s) => s.updateMold);
+type StoreHook = typeof useQuotationStore | typeof useIntlQuotationStore;
+
+export interface MoldCardLabels {
+  title: string;
+  name: string;
+  namePlaceholder: string;
+  totalCost: string;
+  amortizedQty: string;
+  unitCost: string;
+  deleteConfirm: string;
+  deleteOk: string;
+  deleteCancel: string;
+  addButton: string;
+  currencyPrefix: string;
+  currencyUnitCostPrefix: string;
+}
+
+const CN: MoldCardLabels = {
+  title: "模具费用",
+  name: "模具名称",
+  namePlaceholder: "模具名称",
+  totalCost: "模具总费用",
+  amortizedQty: "分摊数量",
+  unitCost: "模具单价",
+  deleteConfirm: "确定删除该模具？",
+  deleteOk: "删除",
+  deleteCancel: "取消",
+  addButton: "添加模具",
+  currencyPrefix: "¥",
+  currencyUnitCostPrefix: "¥",
+};
+
+const EN: MoldCardLabels = {
+  title: "Mold Tooling Cost",
+  name: "Mold Name",
+  namePlaceholder: "Mold name",
+  totalCost: "Total Cost",
+  amortizedQty: "Amortized QTY",
+  unitCost: "Unit Cost",
+  deleteConfirm: "Delete this mold?",
+  deleteOk: "Delete",
+  deleteCancel: "Cancel",
+  addButton: "Add Mold",
+  currencyPrefix: "$",
+  currencyUnitCostPrefix: "$",
+};
+
+function MoldCard({ useStore, labels }: { useStore: StoreHook; labels: MoldCardLabels }) {
+  const molds = useStore((s) => s.quotation.molds);
+  const addMold = useStore((s) => s.addMold);
+  const removeMold = useStore((s) => s.removeMold);
+  const updateMold = useStore((s) => s.updateMold);
 
   const update = (id: string, field: keyof MoldItem, value: unknown) => {
     updateMold(id, (prev) => ({ ...prev, [field]: value }));
@@ -24,14 +71,14 @@ export default function MoldCard() {
       render: (v: number) => <span style={{ color: "#999" }}>{v + 1}</span>,
     },
     {
-      title: "模具名称",
+      title: labels.name,
       dataIndex: "name",
       width: 160,
       render: (_name: string, r: MoldRow) => (
         <Input
           size="small"
           variant="borderless"
-          placeholder="模具名称"
+          placeholder={labels.namePlaceholder}
           value={r.name}
           onChange={(e) => update(r.id, "name", e.target.value)}
           style={{ padding: "2px 4px" }}
@@ -39,7 +86,7 @@ export default function MoldCard() {
       ),
     },
     {
-      title: "模具总费用",
+      title: labels.totalCost,
       dataIndex: "totalCost",
       width: 120,
       render: (_v: number, r: MoldRow) => (
@@ -50,14 +97,14 @@ export default function MoldCard() {
           onChange={(v: number | null) => update(r.id, "totalCost", v ?? 0)}
           precision={2}
           min={0}
-          prefix="¥"
+          prefix={labels.currencyPrefix}
         />
       ),
     },
     {
-      title: "分摊数量",
+      title: labels.amortizedQty,
       dataIndex: "amortizeQty",
-      width: 110,
+      width: 120,
       render: (_v: number, r: MoldRow) => (
         <InputNumber
           size="small"
@@ -70,27 +117,27 @@ export default function MoldCard() {
       ),
     },
     {
-      title: "模具单价",
+      title: labels.unitCost,
       dataIndex: "unitCost",
       width: 100,
       render: (_v: number, r: MoldRow) => {
         const unitCost = r.amortizeQty > 0 ? r.totalCost / r.amortizeQty : 0;
         return (
           <span style={{ color: "#1677ff", fontWeight: 500, fontFamily: "monospace" }}>
-            ¥{unitCost.toFixed(4)}
+            {labels.currencyUnitCostPrefix}{unitCost.toFixed(4)}
           </span>
         );
       },
     },
     {
-      title: "操作",
+      title: "",
       width: 50,
       render: (_v: unknown, r: MoldRow) => (
         <Popconfirm
-          title="确定删除该模具？"
+          title={labels.deleteConfirm}
           onConfirm={() => removeMold(r.id)}
-          okText="删除"
-          cancelText="取消"
+          okText={labels.deleteOk}
+          cancelText={labels.deleteCancel}
         >
           <Button type="text" size="small" danger icon={<DeleteOutlined />} />
         </Popconfirm>
@@ -102,10 +149,10 @@ export default function MoldCard() {
 
   return (
     <Card
-      title={<span style={{ fontSize: 14, fontWeight: 600 }}>模具费用</span>}
+      title={<span style={{ fontSize: 14, fontWeight: 600 }}>{labels.title}</span>}
       extra={
         <Button type="primary" size="small" icon={<PlusOutlined />} onClick={addMold}>
-          添加模具
+          {labels.addButton}
         </Button>
       }
       size="small"
@@ -121,4 +168,12 @@ export default function MoldCard() {
       />
     </Card>
   );
+}
+
+export default function DomesticMoldCard() {
+  return <MoldCard useStore={useQuotationStore} labels={CN} />;
+}
+
+export function MoldCardIntl() {
+  return <MoldCard useStore={useIntlQuotationStore} labels={EN} />;
 }

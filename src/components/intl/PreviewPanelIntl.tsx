@@ -1,5 +1,5 @@
 import { forwardRef, useState, useEffect, Fragment } from "react";
-import { useIntlQuotationStore } from "../../lib/store-intl";
+import { useIntlQuotationStore } from "../../lib/store";
 import { COMPANY_INFO_EN, LOGO_PATH, STAMP_PATH } from "../../lib/constants";
 
 const A4_WIDTH = 794;
@@ -268,7 +268,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                   </tr>
 
                   {/* Tier sub-rows */}
-                  {hasTiers && p.tiers!.map((tier, ti) => (
+                  {hasTiers && p.tiers!.map((tier, _ti) => (
                     <tr key={tier.id} style={{ background: C.bg }}>
                       <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }} colSpan={3}></td>

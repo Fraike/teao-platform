@@ -7,7 +7,7 @@ import {
   CameraOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
-import { useIntlQuotationStore } from "../../lib/store-intl";
+import { useIntlQuotationStore } from "../../lib/store";
 import { useIsMobile } from "../../lib/useIsMobile";
 import type { Product, Tier } from "../../types/quotation";
 import type { ColumnsType } from "antd/es/table";

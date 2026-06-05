@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, Form, Input } from "antd";
 import { UserOutlined } from "@ant-design/icons";
-import { useIntlQuotationStore } from "../../lib/store-intl";
+import { useIntlQuotationStore } from "../../lib/store";
 import { useIsMobile } from "../../lib/useIsMobile";
 
 export default function CustomerCardIntl() {

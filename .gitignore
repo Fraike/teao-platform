@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Env files (secrets)
+.env
+.env.local
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,6 +27,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build output
+dist/
+dist-ssr
+
+# Temporary review directory
+trash_review/
 
 # Runtime data (production config is now in server/)
 data/

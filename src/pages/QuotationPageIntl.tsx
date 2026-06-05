@@ -11,14 +11,14 @@ import {
 import CustomerCardIntl from "../components/intl/CustomerCardIntl";
 import QuoteMetaCardIntl from "../components/intl/QuoteMetaCardIntl";
 import ProductCardIntl from "../components/intl/ProductCardIntl";
-import TermsCardIntl from "../components/intl/TermsCardIntl";
-import MoldCardIntl from "../components/intl/MoldCardIntl";
-import ExportSettingsCardIntl from "../components/intl/ExportSettingsCardIntl";
+import { TermsCardIntl } from "../components/TermsCard";
+import { MoldCardIntl } from "../components/MoldCard";
+import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
 import QuotationHistoryDrawer from "../components/QuotationHistoryDrawer";
-import { useIntlQuotationStore } from "../lib/store-intl";
+import { useIntlQuotationStore } from "../lib/store";
 import { useQuotationHistoryStore } from "../lib/historyStore";
-import { exportPDFIntl } from "../lib/pdf-intl";
+import { exportPDFIntl } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 
 interface Props {

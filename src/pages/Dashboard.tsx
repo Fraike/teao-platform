@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, Row, Col, Typography, Button } from "antd";
 import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, BarChartOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
+import styles from "./Dashboard.module.css";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -53,12 +54,12 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "24px 16px" : "48px 24px" }}>
-      <div style={{ textAlign: "center", marginBottom: isMobile ? 32 : 48 }}>
-        <Title level={isMobile ? 3 : 2} style={{ marginBottom: 8, fontWeight: 700 }}>
+    <div className={isMobile ? `${styles.container} ${styles.containerMobile}` : styles.container}>
+      <div className={isMobile ? `${styles.header} ${styles.headerMobile}` : styles.header}>
+        <Title level={isMobile ? 3 : 2} className={styles.headerTitle}>
           特澳科技业务工具平台
         </Title>
-        <Text type="secondary" style={{ fontSize: isMobile ? 13 : 15 }}>
+        <Text type="secondary" className={isMobile ? styles.headerSubMobile : styles.headerSub}>
           东莞市特澳电子科技有限公司 · 内部业务系统
         </Text>
       </div>
@@ -66,33 +67,15 @@ export default function Dashboard() {
       <Row gutter={[24, 24]}>
         {SYSTEMS.map((sys) => (
           <Col xs={24} sm={12} key={sys.key}>
-            <Card
-              hoverable
-              style={{ height: "100%", borderRadius: 8 }}
-              onClick={() => navigate(sys.path)}
-            >
-              <div style={{ textAlign: "center", padding: "8px 0" }}>
-                <div
-                  style={{
-                    width: 80,
-                    height: 80,
-                    borderRadius: 16,
-                    background: sys.color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 16px",
-                  }}
-                >
+            <Card hoverable style={{ height: "100%", borderRadius: 8 }} onClick={() => navigate(sys.path)}>
+              <div className={styles.cardInner}>
+                <div className={styles.iconBox} style={{ background: sys.color }}>
                   {sys.icon}
                 </div>
-                <Title level={4} style={{ marginBottom: 8 }}>
+                <Title level={4} className={styles.cardTitle}>
                   {sys.title}
                 </Title>
-                <Paragraph
-                  type="secondary"
-                  style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 16, textAlign: "left" }}
-                >
+                <Paragraph type="secondary" className={styles.cardDesc}>
                   {sys.description}
                 </Paragraph>
                 <Button type="primary" icon={<ArrowRightOutlined />} size="middle">
@@ -104,10 +87,8 @@ export default function Dashboard() {
         ))}
       </Row>
 
-      <div style={{ textAlign: "center", marginTop: 48 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          © 2026 东莞市特澳电子科技有限公司
-        </Text>
+      <div className={styles.footer}>
+        <Text type="secondary">© 2026 东莞市特澳电子科技有限公司</Text>
       </div>
     </div>
   );

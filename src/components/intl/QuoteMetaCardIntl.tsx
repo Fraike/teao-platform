@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { Card, Form, Input, DatePicker, Select } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
-import { quoteNoForDate, useIntlQuotationStore } from "../../lib/store-intl";
+import { quoteNoForDate, useIntlQuotationStore } from "../../lib/store";
 import { DEFAULT_TRADE_TERMS, DEFAULT_PAYMENT_TERMS } from "../../lib/constants";
 import { useIsMobile } from "../../lib/useIsMobile";
 import dayjs from "dayjs";
