@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect } from "react";
+import { forwardRef, useState, useEffect, Fragment } from "react";
 import { useIntlQuotationStore } from "../../lib/store-intl";
 import { COMPANY_INFO_EN, LOGO_PATH, STAMP_PATH } from "../../lib/constants";
 
@@ -46,7 +46,10 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
   const columnWidths = quoteMeta.tableColumnWidths;
   const logoSrc = useBase64Image(LOGO_PATH);
   const stampSrc = useBase64Image(STAMP_PATH);
-  const totalAmount = products.reduce((sum, p) => sum + (p.qty ?? 0) * (p.price ?? 0), 0);
+  const totalAmount = products.reduce(
+  (sum, p) => sum + (p.tiers && p.tiers.length > 0 ? 0 : (p.qty ?? 0) * (p.price ?? 0)),
+  0
+);
 
   return (
     <div
@@ -208,42 +211,86 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
             </tr>
           </thead>
           <tbody>
-            {products.map((p, idx) => (
-              <tr key={p.id} style={idx % 2 === 1 ? { background: C.bg } : {}}>
-                <td style={td("#", C.subtle)}>{idx + 1}</td>
-                <td style={tdItem()}>
-                  <span style={{ fontWeight: 600, color: C.heading }}>{p.name || "—"}</span>
-                  {p.torque && <span style={{ display: "block", fontSize: 8, color: C.muted, marginTop: 1 }}>Torque: {p.torque}</span>}
-                </td>
-                <td style={td("left", C.muted)}>{p.spec || "—"}</td>
-                <td style={td("left", C.muted)}>{p.unit}</td>
-                <td style={td("right", C.heading, "monospace")}>
-                  <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                  {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
-                </td>
-                <td style={td("right", C.text)}>
-                  {(p.qty ?? 0).toLocaleString("en-US")}
-                </td>
-                <td style={td("right", C.heading, "monospace", 600)}>
-                  <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                  {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td style={{ ...td("left", C.muted), wordBreak: "break-word" }}>
-                  {p.packaging ? (
-                    <div style={{ color: C.muted, fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.packaging}</div>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td style={{ ...td("left", C.subtle), wordBreak: "break-word" }}>
-                  {p.remark ? (
-                    <div style={{ fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.remark}</div>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-              </tr>
-            ))}
+            {products.map((p, idx) => {
+              const hasTiers = p.tiers && p.tiers.length > 0;
+              return (
+                <Fragment key={p.id}>
+                  {/* Main product row */}
+                  <tr style={idx % 2 === 1 ? { background: C.bg } : {}}>
+                    <td style={td("#", C.subtle)}>{idx + 1}</td>
+                    <td style={tdItem()}>
+                      <span style={{ fontWeight: 600, color: C.heading }}>{p.name || "—"}</span>
+                      {p.torque && <span style={{ display: "block", fontSize: 8, color: C.muted, marginTop: 1 }}>Torque: {p.torque}</span>}
+                    </td>
+                    <td style={td("left", C.muted)}>{p.spec || "—"}</td>
+                    <td style={td("left", C.muted)}>{p.unit}</td>
+                    <td style={td("right", C.muted)}>
+                      {hasTiers ? (
+                        <span style={{ fontSize: 8, fontStyle: "italic", color: C.subtle }}>Tiered →</span>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
+                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                        </>
+                      )}
+                    </td>
+                    <td style={td("right", C.text)}>
+                      {hasTiers ? (
+                        <span style={{ color: C.subtle }}>—</span>
+                      ) : (
+                        (p.qty ?? 0).toLocaleString("en-US")
+                      )}
+                    </td>
+                    <td style={td("right", C.heading, "monospace", 600)}>
+                      {hasTiers ? (
+                        <span style={{ color: C.subtle }}>—</span>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
+                          {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </>
+                      )}
+                    </td>
+                    <td style={{ ...td("left", C.muted), wordBreak: "break-word" }}>
+                      {p.packaging ? (
+                        <div style={{ color: C.muted, fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.packaging}</div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td style={{ ...td("left", C.subtle), wordBreak: "break-word" }}>
+                      {p.remark ? (
+                        <div style={{ fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.remark}</div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Tier sub-rows */}
+                  {hasTiers && p.tiers!.map((tier, ti) => (
+                    <tr key={`${p.id}-t${ti}`} style={{ background: C.bg }}>
+                      <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
+                      <td style={{ ...td("left", C.muted), background: C.bg, paddingLeft: 24 }} colSpan={4}>
+                        <span style={{ fontSize: 7.5, color: C.muted }}>
+                          ≥ {tier.minQty.toLocaleString("en-US")} PCS
+                        </span>
+                      </td>
+                      <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}>
+                        <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
+                        <span style={{ fontSize: 8 }}>
+                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                        </span>
+                      </td>
+                      <td style={{ ...td("right", C.text), background: C.bg }}></td>
+                      <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}></td>
+                      <td style={{ ...td("left", C.muted), background: C.bg }}></td>
+                      <td style={{ ...td("left", C.subtle), background: C.bg }}></td>
+                    </tr>
+                  ))}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
 
@@ -255,7 +302,13 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           padding: "12px 0",
           borderTop: `2px solid ${C.accent}`,
           marginTop: 2,
+          gap: 16,
         }}>
+          {products.some((p) => p.tiers && p.tiers.length > 0) && (
+            <span style={{ fontSize: 7.5, color: C.subtle, fontStyle: "italic" }}>
+              * Some products use tiered pricing, total excludes tiered items
+            </span>
+          )}
           <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginRight: 24 }}>Total Amount</span>
           <span style={{ fontSize: 15, fontWeight: 800, color: C.heading, fontFamily: "monospace" }}>
             {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
