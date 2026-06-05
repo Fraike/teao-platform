@@ -38,21 +38,23 @@ export default function ProductCardIntl() {
   };
 
   // 切换阶梯模式
-  const toggleTierMode = (product: Product) => {
-    if (product.tiers && product.tiers.length > 0) {
-      update(product.id, "tiers", undefined);
-    } else {
-      update(product.id, "tiers", [
-        { minQty: 500, price: product.price || 0 },
-        { minQty: 100, price: product.price || 0 },
-      ]);
-    }
+  const toggleTierMode = (productId: string) => {
+    updateProduct(productId, (prev) => {
+      if (prev.tiers && prev.tiers.length > 0) {
+        return { ...prev, tiers: undefined };
+      }
+      return { ...prev, tiers: [
+        { minQty: 500, price: prev.price || 0 },
+        { minQty: 100, price: prev.price || 0 },
+      ]};
+    });
   };
 
   // 更新单个 tier
   const updateTier = (productId: string, tierIndex: number, field: keyof Tier, value: number) => {
     updateProduct(productId, (prev) => {
-      const tiers = prev.tiers ? [...prev.tiers] : [{ minQty: 100, price: prev.price || 0 }];
+      if (!prev.tiers || prev.tiers.length === 0) return prev;
+      const tiers = [...prev.tiers];
       tiers[tierIndex] = { ...tiers[tierIndex], [field]: value };
       tiers.sort((a, b) => b.minQty - a.minQty);
       return { ...prev, tiers };
@@ -60,22 +62,25 @@ export default function ProductCardIntl() {
   };
 
   // 添加阶梯
-  const addTier = (product: Product) => {
-    const lastTier = product.tiers?.[product.tiers.length - 1];
-    const newMinQty = lastTier ? lastTier.minQty + 500 : 100;
-    const tiers = product.tiers ? [...product.tiers, { minQty: newMinQty, price: lastTier?.price || 0 }] : [{ minQty: 100, price: product.price || 0 }];
-    tiers.sort((a, b) => b.minQty - a.minQty);
-    update(product.id, "tiers", tiers);
+  const addTier = (productId: string) => {
+    updateProduct(productId, (prev) => {
+      const tiers = prev.tiers ? [...prev.tiers] : [{ minQty: 100, price: prev.price || 0 }];
+      const maxMinQty = tiers.length > 0 ? tiers[0].minQty : 0;
+      tiers.push({ minQty: maxMinQty + 500, price: tiers[tiers.length - 1].price || 0 });
+      tiers.sort((a, b) => b.minQty - a.minQty);
+      return { ...prev, tiers };
+    });
   };
 
   // 删除阶梯
-  const removeTier = (product: Product, tierIndex: number) => {
-    const tiers = product.tiers?.filter((_, i) => i !== tierIndex) || [];
-    if (tiers.length === 0) {
-      update(product.id, "tiers", undefined);
-    } else {
-      update(product.id, "tiers", tiers);
-    }
+  const removeTier = (productId: string, tierIndex: number) => {
+    updateProduct(productId, (prev) => {
+      const tiers = prev.tiers?.filter((_, i) => i !== tierIndex) || [];
+      if (tiers.length === 0) {
+        return { ...prev, tiers: undefined };
+      }
+      return { ...prev, tiers };
+    });
   };
 
   const columns: ColumnsType<ProductRow> = [
@@ -158,7 +163,7 @@ export default function ProductCardIntl() {
                 type="text"
                 size="small"
                 icon={<UnorderedListOutlined />}
-                onClick={() => toggleTierMode(r)}
+                onClick={() => toggleTierMode(r.id)}
                 style={{
                   color: hasTiers ? "#1677ff" : "#ccc",
                   width: 24,
@@ -192,7 +197,7 @@ export default function ProductCardIntl() {
                       size="small"
                       danger
                       icon={<DeleteOutlined />}
-                      onClick={() => removeTier(r, idx)}
+                      onClick={() => removeTier(r.id, idx)}
                       style={{ width: 20, height: 20, minWidth: 20, padding: 0, fontSize: 10 }}
                     />
                     <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
@@ -220,7 +225,7 @@ export default function ProductCardIntl() {
                   size="small"
                   block
                   icon={<PlusOutlined />}
-                  onClick={() => addTier(r)}
+                  onClick={() => addTier(r.id)}
                   style={{ marginTop: 4, fontSize: 11 }}
                 >
                   Add Tier
