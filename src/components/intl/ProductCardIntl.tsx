@@ -203,12 +203,13 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
                     <InputNumber
                       size="small"
-                      style={{ width: 60 }}
+                      style={{ width: 80 }}
                       value={tier.minQty}
                       onChange={(v: number | null) => updateTier(r.id, idx, "minQty", v ?? 0)}
+                      precision={0}
                       min={0}
-                      suffix="PCS"
                     />
+                    <span style={{ fontSize: 10, color: "#999", whiteSpace: "nowrap" }}>PCS</span>
                     <span style={{ fontSize: 11, color: "#999" }}>$</span>
                     <InputNumber
                       size="small"
@@ -239,7 +240,7 @@ export default function ProductCardIntl() {
     {
       title: "QTY",
       dataIndex: "qty",
-      width: 70,
+      width: 85,
       render: (_qty: number | undefined, r: ProductRow) => {
         if (r.tiers && r.tiers.length > 0) {
           return <span style={{ color: "#ccc" }}>—</span>;
