@@ -5,10 +5,11 @@ import {
   DeleteOutlined,
   CopyOutlined,
   CameraOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useIntlQuotationStore } from "../../lib/store-intl";
 import { useIsMobile } from "../../lib/useIsMobile";
-import type { Product } from "../../types/quotation";
+import type { Product, Tier } from "../../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 
 type ProductRow = Product & { index: number };
@@ -34,6 +35,47 @@ export default function ProductCardIntl() {
       });
     };
     reader.readAsDataURL(file);
+  };
+
+  // 切换阶梯模式
+  const toggleTierMode = (product: Product) => {
+    if (product.tiers && product.tiers.length > 0) {
+      update(product.id, "tiers", undefined);
+    } else {
+      update(product.id, "tiers", [
+        { minQty: 100, price: product.price || 0 },
+        { minQty: 500, price: product.price || 0 },
+      ]);
+    }
+  };
+
+  // 更新单个 tier
+  const updateTier = (productId: string, tierIndex: number, field: keyof Tier, value: number) => {
+    updateProduct(productId, (prev) => {
+      const tiers = prev.tiers ? [...prev.tiers] : [{ minQty: 100, price: prev.price || 0 }];
+      tiers[tierIndex] = { ...tiers[tierIndex], [field]: value };
+      tiers.sort((a, b) => b.minQty - a.minQty);
+      return { ...prev, tiers };
+    });
+  };
+
+  // 添加阶梯
+  const addTier = (product: Product) => {
+    const lastTier = product.tiers?.[product.tiers.length - 1];
+    const newMinQty = lastTier ? lastTier.minQty + 500 : 100;
+    const tiers = product.tiers ? [...product.tiers, { minQty: newMinQty, price: lastTier?.price || 0 }] : [{ minQty: 100, price: product.price || 0 }];
+    tiers.sort((a, b) => b.minQty - a.minQty);
+    update(product.id, "tiers", tiers);
+  };
+
+  // 删除阶梯
+  const removeTier = (product: Product, tierIndex: number) => {
+    const tiers = product.tiers?.filter((_, i) => i !== tierIndex) || [];
+    if (tiers.length === 0) {
+      update(product.id, "tiers", undefined);
+    } else {
+      update(product.id, "tiers", tiers);
+    }
   };
 
   const columns: ColumnsType<ProductRow> = [
@@ -105,38 +147,118 @@ export default function ProductCardIntl() {
     {
       title: "Unit Price",
       dataIndex: "price",
-      width: 90,
-      render: (_price: number, r: ProductRow) => (
-        <InputNumber
-          size="small"
-          style={{ width: "100%" }}
-          value={r.price}
-          onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
-          precision={4}
-          min={0}
-        />
-      ),
+      width: 180,
+      render: (_price: number, r: ProductRow) => {
+        const hasTiers = r.tiers && r.tiers.length > 0;
+
+        return (
+          <div style={{ minWidth: 160 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: hasTiers ? 4 : 0 }}>
+              <Button
+                type="text"
+                size="small"
+                icon={<UnorderedListOutlined />}
+                onClick={() => toggleTierMode(r)}
+                style={{
+                  color: hasTiers ? "#1677ff" : "#ccc",
+                  width: 24,
+                  height: 24,
+                  minWidth: 24,
+                  padding: 0,
+                  fontSize: 14,
+                }}
+                title={hasTiers ? "Switch to single price" : "Enable tiered pricing"}
+              />
+              {hasTiers ? (
+                <span style={{ fontSize: 11, color: "#1677ff", fontWeight: 500, whiteSpace: "nowrap" }}>Tiered</span>
+              ) : (
+                <InputNumber
+                  size="small"
+                  style={{ width: "100%" }}
+                  value={r.price}
+                  onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
+                  precision={4}
+                  min={0}
+                />
+              )}
+            </div>
+
+            {hasTiers && (
+              <div style={{ background: "#fafafa", borderRadius: 4, padding: "4px 6px" }}>
+                {r.tiers!.map((tier, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: idx < r.tiers!.length - 1 ? 4 : 0 }}>
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeTier(r, idx)}
+                      style={{ width: 20, height: 20, minWidth: 20, padding: 0, fontSize: 10 }}
+                    />
+                    <span style={{ fontSize: 11, color: "#999", whiteSpace: "nowrap" }}>≥</span>
+                    <InputNumber
+                      size="small"
+                      style={{ width: 60 }}
+                      value={tier.minQty}
+                      onChange={(v: number | null) => updateTier(r.id, idx, "minQty", v ?? 0)}
+                      min={0}
+                      suffix="PCS"
+                    />
+                    <span style={{ fontSize: 11, color: "#999" }}>$</span>
+                    <InputNumber
+                      size="small"
+                      style={{ width: 68 }}
+                      value={tier.price}
+                      onChange={(v: number | null) => updateTier(r.id, idx, "price", v ?? 0)}
+                      precision={4}
+                      min={0}
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="dashed"
+                  size="small"
+                  block
+                  icon={<PlusOutlined />}
+                  onClick={() => addTier(r)}
+                  style={{ marginTop: 4, fontSize: 11 }}
+                >
+                  Add Tier
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "QTY",
       dataIndex: "qty",
       width: 70,
-      render: (_qty: number | undefined, r: ProductRow) => (
-        <InputNumber
-          size="small"
-          style={{ width: "100%" }}
-          value={r.qty ?? 0}
-          onChange={(v: number | null) => update(r.id, "qty", v ?? 0)}
-          min={0}
-          suffix="PCS"
-        />
-      ),
+      render: (_qty: number | undefined, r: ProductRow) => {
+        if (r.tiers && r.tiers.length > 0) {
+          return <span style={{ color: "#ccc" }}>—</span>;
+        }
+        return (
+          <InputNumber
+            size="small"
+            style={{ width: "100%" }}
+            value={r.qty ?? 0}
+            onChange={(v: number | null) => update(r.id, "qty", v ?? 0)}
+            min={0}
+            suffix="PCS"
+          />
+        );
+      },
     },
     {
       title: "Amount",
       dataIndex: "amount",
       width: 90,
       render: (_amount: number | undefined, r: ProductRow) => {
+        if (r.tiers && r.tiers.length > 0) {
+          return <span style={{ color: "#ccc" }}>—</span>;
+        }
         const amt = (r.qty ?? 0) * (r.price ?? 0);
         return (
           <span style={{ color: "#1677ff", fontWeight: 500, fontFamily: "monospace" }}>
@@ -269,7 +391,7 @@ export default function ProductCardIntl() {
         dataSource={dataSource}
         pagination={false}
         size="small"
-        scroll={{ x: isMobile ? 900 : 1100 }}
+        scroll={{ x: isMobile ? 1000 : 1200 }}
         bordered
       />
     </Card>
