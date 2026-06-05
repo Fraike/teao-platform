@@ -1,3 +1,8 @@
+export interface Tier {
+  minQty: number;   // 阶梯起始数量，如 100, 500, 1000
+  price: number;    // 该阶梯对应单价
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -5,6 +10,7 @@ export interface Product {
   spec?: string;
   unit: string;
   price: number;
+  tiers?: Tier[];
   qty?: number;
   amount?: number;
   torque?: string;
