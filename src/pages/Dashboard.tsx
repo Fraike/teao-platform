@@ -1,12 +1,34 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Row, Col, Typography, Button } from "antd";
-import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, BarChartOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { Card, Row, Col, Typography, Button, Alert } from "antd";
+import { FileTextOutlined, CalculatorOutlined, ReadOutlined, GlobalOutlined, BarChartOutlined, ArrowRightOutlined, TeamOutlined } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
+import { useAuthStore } from "../lib/authStore";
+import { api } from "../lib/api";
 import styles from "./Dashboard.module.css";
 
 const { Title, Paragraph, Text } = Typography;
 
-const SYSTEMS = [
+interface SystemEntry {
+  key: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  path: string;
+  permission?: string;
+}
+
+const SYSTEMS: SystemEntry[] = [
+  {
+    key: "employees",
+    title: "员工管理",
+    description: "在职/离职员工档案管理，合同到期自动提醒，支持搜索筛选与增删改查。",
+    icon: <TeamOutlined style={{ fontSize: 40, color: "#eb2f96" }} />,
+    color: "#fff0f6",
+    path: "/employees",
+    permission: "hr",
+  },
   {
     key: "quotation",
     title: "国内报价系统",
@@ -14,6 +36,7 @@ const SYSTEMS = [
     icon: <FileTextOutlined style={{ fontSize: 40, color: "#1677ff" }} />,
     color: "#e6f4ff",
     path: "/quotation",
+    permission: "business",
   },
   {
     key: "quotation-intl",
@@ -22,6 +45,7 @@ const SYSTEMS = [
     icon: <GlobalOutlined style={{ fontSize: 40, color: "#722ed1" }} />,
     color: "#f9f0ff",
     path: "/quotation-intl",
+    permission: "business",
   },
   {
     key: "cost",
@@ -30,6 +54,7 @@ const SYSTEMS = [
     icon: <CalculatorOutlined style={{ fontSize: 40, color: "#52c41a" }} />,
     color: "#f6ffed",
     path: "/cost",
+    permission: "business",
   },
   {
     key: "production-report",
@@ -38,6 +63,7 @@ const SYSTEMS = [
     icon: <BarChartOutlined style={{ fontSize: 40, color: "#13c2c2" }} />,
     color: "#e6fffb",
     path: "/production-report",
+    permission: "production",
   },
   {
     key: "process",
@@ -46,12 +72,27 @@ const SYSTEMS = [
     icon: <ReadOutlined style={{ fontSize: 40, color: "#fa8c16" }} />,
     color: "#fff7e6",
     path: "/process",
+    permission: "tools",
   },
 ];
 
-export default function Dashboard() {
+export function Dashboard() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const user = useAuthStore((s) => s.user);
+  const [reminders, setReminders] = useState<{ expired: number; expiring: number } | null>(null);
+
+  const visibleSystems = SYSTEMS.filter((sys) => {
+    if (!sys.permission) return true;
+    if (user?.role === "admin") return true;
+    return user?.permissions?.includes(sys.permission);
+  });
+
+  useEffect(() => {
+    api.get<{ expired: { length: number }; expiring: { length: number } }>("/api/employees/reminders")
+      .then((r) => setReminders({ expired: r.expired.length, expiring: r.expiring.length }))
+      .catch((err) => console.error("获取合同提醒失败:", err));
+  }, []);
 
   return (
     <div className={isMobile ? `${styles.container} ${styles.containerMobile}` : styles.container}>
@@ -64,8 +105,21 @@ export default function Dashboard() {
         </Text>
       </div>
 
+      {reminders && (reminders.expired > 0 || reminders.expiring > 0) && (
+        <Alert
+          type={reminders.expired > 0 ? "error" : "warning"}
+          showIcon
+          message={
+            reminders.expired > 0
+              ? `合同到期提醒：${reminders.expired} 人合同已过期，${reminders.expiring} 人即将到期（60天内），请及时处理`
+              : `合同到期提醒：${reminders.expiring} 人合同即将到期（60天内），请及时处理`
+          }
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
       <Row gutter={[24, 24]}>
-        {SYSTEMS.map((sys) => (
+        {visibleSystems.map((sys) => (
           <Col xs={24} sm={12} key={sys.key}>
             <Card hoverable style={{ height: "100%", borderRadius: 8 }} onClick={() => navigate(sys.path)}>
               <div className={styles.cardInner}>

@@ -1,0 +1,33 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filterBar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.contractExpired {
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+.contractExpiring {
+  color: #faad14;
+  font-weight: 500;
+}
+
+.contractNormal {
+  color: #52c41a;
+}

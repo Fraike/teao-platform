@@ -1,0 +1,250 @@
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import { fileURLToPath } from "node:url";
+import { createMutex } from "../lib/mutex.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function resolveDataDir() {
+  const envDir = process.env.DATA_DIR;
+  if (envDir) return envDir;
+  // Try production path
+  const prodDir = "/var/www/teao-platform/data";
+  try {
+    if (!fs.existsSync(prodDir)) fs.mkdirSync(prodDir, { recursive: true });
+    return prodDir;
+  } catch {
+    // Fall back to project-relative data directory
+    const localDir = path.resolve(__dirname, "../../data");
+    if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+    console.log(`[auth] using local data dir: ${localDir}`);
+    return localDir;
+  }
+}
+
+const DATA_DIR = resolveDataDir();
+const USERS_FILE = path.join(DATA_DIR, "users.json");
+if (!process.env.JWT_SECRET) {
+  console.error("[auth] FATAL: JWT_SECRET environment variable is not set");
+  console.error("[auth] Set it via: export JWT_SECRET=<your-secret-key>");
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = "7d";
+const JWT_REFRESH_WINDOW = "1d"; // allow refresh within 1 day of expiry
+
+const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
+const ALL_PERMISSIONS = ["business", "production", "hr", "tools", "admin"];
+
+const userMutex = createMutex();
+
+function readUsersUnsafe() {
+  try {
+    if (!fs.existsSync(USERS_FILE)) return [];
+    const parsed = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+    const users = parsed.users || [];
+
+    // migrate: add default permissions to users without them
+    let migrated = false;
+    for (const u of users) {
+      if (!u.permissions) {
+        u.permissions = u.role === "admin" ? [...ALL_PERMISSIONS] : [...DEFAULT_PERMISSIONS];
+        migrated = true;
+      }
+    }
+    if (migrated) writeUsersUnsafe(users);
+
+    return users;
+  } catch {
+    return [];
+  }
+}
+
+function writeUsersUnsafe(users) {
+  const dir = path.dirname(USERS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(USERS_FILE, JSON.stringify({ users }, null, 2), "utf-8");
+}
+
+// Thread-safe wrappers
+async function readUsers() {
+  return userMutex.run(() => readUsersUnsafe());
+}
+
+async function writeUsers(users) {
+  return userMutex.run(() => writeUsersUnsafe(users));
+}
+
+async function withUsers(fn) {
+  return userMutex.run(async () => {
+    const users = readUsersUnsafe();
+    const result = await fn(users);
+    writeUsersUnsafe(users);
+    return result;
+  });
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, derivedKey) => {
+      if (err) reject(err);
+      resolve(`${salt}:${derivedKey.toString("hex")}`);
+    });
+  });
+}
+
+function verifyPassword(password, stored) {
+  const [salt, hash] = stored.split(":");
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, derivedKey) => {
+      if (err) reject(err);
+      resolve(derivedKey.toString("hex") === hash);
+    });
+  });
+}
+
+function generateId() {
+  return `u_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
+}
+
+// ---- public API ----
+
+export async function initDefaultAdmin() {
+  await userMutex.run(async () => {
+    const users = readUsersUnsafe();
+    if (users.some((u) => u.role === "admin")) return;
+
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = await new Promise((resolve, reject) => {
+      crypto.scrypt("admin123", salt, 64, (err, derivedKey) => {
+        if (err) reject(err);
+        resolve(derivedKey.toString("hex"));
+      });
+    });
+
+    users.push({
+      id: generateId(),
+      name: "管理员",
+      username: "admin",
+      passwordHash: `${salt}:${hash}`,
+      role: "admin",
+      status: "active",
+      permissions: [...ALL_PERMISSIONS],
+      createdAt: new Date().toISOString(),
+    });
+    writeUsersUnsafe(users);
+    console.log("[auth] default admin created (admin / admin123)");
+  });
+}
+
+export async function registerUser({ name, username, password }) {
+  return withUsers(async (users) => {
+    if (users.some((u) => u.username === username)) {
+      return { error: "用户名已存在" };
+    }
+    const passwordHash = await hashPassword(password);
+    const user = {
+      id: generateId(),
+      name,
+      username,
+      passwordHash,
+      role: "user",
+      status: "pending",
+      permissions: [...DEFAULT_PERMISSIONS],
+      createdAt: new Date().toISOString(),
+    };
+    users.push(user);
+    return { ok: true };
+  });
+}
+
+export async function loginUser({ username, password }) {
+  return withUsers(async (users) => {
+    const user = users.find((u) => u.username === username);
+    if (!user) return { error: "用户名或密码错误" };
+    if (user.status !== "active") return { error: "账号尚未通过审核，请联系管理员" };
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) return { error: "用户名或密码错误" };
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, permissions: user.permissions },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    return {
+      token,
+      user: { id: user.id, name: user.name, username: user.username, role: user.role, permissions: user.permissions },
+    };
+  });
+}
+
+export function getUserById(id) {
+  const users = readUsersUnsafe(); // read-only, no lock needed
+  const user = users.find((u) => u.id === id);
+  if (!user) return null;
+  return { id: user.id, name: user.name, username: user.username, role: user.role, status: user.status, permissions: user.permissions || DEFAULT_PERMISSIONS };
+}
+
+export function listUsers() {
+  return readUsersUnsafe().map(({ passwordHash, ...u }) => u);
+}
+
+export async function approveUser(id) {
+  return withUsers(async (users) => {
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx < 0) return { error: "用户不存在" };
+    if (users[idx].role === "admin") return { error: "不能审核管理员" };
+    users[idx].status = "active";
+    return { ok: true };
+  });
+}
+
+export async function rejectUser(id) {
+  return withUsers(async (users) => {
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx < 0) return { error: "用户不存在" };
+    if (users[idx].role === "admin") return { error: "不能驳回管理员" };
+    users.splice(idx, 1);
+    return { ok: true };
+  });
+}
+
+export async function setUserPermission(id, permission, enabled) {
+  return withUsers(async (users) => {
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx < 0) return { error: "用户不存在" };
+    if (users[idx].role === "admin") return { error: "不能修改管理员权限" };
+    if (!users[idx].permissions) users[idx].permissions = [...DEFAULT_PERMISSIONS];
+    if (enabled) {
+      if (!users[idx].permissions.includes(permission)) users[idx].permissions.push(permission);
+    } else {
+      users[idx].permissions = users[idx].permissions.filter((p) => p !== permission);
+    }
+    return { ok: true, permissions: users[idx].permissions };
+  });
+}
+
+/** Refresh token — issue a new one if the old one is still valid (or recently expired) */
+export function refreshToken(oldToken) {
+  try {
+    const payload = jwt.verify(oldToken, JWT_SECRET, { ignoreExpiration: true });
+    // Only allow refresh if within the refresh window after expiry
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && (payload.exp + 86400) < now) {
+      return { error: "token已过期超过24小时，请重新登录" };
+    }
+    const newToken = jwt.sign(
+      { id: payload.id, username: payload.username, role: payload.role, permissions: payload.permissions },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    return { token: newToken };
+  } catch {
+    return { error: "token无效" };
+  }
+}
+
+export { JWT_SECRET };

@@ -3,6 +3,11 @@ import cron from "node-cron";
 import { PORT, readConfig, formatShanghaiDate, isRestDay, getLastWorkingDay } from "./config.js";
 import { registerHistoryRoutes } from "./routes/history.js";
 import { registerProductionRoutes } from "./routes/production.js";
+import { initDefaultAdmin } from "./services/users.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerAdminRoutes } from "./routes/admin.js";
+import { initEmployeeData } from "./services/employees.js";
+import { registerEmployeeRoutes } from "./routes/employees.js";
 import { fetchAndStoreReport, hasProductionData, buildWecomContent } from "./services/report.js";
 import { sendWecomMessage } from "./services/wecom.js";
 
@@ -13,6 +18,9 @@ app.use(express.json({ limit: "10mb" }));
 
 registerHistoryRoutes(app);
 registerProductionRoutes(app);
+registerAuthRoutes(app);
+registerAdminRoutes(app);
+registerEmployeeRoutes(app);
 
 // ---- cron: daily push ----
 
@@ -63,7 +71,12 @@ function setupCron() {
 
 // ---- start ----
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`teao-api running on port ${PORT}`);
-  setupCron();
-});
+(async () => {
+  await initDefaultAdmin();
+  await initEmployeeData();
+
+  app.listen(PORT, "127.0.0.1", () => {
+    console.log(`teao-api running on port ${PORT}`);
+    setupCron();
+  });
+})();

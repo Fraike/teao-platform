@@ -1,0 +1,23 @@
+.container {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.permissionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permissionItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.actionRow {
+  display: flex;
+  gap: 8px;
+}
