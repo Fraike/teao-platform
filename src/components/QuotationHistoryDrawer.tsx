@@ -7,94 +7,38 @@ import {
   Space,
   Button,
   Popconfirm,
-  Modal,
   Typography,
-  message,
 } from "antd";
 import {
   SearchOutlined,
   DeleteOutlined,
-  LockOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
-import { useQuotationHistoryStore, historyPassword } from "../lib/historyStore";
+import { useQuotationHistoryStore } from "../lib/historyStore";
 import type { QuotationRecord, Product, MoldItem } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
-const FIXED_PASSWORD = historyPassword();
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-export default function QuotationHistoryDrawer({ open, onClose }: Props) {
-  const [authenticated, setAuthenticated] = useState(false);
+export function QuotationHistoryDrawer({ open, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
-  const handleAuth = (pw: string) => {
-    if (pw === FIXED_PASSWORD) {
-      setAuthenticated(true);
-      return true;
-    }
-    message.error("密码错误");
-    return false;
-  };
-
-  const handleCancel = () => {
-    setAuthenticated(false);
-    onClose();
-  };
-
-  if (!authenticated) {
-    return (
-      <Modal
-        title={<Space><LockOutlined />请输入访问密码</Space>}
-        open={open}
-        onOk={() => {
-          // handled by onPressEnter
-        }}
-        onCancel={handleCancel}
-        okText="确认"
-        cancelText="取消"
-        width={320}
-        footer={null}
-      >
-        <PasswordForm onVerify={handleAuth} />
-      </Modal>
-    );
-  }
-
-  return <HistoryPanel open={open} onClose={handleCancel} search={search} setSearch={setSearch} dateRange={dateRange} setDateRange={setDateRange} />;
-}
-
-function PasswordForm({ onVerify }: { onVerify: (pw: string) => boolean }) {
-  const [pw, setPw] = useState("");
-
-  const handleOk = () => {
-    onVerify(pw);
-    setPw("");
-  };
-
   return (
-    <>
-      <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
-        请输入密码查看报价汇总
-      </Text>
-      <Input.Password
-        value={pw}
-        onChange={(e) => setPw(e.target.value)}
-        placeholder="请输入密码"
-        onPressEnter={handleOk}
-        autoFocus
-      />
-      <Button type="primary" block style={{ marginTop: 12 }} onClick={handleOk}>
-        确认
-      </Button>
-    </>
+    <HistoryPanel
+      open={open}
+      onClose={onClose}
+      search={search}
+      setSearch={setSearch}
+      dateRange={dateRange}
+      setDateRange={setDateRange}
+    />
   );
 }
 

@@ -1,15 +1,6 @@
 import { create } from "zustand";
+import { api } from "./api";
 import type { QuotationRecord } from "../types/quotation";
-
-const API_BASE = "/api/history";
-const HISTORY_PASSWORD = "teao123";
-
-function apiHeaders(): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    "X-Auth-Password": HISTORY_PASSWORD,
-  };
-}
 
 interface HistoryStore {
   records: QuotationRecord[];
@@ -26,30 +17,15 @@ export const useQuotationHistoryStore = create<HistoryStore>((set, get) => ({
   loadRecords: async () => {
     set({ loading: true });
     try {
-      const res = await fetch(API_BASE, { headers: apiHeaders() });
-      if (res.ok) {
-        const data = (await res.json()) as QuotationRecord[];
-        set({ records: data, loading: false });
-      } else {
-        set({ loading: false });
-      }
+      const data = await api.get<QuotationRecord[]>("/api/history");
+      set({ records: data, loading: false });
     } catch {
       set({ loading: false });
     }
   },
 
   addRecord: async (record) => {
-    const res = await fetch(API_BASE, {
-      method: "POST",
-      headers: apiHeaders(),
-      body: JSON.stringify({ record }),
-    });
-    if (!res.ok) {
-      const msg = res.status === 413
-        ? "报价数据过大，请减少产品图片"
-        : `保存失败 (${res.status})`;
-      throw new Error(msg);
-    }
+    await api.post<{ ok: boolean; total: number }>("/api/history", { record });
     const records = [
       record,
       ...get().records.filter((r) => r.quoteNo !== record.quoteNo),
@@ -59,18 +35,9 @@ export const useQuotationHistoryStore = create<HistoryStore>((set, get) => ({
 
   removeRecord: async (id) => {
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: apiHeaders(),
-      });
-      if (res.ok) {
-        const records = get().records.filter((r) => r.id !== id);
-        set({ records });
-      }
+      await api.delete(`/api/history/${encodeURIComponent(id)}`);
+      const records = get().records.filter((r) => r.id !== id);
+      set({ records });
     } catch { /* ignore */ }
   },
 }));
-
-export function historyPassword(): string {
-  return HISTORY_PASSWORD;
-}

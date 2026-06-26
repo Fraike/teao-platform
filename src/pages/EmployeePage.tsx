@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   Table, Button, Tag, Input, Select, Space, Typography,
-  Popconfirm, message, Tabs,
+  Popconfirm, message, Tabs, Alert,
 } from "antd";
 import {
   PlusOutlined, SearchOutlined, ExportOutlined,
@@ -27,6 +27,13 @@ export function EmployeePage() {
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [reminders, setReminders] = useState<{ expired: number; expiring: number } | null>(null);
+
+  useEffect(() => {
+    api.get<{ expired: { length: number }; expiring: { length: number } }>("/api/employees/reminders")
+      .then((r) => setReminders({ expired: r.expired.length, expiring: r.expiring.length }))
+      .catch((err) => console.error("获取合同提醒失败:", err));
+  }, []);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -41,6 +48,7 @@ export function EmployeePage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEmployees();
   }, [fetchEmployees]);
 
@@ -80,7 +88,7 @@ export function EmployeePage() {
 
     const rows = filtered.map((e) =>
       keys.map((k) => {
-        const v = (e as Record<string, unknown>)[k];
+        const v = (e as unknown as Record<string, unknown>)[k];
         if (typeof v === "boolean") return v ? "是" : "否";
         return v ?? "";
       })
@@ -177,6 +185,19 @@ export function EmployeePage() {
           </Button>
         </Space>
       </div>
+
+      {reminders && (reminders.expired > 0 || reminders.expiring > 0) && (
+        <Alert
+          type={reminders.expired > 0 ? "error" : "warning"}
+          showIcon
+          message={
+            reminders.expired > 0
+              ? `合同到期提醒：${reminders.expired} 人合同已过期，${reminders.expiring} 人即将到期（60天内），请及时处理`
+              : `合同到期提醒：${reminders.expiring} 人合同即将到期（60天内），请及时处理`
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Tabs
         activeKey={activeTab}

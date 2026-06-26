@@ -21,6 +21,7 @@ export const DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS = {
   torque: 98,
   packaging: 120,
   remark: 106,
+  freight: 70,
 };
 
 export const DEFAULT_AMORTIZE_QTY = 50000;

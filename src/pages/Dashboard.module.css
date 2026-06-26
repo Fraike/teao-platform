@@ -1,63 +1,105 @@
 .container {
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 48px 24px;
+  padding: 40px 24px 32px;
 }
 
 .containerMobile {
-  padding: 24px 16px;
+  padding: 20px 14px 24px;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: 48px;
+/* ===== Section ===== */
+.section {
+  margin-bottom: 28px;
 }
 
-.headerMobile {
-  margin-bottom: 32px;
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.headerTitle {
-  margin-bottom: 8px;
-  font-weight: 700;
+.sectionDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.headerSub {
+.sectionTitle {
   font-size: 15px;
+  font-weight: 700;
+  color: #334155;
 }
 
-.headerSubMobile {
-  font-size: 13px;
+.sectionCount {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 400;
 }
 
-.cardInner {
-  text-align: center;
-  padding: 8px 0;
+/* ===== Module Card ===== */
+.moduleCard {
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fff;
+  overflow: hidden;
+  height: 100%;
+  border: 1px solid #edf0f4;
 }
 
-.iconBox {
-  width: 80px;
-  height: 80px;
-  border-radius: 16px;
+.moduleCard:hover {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+  transform: translateY(-2px);
+}
+
+.moduleInner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 20px 20px 16px;
+}
+
+.moduleIconBox {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  font-size: 22px;
+  flex-shrink: 0;
 }
 
-.cardTitle {
-  margin-bottom: 8px;
+.moduleText {
+  flex: 1;
+  min-width: 0;
 }
 
-.cardDesc {
-  font-size: 13px;
-  line-height: 1.8;
-  margin-bottom: 16px;
-  text-align: left;
+.moduleName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
 }
 
+.moduleDesc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== Footer ===== */
 .footer {
   text-align: center;
-  margin-top: 48px;
+  margin-top: 40px;
   font-size: 12px;
+  color: #b0b8c4;
 }

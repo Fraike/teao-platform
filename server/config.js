@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const PORT = process.env.PORT || 3899;
-export const PASSWORD = process.env.API_PASSWORD || "teao123";
 
-const DATA_DIR = process.env.DATA_DIR || "/var/www/teao-platform/data";
+const PRODUCTION_DATA_DIR = "/var/www/teao-platform/data";
+const DATA_DIR = process.env.DATA_DIR
+  || (fs.existsSync(PRODUCTION_DATA_DIR) ? PRODUCTION_DATA_DIR : path.join(__dirname, "..", "data"));
 export const DATA_FILE = path.join(DATA_DIR, "history.json");
 export const REPORTS_DIR = path.join(DATA_DIR, "production-reports");
 

@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect, Fragment } from "react";
+import { forwardRef, Fragment } from "react";
 import { useIntlQuotationStore } from "../../lib/store";
 import { COMPANY_INFO_EN, LOGO_PATH, STAMP_PATH } from "../../lib/constants";
 
@@ -21,23 +21,7 @@ const C = {
   tagBg: "#f5f1e8",
 };
 
-function useBase64Image(path: string) {
-  const [src, setSrc] = useState(path);
-  useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext("2d")!.drawImage(img, 0, 0);
-      setSrc(canvas.toDataURL("image/png"));
-    };
-    img.onerror = () => setSrc("");
-    img.src = path;
-  }, [path]);
-  return src;
-}
+import { useBase64Image } from "../../lib/useBase64Image";
 
 const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_props, ref) {
   const { customer, quoteMeta, products, terms, molds } = useIntlQuotationStore((s) => s.quotation);
@@ -46,10 +30,12 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
   const columnWidths = quoteMeta.tableColumnWidths;
   const logoSrc = useBase64Image(LOGO_PATH);
   const stampSrc = useBase64Image(STAMP_PATH);
-  const totalAmount = products.reduce(
-  (sum, p) => sum + (p.tiers && p.tiers.length > 0 ? 0 : (p.qty ?? 0) * (p.price ?? 0)),
-  0
-);
+  const totalProductAmount = products.reduce(
+    (sum, p) => sum + (p.tiers && p.tiers.length > 0 ? 0 : (p.qty ?? 0) * (p.price ?? 0)),
+    0
+  );
+  const totalFreight = products.reduce((sum, p) => sum + (p.freight ?? 0), 0);
+  const totalAmount = totalProductAmount + totalFreight;
 
   return (
     <div
@@ -194,6 +180,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
             <col style={{ width: columnWidths.price + 10 }} />
             <col style={{ width: 44 }} />
             <col style={{ width: 60 }} />
+            <col style={{ width: columnWidths.freight }} />
             <col style={{ width: columnWidths.packaging }} />
             <col style={{ width: columnWidths.remark }} />
           </colgroup>
@@ -206,6 +193,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
               <th style={th("right")}>Unit Price</th>
               <th style={th("right")}>QTY</th>
               <th style={th("right")}>Amount</th>
+              <th style={th("right")}>Freight</th>
               <th style={th("left")}>Packaging</th>
               <th style={th("left")}>Note</th>
             </tr>
@@ -251,6 +239,16 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                         </>
                       )}
                     </td>
+                    <td style={td("right", C.text, "monospace")}>
+                      {(p.freight ?? 0) > 0 ? (
+                        <>
+                          <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
+                          {(p.freight ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </>
+                      ) : (
+                        <span style={{ color: C.subtle }}>—</span>
+                      )}
+                    </td>
                     <td style={{ ...td("left", C.muted), wordBreak: "break-word" }}>
                       {p.packaging ? (
                         <div style={{ color: C.muted, fontSize: 8.5, lineHeight: 1.4, whiteSpace: "pre-line" }}>{p.packaging}</div>
@@ -268,7 +266,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                   </tr>
 
                   {/* Tier sub-rows */}
-                  {hasTiers && p.tiers!.map((tier, _ti) => (
+                  {hasTiers && p.tiers!.map((tier) => (
                     <tr key={tier.id} style={{ background: C.bg }}>
                       <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }} colSpan={3}></td>
@@ -283,6 +281,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                       </td>
                       <td style={{ ...td("right", C.text), background: C.bg }}></td>
                       <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}></td>
+                      <td style={{ ...td("right", C.text), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }}></td>
                       <td style={{ ...td("left", C.subtle), background: C.bg }}></td>
                     </tr>
@@ -296,22 +295,36 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
         {/* ===== Total ===== */}
         <div style={{
           display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
+          flexDirection: "column",
+          alignItems: "flex-end",
           padding: "12px 0",
           borderTop: `2px solid ${C.accent}`,
           marginTop: 2,
-          gap: 16,
+          gap: 6,
         }}>
           {products.some((p) => p.tiers && p.tiers.length > 0) && (
             <span style={{ fontSize: 7.5, color: C.subtle, fontStyle: "italic" }}>
-              * Some products use tiered pricing, total excludes tiered items
+              * Some products use tiered pricing, product total excludes tiered items
             </span>
           )}
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginRight: 24 }}>Total Amount</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: C.heading, fontFamily: "monospace" }}>
-            {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: C.muted, minWidth: 100, textAlign: "right" }}>Product Amount</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "monospace", minWidth: 100, textAlign: "right" }}>
+              {quoteMeta.currency} {totalProductAmount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: C.muted, minWidth: 100, textAlign: "right" }}>Freight</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "monospace", minWidth: 100, textAlign: "right" }}>
+              {quoteMeta.currency} {totalFreight.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, borderTop: `1px solid ${C.border}`, paddingTop: 6, marginTop: 2 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, minWidth: 100, textAlign: "right" }}>Total Amount</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: C.heading, fontFamily: "monospace", minWidth: 100, textAlign: "right" }}>
+              {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+            </span>
+          </div>
         </div>
       </div>
 

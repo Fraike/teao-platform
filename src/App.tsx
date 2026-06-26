@@ -27,7 +27,7 @@ const QuotationPage = lazy(() => import("./pages/QuotationPage"));
 const QuotationPageIntl = lazy(() => import("./pages/QuotationPageIntl"));
 const CostCalculatorPage = lazy(() => import("./pages/CostCalculatorPage"));
 const ProcessCenter = lazy(() => import("./pages/ProcessCenter"));
-const ProductionReportPage = lazy(() => import("./pages/ProductionReportPage"));
+const ProductionReportPage = lazy(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const EmployeePage = lazy(() => import("./pages/EmployeePage").then((m) => ({ default: m.EmployeePage })));
 
@@ -178,19 +178,68 @@ function AppLayout() {
             {!isMobile && (
               <div>
                 <Text strong style={{ color: "#fff", fontSize: 15, whiteSpace: "nowrap" }}>
-                  特澳科技业务工具平台
+                  特澳科技后台
                 </Text>
               </div>
             )}
           </div>
           {!isMobile && (
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={[selectedKey]}
-              items={menuItems}
-              style={{ flex: 1, minWidth: 300, background: "transparent", borderBottom: "none" }}
-            />
+            <nav style={{ flex: 1, display: "flex", alignItems: "center", gap: 4, marginLeft: 16 }}>
+              {visibleNavItems.map((item) => {
+                if (item.children) {
+                  return (
+                    <Dropdown
+                      key={item.key}
+                      menu={{
+                        items: item.children.map((child) => ({
+                          key: child.key,
+                          label: child.label,
+                          onClick: () => navigate(child.key),
+                        })),
+                      }}
+                    >
+                      <Button
+                        type="text"
+                        style={{
+                          color: item.children.some((c) => selectedKey === c.key || selectedKey.startsWith(c.key + "/"))
+                            ? "#fff"
+                            : "rgba(255,255,255,0.65)",
+                          background: item.children.some((c) => selectedKey === c.key || selectedKey.startsWith(c.key + "/"))
+                            ? "rgba(255,255,255,0.15)"
+                            : "transparent",
+                          fontSize: 14,
+                          padding: "0 14px",
+                          height: headerHeight - 4,
+                          borderRadius: 6,
+                        }}
+                      >
+                        {item.icon}
+                        <span style={{ marginLeft: 6 }}>{item.label}</span>
+                      </Button>
+                    </Dropdown>
+                  );
+                }
+                const active = selectedKey === item.key || (item.key !== "/" && selectedKey.startsWith(item.key + "/"));
+                return (
+                  <Button
+                    key={item.key}
+                    type="text"
+                    onClick={() => navigate(item.key)}
+                    style={{
+                      color: active ? "#fff" : "rgba(255,255,255,0.65)",
+                      background: active ? "rgba(255,255,255,0.15)" : "transparent",
+                      fontSize: 14,
+                      padding: "0 14px",
+                      height: headerHeight - 4,
+                      borderRadius: 6,
+                    }}
+                  >
+                    {item.icon}
+                    <span style={{ marginLeft: 6 }}>{item.label}</span>
+                  </Button>
+                );
+              })}
+            </nav>
           )}
         </div>
 
@@ -202,7 +251,7 @@ function AppLayout() {
               onClick={() => setDrawerOpen(true)}
             />
             <Drawer
-              title="特澳科技业务工具平台"
+              title="特澳科技后台"
               placement="right"
               width={220}
               open={drawerOpen}

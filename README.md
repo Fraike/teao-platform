@@ -1,6 +1,6 @@
-# 特澳科技业务工具平台
+# 特澳科技后台
 
-东莞市特澳电子科技有限公司内部业务工具平台，集成报价单生成、成本计算、生产日报推送等业务模块。
+东莞市特澳电子科技有限公司内部业务工具平台，集成报价单生成、成本计算、生产日报推送、员工管理等业务模块。
 
 > 在线地址：https://teao.work
 
@@ -8,78 +8,16 @@
 
 ## 业务模块
 
-| 模块 | 路由 | 说明 |
-|------|------|------|
-| 首页 Dashboard | `/` | 系统入口，各模块快捷导航 |
-| 国内报价 | `/quotation` | 国内客户报价单编辑、预览、PDF 导出 |
-| 国际报价 | `/quotation-intl` | 海外客户报价单，支持阶梯定价、EXW/FOB 等贸易条款 |
-| 成本计算 | `/cost` | A-G 全维度供应商成本核算 |
-| 生产日报 | `/production-report` | 装配部 + 注塑部生产数据查看，企业微信定时推送 |
-| 流程查阅 | `/process` | 产品工艺流程图可视化 |
-
----
-
-### 报价系统（国内 & 国际）
-
-左右分屏布局：左侧录入区，右侧 A4 实时预览。
-
-**国内报价** — 标准报价单：
-- 客户信息、报价单号（自动生成）、币种、税率
-- 产品明细（名称/规格/单价/扭矩/包装/备注），支持图片
-- 模具费用表（模具成本 + 摊销数量）
-- 条款编辑器（预设默认条款）
-- 公章/金额列 显示开关
-- 导出设置：自定义表格列宽
-
-**国际报价** — 英文报价单，额外功能：
-- 贸易术语（EXW / FOB / CIF / DDP）
-- 付款条件（预设常用模板）
-- 银行信息（SWIFT/BIC + 账号）
-- **阶梯定价**：每个产品可配置多级数量-单价梯次
-- 客户邮箱、国家、邮编字段
-
-**工具栏操作**：新建 / 导入 JSON / 导出 JSON / 保存草稿（localStorage）/ 导出 PDF / 报价汇总
-
-> 导出 PDF 后自动保存至报价汇总（可通过页面右上角"报价汇总"按钮查看历史记录）
-
----
-
-### 成本计算
-
-支持 **A-G 七个成本维度** 的供应商报价分析：
-
-| 维度 | 内容 |
-|------|------|
-| A 原材料分析 | 材料名称、用量、单价、金额 |
-| B 外购件分析 | 外购零件、数量、单价 |
-| C 制造费用 | 工序、费率、工时 |
-| D 专项分摊 | 模具/治具分摊 |
-| E 包装费 | 包装材料、规格、成本 |
-| F 运输费 | 运输方式、距离、费用 |
-| G 加成费用 | 管理费、利润、其他 |
-
-自动计算 **H（不含税合计）** 和 **I（含税合计）**，右侧汇总面板展示各项明细占比。
-
-工具栏支持：新建 / JSON 导入导出 / 保存草稿
-
----
-
-### 生产日报
-
-- 从维格表自动拉取装配部和注塑部的生产数据
-- 支持按日期查询、手动刷新
-- 装配部：按产线查看品名/产量/达成率/合格率/不良数/欠数
-- 注塑部：按机台/班次查看品名/产量/合格率/不良数
-- 工作日智能识别：周日自动跳过，支持配置法定节假日和补班日
-- 企业微信机器人定时推送（默认每天 13:00）
-
-> 配置管理：管理员可通过页面设置维格表 ID、Webhook、定时表达式、休息日等
-
----
-
-### 流程查阅
-
-基于 AntV X6 的交互式流程图，展示产品生产工艺路径。支持节点拖拽、缩放。
+| 模块 | 路由 | 权限 | 说明 |
+|------|------|------|------|
+| 首页 Dashboard | `/` | 所有用户 | 系统入口，分类展示各模块快捷入口 |
+| 国内报价 | `/quotation` | business | 国内客户报价单编辑、预览、PDF 导出 |
+| 国际报价 | `/quotation-intl` | business | 海外客户报价单，支持阶梯定价、EXW/FOB 等 |
+| 成本计算 | `/cost` | business | 原材料、外购件、制造、包装、运输等全维度成本核算 |
+| 生产日报 | `/production-report` | production | 装配部 + 注塑部生产数据，企业微信定时推送 |
+| 员工管理 | `/employees` | hr | 员工档案 CRUD、搜索筛选、CSV 导出、合同到期提醒 |
+| 流程查阅 | `/process` | tools | 产品工艺流程图可视化 |
+| 用户管理 | `/admin` | admin | 管理员审核注册、模块权限开关 |
 
 ---
 
@@ -93,34 +31,192 @@
 | Ant Design | 5.x | UI 组件库 |
 | AntV X6 | 3.x | 流程图渲染 |
 | Zustand | 5.x | 状态管理 |
-| html2canvas + jsPDF | — | PDF 导出 |
 | react-router-dom | 7.x | 客户端路由 |
+| html2canvas + jsPDF | — | PDF 导出 |
 | dayjs | 1.x | 日期处理 |
 
 **后端（API 服务器）**：
 
 | 技术 | 用途 |
 |------|------|
-| Express | HTTP API |
-| node-cron | 定时任务 |
+| Express 4 | HTTP API |
+| jsonwebtoken | JWT 认证 |
+| node-cron | 定时任务（生产日报推送） |
+| crypto (Node.js) | scrypt 密码哈希 |
 
 ---
 
 ## 快速开始
 
+### 1. 环境准备
+
 ```bash
-# 安装依赖
+# 安装前端依赖
 npm install
 
-# 启动前端开发服务器
-npm run dev
+# 安装后端依赖
+cd server && npm install && cd ..
 
-# 启动 API 服务器（可选，用于报价汇总和生产日报）
-cd server && npm install && node server.js
-
-# 生产构建
-npm run build
+# 创建环境变量文件
+cp .env.example .env
+# 编辑 .env，至少填写 JWT_SECRET（必填）
 ```
+
+### 2. 启动开发环境
+
+**前端**（端口 5173）：
+```bash
+npm run dev
+```
+
+**后端 API**（端口 3899）：
+```bash
+# 创建 server/.env 文件（必需）
+cat > server/.env << 'EOF'
+JWT_SECRET=your-secret-key-at-least-32-chars
+EOF
+
+# 启动后端（Node.js 22+ 内置 .env 支持）
+cd server && node --env-file=.env server.js
+
+# 旧版 Node.js 需先安装 dotenv：
+# cd server && npm install dotenv && node -r dotenv/config server.js
+```
+
+前端 Vite 开发服务器会自动将 `/api/*` 请求代理到 `http://127.0.0.1:3899`。
+
+### 3. 首次使用
+
+1. API 启动后会自动创建默认管理员账户：
+   - 用户名：`admin`
+   - 密码：`admin123`
+2. 访问 `http://localhost:5173/login` 登录
+3. **生产环境务必修改默认管理员密码！**
+
+### 4. 生产构建
+
+```bash
+npm run build          # 前端构建 → dist/
+cd server && npm start # 后端启动（需设置环境变量）
+```
+
+---
+
+## 环境变量
+
+全部变量定义在 `.env.example`，本地开发复制为 `.env`：
+
+| 变量 | 必填 | 默认值 | 用途 |
+|------|------|--------|------|
+| `JWT_SECRET` | ✅ 是 | 无（缺少则启动失败） | JWT 签名密钥，生产环境用随机长字符串 |
+| `DATA_DIR` | 否 | 自动选择 | API 数据存储目录 |
+| `VIKA_TOKEN` | 否 | — | 维格表 API Token（生产日报抓取） |
+| `ASSEMBLY_DATASHEET_ID` | 否 | — | 装配部维格表 ID |
+| `INJECTION_DATASHEET_ID` | 否 | — | 注塑部维格表 ID |
+| `WECOM_WEBHOOK` | 否 | — | 企业微信机器人 Webhook 地址 |
+| `CRON_EXPRESSION` | 否 | `0 0 13 * * *` | 生产日报推送 cron 表达式 |
+| `PRODUCTION_REPORT_ENABLED` | 否 | `true` | 是否启用日报定时推送 |
+
+### 启动后端
+
+**本地开发：**
+
+```bash
+# 创建 server/.env，至少配置 JWT_SECRET
+cat > server/.env << 'EOF'
+JWT_SECRET=your-secret-key-at-least-32-chars
+EOF
+
+# 启动（Node.js 22+ 内置 .env 支持）
+cd server && node --env-file=.env server.js
+```
+
+**生产环境（systemd）：**
+
+```ini
+# /etc/systemd/system/teao-api.service
+[Service]
+Environment="JWT_SECRET=your-production-secret-key"
+Environment="DATA_DIR=/var/www/teao-platform/data"
+ExecStart=/usr/bin/node /var/www/teao-platform/server/server.js
+```
+
+生产环境维格表相关配置（VIKA_TOKEN 等）在 `server/production-config.json` 中维护，该文件不进 Git。
+
+---
+
+## 权限体系
+
+基于 RBAC 的五模块权限：
+
+| 权限标识 | 可访问模块 |
+|----------|-----------|
+| `business` | 国内报价、国际报价、成本计算 |
+| `production` | 生产日报 |
+| `hr` | 员工管理 |
+| `tools` | 流程查阅 |
+| `admin` | 全部模块 + 用户管理（审核注册、权限开关） |
+
+- 新用户注册后状态为"待审核"，管理员审核通过后方可登录
+- 管理员可在用户管理页面为每个用户单独开关模块权限
+- 首页仪表盘永远对所有已登录用户可见
+
+---
+
+## API 端点
+
+### 认证（无需 Token）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/login` | 登录，返回 JWT token |
+| POST | `/api/auth/register` | 注册（需管理员审核） |
+| POST | `/api/auth/refresh` | 刷新 token |
+
+### 认证（需 Token）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/auth/me` | 获取当前用户信息 |
+
+### 员工管理（需 Token，权限：hr）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/employees` | 员工列表（?status=active\|resigned） |
+| GET | `/api/employees/reminders` | 合同到期提醒 |
+| GET | `/api/employees/:id` | 员工详情 |
+| POST | `/api/employees` | 新增员工 |
+| PUT | `/api/employees/:id` | 更新员工 |
+| DELETE | `/api/employees/:id` | 标记离职 |
+
+### 报价汇总（需 Token）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/history` | 获取报价记录列表 |
+| POST | `/api/history` | 保存报价记录 |
+| DELETE | `/api/history/:id` | 删除报价记录 |
+
+### 生产日报（需 Token）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/production/config` | 获取日报配置 |
+| POST | `/api/production/config` | 保存日报配置 |
+| POST | `/api/production/fetch` | 从维格表拉取并存储日报 |
+| GET | `/api/production/report` | 获取已存储的日报 |
+| POST | `/api/production/send` | 推送到企业微信群 |
+| POST | `/api/production/preview` | 预览推送内容 |
+
+### 用户管理（需 Token，权限：admin）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/admin/users` | 用户列表 |
+| POST | `/api/admin/users/:id/approve` | 审核通过 |
+| POST | `/api/admin/users/:id/reject` | 驳回注册 |
+| PUT | `/api/admin/users/:id/permissions` | 修改模块权限 |
 
 ---
 
@@ -128,66 +224,79 @@ npm run build
 
 ```
 teao-platform/
-├── public/assets/              # 静态资源（Logo、公章）
+├── public/assets/                   # 静态资源（Logo、公章）
 ├── src/
-│   ├── App.tsx                 # 路由 + 顶部导航
-│   ├── main.tsx                # 入口
-│   ├── index.css               # 全局样式
+│   ├── App.tsx                      # 路由 + 顶部导航 + 权限过滤
+│   ├── main.tsx                     # 入口
+│   ├── index.css                    # 全局样式
 │   ├── types/
-│   │   ├── quotation.ts        # 报价单类型定义
-│   │   └── costQuote.ts        # 成本报价类型定义
+│   │   ├── quotation.ts             # 报价单类型定义
+│   │   ├── costQuote.ts             # 成本报价类型定义
+│   │   ├── auth.ts                  # 用户/认证类型定义
+│   │   └── employee.ts              # 员工类型定义
 │   ├── lib/
-│   │   ├── constants.ts        # 公司信息、默认条款、资源路径
-│   │   ├── store.ts            # 报价单 Store（国内 + 国际共用工厂）
-│   │   ├── sample.ts           # 国内报价示例数据
-│   │   ├── sample-intl.ts      # 国际报价示例数据
-│   │   ├── pdf.ts              # PDF 导出引擎（国内 + 国际）
-│   │   ├── costStore.ts        # 成本计算 Store
-│   │   ├── costCalculations.ts # 成本计算函数（A-I）
-│   │   ├── costFormat.ts       # 金额/重量格式化
-│   │   ├── costStorage.ts      # 成本数据 localStorage
-│   │   ├── historyStore.ts     # 报价汇总 Store（含 API 同步）
-│   │   └── useIsMobile.ts      # 移动端检测 Hook
+│   │   ├── api.ts                   # API 客户端（JWT 自动刷新）
+│   │   ├── authStore.ts             # 认证 Store
+│   │   ├── constants.ts             # 公司信息、默认条款、资源路径
+│   │   ├── store.ts                 # 报价单 Store（国内 + 国际共用工厂）
+│   │   ├── sample.ts                # 国内报价示例数据
+│   │   ├── sample-intl.ts           # 国际报价示例数据
+│   │   ├── pdf.ts                   # PDF 导出引擎
+│   │   ├── costStore.ts             # 成本计算 Store
+│   │   ├── costCalculations.ts      # 成本计算函数
+│   │   ├── costFormat.ts            # 金额/重量格式化
+│   │   ├── costStorage.ts           # 成本数据 localStorage
+│   │   ├── historyStore.ts          # 报价汇总 Store
+│   │   ├── imageUtils.ts            # 图片缩放工具
+│   │   ├── useBase64Image.ts        # 图片转 Base64 Hook
+│   │   └── useIsMobile.ts           # 移动端检测 Hook
 │   ├── components/
-│   │   ├── intl/               # 国际报价组件（需逐步合并到共享层）
-│   │   ├── cost/               # 成本计算组件
-│   │   ├── process/            # 流程查阅组件
-│   │   └── *.tsx               # 国内报价共享组件
-│   ├── pages/
-│   │   ├── Dashboard.tsx       # 首页
-│   │   ├── QuotationPage.tsx   # 国内报价
-│   │   ├── QuotationPageIntl.tsx # 国际报价
-│   │   ├── CostCalculatorPage.tsx # 成本计算
-│   │   ├── ProductionReportPage.tsx # 生产日报
-│   │   └── ProcessCenter.tsx   # 流程查阅
-│   └── data/                   # 示例数据
+│   │   ├── AuthGuard.tsx             # 路由守卫（登录 + 权限检查）
+│   │   ├── EmployeeFormModal.tsx     # 员工新增/编辑弹窗
+│   │   ├── intl/                    # 国际报价特有组件（ProductCard/PreviewPanel）
+│   │   ├── cost/                    # 成本计算组件
+│   │   ├── process/                 # 流程查阅组件
+│   │   └── *.tsx                    # 共享组件（国内/国际共用）
+│   └── pages/
+│       ├── Dashboard.tsx            # 首页（模块分类导航）
+│       ├── LoginPage.tsx            # 登录页
+│       ├── RegisterPage.tsx         # 注册页
+│       ├── AdminPage.tsx            # 用户管理（管理员）
+│       ├── EmployeePage.tsx         # 员工管理（含合同到期提醒）
+│       ├── QuotationPage.tsx        # 国内报价
+│       ├── QuotationPageIntl.tsx    # 国际报价
+│       ├── CostCalculatorPage.tsx   # 成本计算
+│       ├── ProductionReportPage.tsx # 生产日报
+│       └── ProcessCenter.tsx        # 流程查阅
 ├── server/
-│   ├── server.js               # Express API（历史记录 + 生产日报）
-│   ├── production-config.json  # 生产日报配置（git-ignored）
-│   └── teao-api.service        # systemd 服务文件
-├── docs/                       # 设计文档
-├── trash_review/               # 待删除文件审查区
-├── CLAUDE.md                   # AI 编码规范
-├── .env.example                # 环境变量模板
+│   ├── server.js                    # Express 入口 + cron 定时任务
+│   ├── config.js                    # 配置读写 + 数据存储路径
+│   ├── production-config.json       # 维格表/企微配置（不进 Git）
+│   ├── lib/mutex.js                 # 文件写入互斥锁
+│   ├── middleware/
+│   │   ├── jwt-auth.js              # JWT 验证 + Admin 权限
+│   │   └── rate-limit.js            # 登录频率限制
+│   ├── routes/
+│   │   ├── auth.js                  # 认证路由
+│   │   ├── admin.js                 # 管理员路由
+│   │   ├── employees.js             # 员工路由
+│   │   ├── history.js               # 报价汇总路由
+│   │   └── production.js            # 生产日报路由
+│   └── services/
+│       ├── users.js                 # 用户管理 + JWT
+│       ├── employees.js             # 员工管理 + 合同提醒
+│       ├── report.js                # 维格表数据拉取 + 汇总
+│       ├── vika.js                  # 维格表 API 调用
+│       └── wecom.js                 # 企业微信推送
+├── data/                            # 运行时数据（git-ignored）
+│   ├── users.json                   # 用户数据
+│   └── employees.json               # 员工数据
+├── docs/                            # 设计文档
+├── .env.example                     # 环境变量模板
+├── CLAUDE.md                        # AI 编码规范
+├── vite.config.ts                   # Vite 配置（含 API 代理）
 └── package.json
 ```
-
----
-
-## 环境变量
-
-复制 `.env.example` 为 `.env` 填入真实值：
-
-| 变量 | 用途 |
-|------|------|
-| `API_PASSWORD` | API 认证密码 |
-| `VIKA_TOKEN` | 维格表 API Token |
-| `ASSEMBLY_DATASHEET_ID` | 装配部维格表 ID |
-| `INJECTION_DATASHEET_ID` | 注塑部维格表 ID |
-| `WECOM_WEBHOOK` | 企业微信机器人 Webhook |
-| `CRON_EXPRESSION` | 推送定时表达式（默认 13:00） |
-
-生产环境：在 `teao-api.service` 的 `[Service]` 区块中通过 `Environment=` 设置。
 
 ---
 
@@ -198,6 +307,9 @@ teao-platform/
 1. 前端静态文件 → `/var/www/teao-platform/`
 2. API 服务器 → `/var/www/teao-platform/server/`
 3. Nginx 反向代理 `/api/` → `127.0.0.1:3899`
+
+**生产环境必设环境变量**（在 systemd service 中）：
+- `JWT_SECRET` — 随机长字符串（必要！）
 
 > 部署前需在 GitHub Secrets 中配置 `DEPLOY_SSH_KEY`
 
@@ -212,15 +324,4 @@ teao-platform/
 - **不复制粘贴代码**，国内/国际报价共用逻辑必须抽取
 - **新代码避免 inline style**，优先使用 CSS Modules
 - TypeScript `strict: true`，零类型错误
-
----
-
-## 待办事项
-
-详见 [TODO.md](TODO.md)，主要待完成：
-- [ ] 替换真实 Logo 和公章
-- [ ] 手机端响应式适配
-- [ ] 用户登录与权限管理
-- [ ] 后端 API + 数据库持久化
-- [ ] 报价历史版本对比
-- [ ] 邮件发送报价单
+- 使用命名导出（`export function`），不使用 `export default`

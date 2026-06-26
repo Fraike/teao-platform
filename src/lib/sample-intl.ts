@@ -43,7 +43,8 @@ export const sampleIntlQuotation: Quotation = {
       ],
       torque: "",
       packaging: "1g/pcs, 500 pcs / opp bag packing\nCTN: 32*38*26.5 CM",
-      remark: "Freight Cost: $230",
+      freight: 230,
+      remark: "",
     },
     {
       id: "p2",

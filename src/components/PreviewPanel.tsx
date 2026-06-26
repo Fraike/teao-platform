@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect } from "react";
+import { forwardRef } from "react";
 import { useQuotationStore } from "../lib/store";
 import { COMPANY_INFO, LOGO_PATH, STAMP_PATH } from "../lib/constants";
 
@@ -15,23 +15,7 @@ const S = {
   headerBg: "#f1f5f9",
 };
 
-function useBase64Image(path: string) {
-  const [src, setSrc] = useState(path);
-  useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext("2d")!.drawImage(img, 0, 0);
-      setSrc(canvas.toDataURL("image/png"));
-    };
-    img.onerror = () => setSrc("");
-    img.src = path;
-  }, [path]);
-  return src;
-}
+import { useBase64Image } from "../lib/useBase64Image";
 
 const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
   const { customer, quoteMeta, products, terms, molds } = useQuotationStore((s) => s.quotation);

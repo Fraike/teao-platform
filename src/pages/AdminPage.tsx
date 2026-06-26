@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Table, Button, Tag, message, Popconfirm, Typography, Switch } from "antd";
+import { Table, Button, Tag, message, Popconfirm, Typography, Switch, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import type { User } from "../types/auth";
@@ -17,6 +17,9 @@ const PERMISSION_OPTIONS = [
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resetTarget, setResetTarget] = useState<User | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetForm] = Form.useForm<{ newPassword: string; confirmPassword: string }>();
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -31,6 +34,7 @@ export function AdminPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, [fetchUsers]);
 
@@ -60,6 +64,30 @@ export function AdminPage() {
       fetchUsers();
     } catch (err) {
       message.error((err as Error).message);
+    }
+  };
+
+  const openResetModal = (user: User) => {
+    resetForm.resetFields();
+    setResetTarget(user);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+    const values = await resetForm.validateFields();
+    if (values.newPassword !== values.confirmPassword) {
+      resetForm.setFields([{ name: "confirmPassword", errors: ["两次输入的密码不一致"] }]);
+      return;
+    }
+    setResetting(true);
+    try {
+      await api.post(`/api/admin/users/${resetTarget.id}/reset-password`, { newPassword: values.newPassword });
+      message.success("密码已重置");
+      setResetTarget(null);
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -113,25 +141,33 @@ export function AdminPage() {
       title: "操作",
       key: "action",
       render: (_: React.Key, record: User) => {
-        if (record.status !== "pending" || record.role === "admin") return null;
+        if (record.role === "admin") return null;
         return (
           <div className={styles.actionRow}>
-            <Popconfirm
-              title="确认通过该用户的注册申请？"
-              onConfirm={() => handleApprove(record.id)}
-            >
-              <Button type="link" size="small">
-                通过
+            {record.status === "pending" ? (
+              <>
+                <Popconfirm
+                  title="确认通过该用户的注册申请？"
+                  onConfirm={() => handleApprove(record.id)}
+                >
+                  <Button type="link" size="small">
+                    通过
+                  </Button>
+                </Popconfirm>
+                <Popconfirm
+                  title="确认驳回该用户的注册申请？此操作不可撤销。"
+                  onConfirm={() => handleReject(record.id)}
+                >
+                  <Button type="link" danger size="small">
+                    驳回
+                  </Button>
+                </Popconfirm>
+              </>
+            ) : (
+              <Button type="link" size="small" onClick={() => openResetModal(record)}>
+                重置密码
               </Button>
-            </Popconfirm>
-            <Popconfirm
-              title="确认驳回该用户的注册申请？此操作不可撤销。"
-              onConfirm={() => handleReject(record.id)}
-            >
-              <Button type="link" danger size="small">
-                驳回
-              </Button>
-            </Popconfirm>
+            )}
           </div>
         );
       },
@@ -148,6 +184,36 @@ export function AdminPage() {
         loading={loading}
         pagination={false}
       />
+      <Modal
+        title={`重置密码：${resetTarget?.name || ""}`}
+        open={!!resetTarget}
+        confirmLoading={resetting}
+        onOk={handleResetPassword}
+        onCancel={() => setResetTarget(null)}
+        okText="确认重置"
+        cancelText="取消"
+      >
+        <Form form={resetForm} layout="vertical">
+          <Form.Item
+            name="newPassword"
+            label="新密码"
+            rules={[
+              { required: true, message: "请输入新密码" },
+              { min: 6, message: "密码至少 6 位" },
+              { pattern: /^(?=.*[a-zA-Z])(?=.*\d)/, message: "需同时包含字母和数字" },
+            ]}
+          >
+            <Input.Password placeholder="新密码" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="确认密码"
+            rules={[{ required: true, message: "请确认新密码" }]}
+          >
+            <Input.Password placeholder="确认密码" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

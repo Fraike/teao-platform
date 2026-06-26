@@ -18,6 +18,7 @@ export interface Product {
   image?: string;
   remark?: string;
   packaging?: string;
+  freight?: number;
 }
 
 export interface CustomerInfo {
@@ -87,4 +88,5 @@ export interface ProductTableColumnWidths {
   torque: number;
   packaging: number;
   remark: number;
+  freight: number;
 }

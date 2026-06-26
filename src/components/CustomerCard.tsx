@@ -2,11 +2,44 @@ import React from "react";
 import { Card, Form, Input } from "antd";
 import { UserOutlined } from "@ant-design/icons";
 import { useQuotationStore } from "../lib/store";
+import { useIntlQuotationStore } from "../lib/store";
 import { useIsMobile } from "../lib/useIsMobile";
+import type { CustomerInfo } from "../types/quotation";
 
-export default function CustomerCard() {
-  const customer = useQuotationStore((s) => s.quotation.customer);
-  const setCustomer = useQuotationStore((s) => s.setCustomer);
+interface CustomerField {
+  key: keyof CustomerInfo;
+  label: string;
+  placeholder: string;
+}
+
+const DOMESTIC_FIELDS: CustomerField[] = [
+  { key: "name", label: "客户名称", placeholder: "请输入客户名称" },
+  { key: "contact", label: "联系人", placeholder: "联系人" },
+  { key: "tel", label: "电话", placeholder: "电话" },
+  { key: "address", label: "地址", placeholder: "地址" },
+];
+
+const INTL_FIELDS: CustomerField[] = [
+  { key: "name", label: "Company Name", placeholder: "Customer company name" },
+  { key: "contact", label: "Contact Person", placeholder: "Contact name" },
+  { key: "email", label: "Email", placeholder: "Customer email" },
+  { key: "tel", label: "Phone", placeholder: "Phone number" },
+  { key: "address", label: "Address", placeholder: "Street address" },
+  { key: "postalCode", label: "Postal Code / ZIP", placeholder: "Postal code" },
+  { key: "country", label: "Country", placeholder: "Country" },
+];
+
+function CustomerCardInner({
+  fields,
+  title,
+  customer,
+  setCustomer,
+}: {
+  fields: CustomerField[];
+  title: string;
+  customer: CustomerInfo;
+  setCustomer: (fn: (prev: CustomerInfo) => CustomerInfo) => void;
+}) {
   const isMobile = useIsMobile();
 
   return (
@@ -14,7 +47,7 @@ export default function CustomerCard() {
       title={
         <span style={{ fontSize: 14, fontWeight: 600 }}>
           <UserOutlined style={{ marginRight: 6 }} />
-          客户信息
+          {title}
         </span>
       }
       size="small"
@@ -22,36 +55,31 @@ export default function CustomerCard() {
     >
       <Form layout="vertical" size="small">
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0 16px" }}>
-          <Form.Item label="客户名称" style={{ marginBottom: 8 }}>
-            <Input
-              placeholder="请输入客户名称"
-              value={customer.name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomer((prev) => ({ ...prev, name: e.target.value }))}
-            />
-          </Form.Item>
-          <Form.Item label="联系人" style={{ marginBottom: 8 }}>
-            <Input
-              placeholder="联系人"
-              value={customer.contact ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomer((prev) => ({ ...prev, contact: e.target.value }))}
-            />
-          </Form.Item>
-          <Form.Item label="电话" style={{ marginBottom: 8 }}>
-            <Input
-              placeholder="电话"
-              value={customer.tel ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomer((prev) => ({ ...prev, tel: e.target.value }))}
-            />
-          </Form.Item>
-          <Form.Item label="地址" style={{ marginBottom: 8 }}>
-            <Input
-              placeholder="地址"
-              value={customer.address ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomer((prev) => ({ ...prev, address: e.target.value }))}
-            />
-          </Form.Item>
+          {fields.map((f) => (
+            <Form.Item key={f.key} label={f.label} style={{ marginBottom: 8 }}>
+              <Input
+                placeholder={f.placeholder}
+                value={(customer[f.key] as string) ?? ""}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCustomer((prev) => ({ ...prev, [f.key]: e.target.value }))
+                }
+              />
+            </Form.Item>
+          ))}
         </div>
       </Form>
     </Card>
   );
+}
+
+export function DomesticCustomerCard() {
+  const customer = useQuotationStore((s) => s.quotation.customer);
+  const setCustomer = useQuotationStore((s) => s.setCustomer);
+  return <CustomerCardInner fields={DOMESTIC_FIELDS} title="客户信息" customer={customer} setCustomer={setCustomer} />;
+}
+
+export function CustomerCardIntl() {
+  const customer = useIntlQuotationStore((s) => s.quotation.customer);
+  const setCustomer = useIntlQuotationStore((s) => s.setCustomer);
+  return <CustomerCardInner fields={INTL_FIELDS} title="To / Customer Information" customer={customer} setCustomer={setCustomer} />;
 }

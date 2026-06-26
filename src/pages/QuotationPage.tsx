@@ -8,14 +8,14 @@ import {
   FileAddOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";
-import CustomerCard from "../components/CustomerCard";
-import QuoteMetaCard from "../components/QuoteMetaCard";
+import { DomesticCustomerCard } from "../components/CustomerCard";
+import { DomesticQuoteMetaCard } from "../components/QuoteMetaCard";
 import ProductCard from "../components/ProductCard";
 import TermsCard from "../components/TermsCard";
 import MoldCard from "../components/MoldCard";
 import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
-import QuotationHistoryDrawer from "../components/QuotationHistoryDrawer";
+import { QuotationHistoryDrawer } from "../components/QuotationHistoryDrawer";
 import { useQuotationStore } from "../lib/store";
 import { useQuotationHistoryStore } from "../lib/historyStore";
 import { exportPDF } from "../lib/pdf";
@@ -61,7 +61,11 @@ export default function QuotationPage({ headerHeight }: Props) {
       await exportPDF(previewRef.current, quotation);
 
       const totalAmount = quotation.products.reduce((sum, p) => sum + (p.price ?? 0), 0);
-      const cleanProducts = quotation.products.map(({ image: _, ...rest }) => rest);
+      const cleanProducts = quotation.products.map((product) => {
+        const { image, ...rest } = product;
+        void image;
+        return rest;
+      });
       addRecord({
         id: `${Date.now()}_${quotation.quoteMeta.no}`,
         createdAt: new Date().toISOString(),
@@ -187,8 +191,8 @@ export default function QuotationPage({ headerHeight }: Props) {
             gap: isMobile ? 10 : 14,
           }}
         >
-          <CustomerCard />
-          <QuoteMetaCard />
+          <DomesticCustomerCard />
+          <DomesticQuoteMetaCard />
           <ProductCard />
           {quotation.quoteMeta.showMold && <MoldCard />}
           <TermsCard />

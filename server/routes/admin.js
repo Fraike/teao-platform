@@ -1,4 +1,4 @@
-import { listUsers, approveUser, rejectUser, setUserPermission } from "../services/users.js";
+import { listUsers, approveUser, rejectUser, resetUserPassword, setUserPermission } from "../services/users.js";
 import { jwtAuth, adminAuth } from "../middleware/jwt-auth.js";
 
 export function registerAdminRoutes(app) {
@@ -32,5 +32,14 @@ export function registerAdminRoutes(app) {
       return res.status(400).json({ error: result.error });
     }
     res.json(result);
+  });
+
+  app.post("/api/admin/users/:id/reset-password", jwtAuth, adminAuth, async (req, res) => {
+    const { newPassword } = req.body || {};
+    const result = await resetUserPassword(req.params.id, newPassword);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ ok: true });
   });
 }

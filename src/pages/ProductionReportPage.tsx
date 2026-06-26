@@ -8,17 +8,9 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useIsMobile } from "../lib/useIsMobile";
+import { api } from "../lib/api";
 
 const { Title } = Typography;
-
-const API_PASSWORD = "teao123";
-
-function apiHeaders(): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    "X-Auth-Password": API_PASSWORD,
-  };
-}
 
 interface LineSummary {
   line: string;
@@ -83,7 +75,7 @@ interface ReportData {
   };
 }
 
-export default function ProductionReportPage() {
+export function ProductionReportPage() {
   const isMobile = useIsMobile();
   const [date, setDate] = useState(() => dayjs().subtract(1, "day"));
   const [report, setReport] = useState<ReportData | null>(null);
@@ -97,33 +89,28 @@ export default function ProductionReportPage() {
     setLoading(true);
     try {
       if (force) {
-        const res = await fetch(`/api/production/fetch?date=${d}`, {
-          method: "POST",
-          headers: apiHeaders(),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "获取数据失败");
-        }
-        await res.json();
+        await api.post<{
+          ok: boolean;
+          date: string;
+          assembly: { summary: unknown; rawCount: number };
+          injection: { summary: unknown; rawCount: number };
+        }>(`/api/production/fetch?date=${d}`);
       }
-      const res = await fetch(`/api/production/report?date=${d}`, {
-        headers: apiHeaders(),
-      });
-      const data = await res.json();
+      const data = await api.get<ReportData & { exists: boolean }>(`/api/production/report?date=${d}`);
       if (data.exists) {
         setReport(data as ReportData);
       } else {
         setReport(null);
       }
-    } catch (e: any) {
-      message.error(e.message || "加载失败");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载失败");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReport(dateStr, true);
   }, [dateStr, fetchReport]);
 
@@ -132,17 +119,10 @@ export default function ProductionReportPage() {
   const handleSend = async () => {
     setSending(true);
     try {
-      const res = await fetch(`/api/production/send?date=${dateStr}`, {
-        method: "POST",
-        headers: apiHeaders(),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "推送失败");
-      }
+      await api.post<{ ok: boolean; date: string; message: string }>(`/api/production/send?date=${dateStr}`);
       message.success("已推送到企业微信群");
-    } catch (e: any) {
-      message.error(e.message || "推送失败");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "推送失败");
     } finally {
       setSending(false);
     }

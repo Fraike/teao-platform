@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Card, Form, Input, Button, Typography, message, Space, Alert } from "antd";
 import { UserOutlined, LockOutlined, IdcardOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../lib/authStore";
-import styles from "./RegisterPage.module.css";
+import styles from "./AuthPage.module.css";
 
 const { Title, Text } = Typography;
 

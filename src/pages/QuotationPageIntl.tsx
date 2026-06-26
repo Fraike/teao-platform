@@ -8,14 +8,14 @@ import {
   FileAddOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";
-import CustomerCardIntl from "../components/intl/CustomerCardIntl";
-import QuoteMetaCardIntl from "../components/intl/QuoteMetaCardIntl";
+import { CustomerCardIntl } from "../components/CustomerCard";
+import { QuoteMetaCardIntl } from "../components/QuoteMetaCard";
 import ProductCardIntl from "../components/intl/ProductCardIntl";
 import { TermsCardIntl } from "../components/TermsCard";
 import { MoldCardIntl } from "../components/MoldCard";
 import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
-import QuotationHistoryDrawer from "../components/QuotationHistoryDrawer";
+import { QuotationHistoryDrawer } from "../components/QuotationHistoryDrawer";
 import { useIntlQuotationStore } from "../lib/store";
 import { useQuotationHistoryStore } from "../lib/historyStore";
 import { exportPDFIntl } from "../lib/pdf";
@@ -60,8 +60,12 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
     try {
       await exportPDFIntl(previewRef.current, quotation);
 
-      const totalAmount = quotation.products.reduce((sum, p) => sum + (p.qty ?? 0) * (p.price ?? 0), 0);
-      const cleanProducts = quotation.products.map(({ image: _, ...rest }) => rest);
+      const totalAmount = quotation.products.reduce((sum, p) => sum + (p.qty ?? 0) * (p.price ?? 0) + (p.freight ?? 0), 0);
+      const cleanProducts = quotation.products.map((product) => {
+        const { image, ...rest } = product;
+        void image;
+        return rest;
+      });
       addRecord({
         id: `${Date.now()}_${quotation.quoteMeta.no}`,
         createdAt: new Date().toISOString(),

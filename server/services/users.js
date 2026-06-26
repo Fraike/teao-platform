@@ -212,6 +212,22 @@ export async function rejectUser(id) {
   });
 }
 
+export async function resetUserPassword(id, newPassword) {
+  return withUsers(async (users) => {
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx < 0) return { error: "用户不存在" };
+    if (users[idx].role === "admin") return { error: "不能重置管理员密码" };
+    if (users[idx].status !== "active") return { error: "该账号尚未激活，请联系管理员" };
+    if (!newPassword) return { error: "请输入新密码" };
+    if (newPassword.length < 6) return { error: "密码至少 6 位" };
+    if (!/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return { error: "密码必须同时包含字母和数字" };
+    }
+    users[idx].passwordHash = await hashPassword(newPassword);
+    return { ok: true, reset: true };
+  });
+}
+
 export async function setUserPermission(id, permission, enabled) {
   return withUsers(async (users) => {
     const idx = users.findIndex((u) => u.id === id);
