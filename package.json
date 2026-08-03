@@ -15,7 +15,7 @@
     "@antv/x6": "^3.1.7",
     "@antv/x6-react-shape": "^3.0.1",
     "antd": "^5.29.3",
-    "better-sqlite3": "^13.0.1",
+    "better-sqlite3": "12.10.0",
     "dayjs": "^1.11.20",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
