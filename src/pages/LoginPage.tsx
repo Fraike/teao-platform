@@ -15,6 +15,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || "/";
+  const expired = (location.state as { expired?: boolean })?.expired;
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoginError("");
@@ -39,6 +40,14 @@ export function LoginPage() {
         </div>
 
         <Form onFinish={onFinish} size="large">
+          {expired && (
+            <Alert
+              type="warning"
+              showIcon
+              message="登录已过期（超过 12 小时），请重新登录"
+              style={{ marginBottom: 16 }}
+            />
+          )}
           {loginError && (
             <Alert type="error" showIcon message={loginError} style={{ marginBottom: 16 }} closable onClose={() => setLoginError("")} />
           )}

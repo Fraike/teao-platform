@@ -59,10 +59,21 @@ cd server && npm install && cd ..
 
 # 创建环境变量文件
 cp .env.example .env
-# 编辑 .env，至少填写 JWT_SECRET（必填）
+# 生成至少 32 位的随机密钥，并将输出填入 .env 的 JWT_SECRET
+openssl rand -hex 32
 ```
 
 ### 2. 启动开发环境
+
+**一键启动（推荐）：**
+
+```bash
+./start-dev.sh
+```
+
+同时启动前端（`:5173`）和后端（`:3899`），按 `Ctrl+C` 停止所有服务。脚本会自动检查 `.env` 配置。
+
+**手动启动：**
 
 **前端**（端口 5173）：
 ```bash
@@ -71,19 +82,12 @@ npm run dev
 
 **后端 API**（端口 3899）：
 ```bash
-# 创建 server/.env 文件（必需）
-cat > server/.env << 'EOF'
-JWT_SECRET=your-secret-key-at-least-32-chars
-EOF
-
-# 启动后端（Node.js 22+ 内置 .env 支持）
-cd server && node --env-file=.env server.js
-
-# 旧版 Node.js 需先安装 dotenv：
-# cd server && npm install dotenv && node -r dotenv/config server.js
+cd server && node --env-file=../.env server.js
 ```
 
 前端 Vite 开发服务器会自动将 `/api/*` 请求代理到 `http://127.0.0.1:3899`。
+
+
 
 ### 3. 首次使用
 
@@ -110,6 +114,9 @@ cd server && npm start # 后端启动（需设置环境变量）
 |------|------|--------|------|
 | `JWT_SECRET` | ✅ 是 | 无（缺少则启动失败） | JWT 签名密钥，生产环境用随机长字符串 |
 | `DATA_DIR` | 否 | 自动选择 | API 数据存储目录 |
+| `KINGDEE_CLIENT_ID` | ✅ 是 | 无 | 金蝶云星辰应用 ID |
+| `KINGDEE_CLIENT_SECRET` | ✅ 是 | 无 | 金蝶云星辰应用密钥 |
+| `INITIAL_ADMIN_PASSWORD` | 生产首次部署必填 | 无 | 至少 12 位，且同时含字母和数字的管理员初始密码 |
 | `VIKA_TOKEN` | 否 | — | 维格表 API Token（生产日报抓取） |
 | `ASSEMBLY_DATASHEET_ID` | 否 | — | 装配部维格表 ID |
 | `INJECTION_DATASHEET_ID` | 否 | — | 注塑部维格表 ID |
@@ -122,10 +129,8 @@ cd server && npm start # 后端启动（需设置环境变量）
 **本地开发：**
 
 ```bash
-# 创建 server/.env，至少配置 JWT_SECRET
-cat > server/.env << 'EOF'
-JWT_SECRET=your-secret-key-at-least-32-chars
-EOF
+# 创建 server/.env；JWT_SECRET 必须粘贴 `openssl rand -hex 32` 的输出
+# JWT_SECRET=<至少 32 位的随机密钥>
 
 # 启动（Node.js 22+ 内置 .env 支持）
 cd server && node --env-file=.env server.js
@@ -136,10 +141,23 @@ cd server && node --env-file=.env server.js
 ```ini
 # /etc/systemd/system/teao-api.service
 [Service]
-Environment="JWT_SECRET=your-production-secret-key"
+Environment="JWT_SECRET=<至少 32 位的随机密钥>"
 Environment="DATA_DIR=/var/www/teao-platform/data"
 ExecStart=/usr/bin/node /var/www/teao-platform/server/server.js
 ```
+
+生产部署前，在服务器创建仅 root 可读的 `/etc/teao-platform/teao-api.env`：
+
+```env
+NODE_ENV=production
+JWT_SECRET=<至少 32 位随机密钥>
+DATA_DIR=/var/www/teao-platform/data
+KINGDEE_CLIENT_ID=<金蝶应用 ID>
+KINGDEE_CLIENT_SECRET=<金蝶应用密钥>
+INITIAL_ADMIN_PASSWORD=<至少 12 位且包含字母和数字的管理员密码>
+```
+
+该文件不进 Git。部署工作流会先验证它存在，再更新 API 服务，避免凭据缺失导致服务重启失败。
 
 生产环境维格表相关配置（VIKA_TOKEN 等）在 `server/production-config.json` 中维护，该文件不进 Git。
 

@@ -6,6 +6,8 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/var/www/teao-platform/server
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/teao-platform/teao-api.env
 ExecStart=/usr/bin/node /var/www/teao-platform/server/server.js
 Restart=on-failure
 RestartSec=3

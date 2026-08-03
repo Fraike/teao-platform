@@ -10,6 +10,23 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LOGIN_TIMESTAMP_KEY);
+}
+
+// ---- login timestamp (会话过期检测) ----
+const LOGIN_TIMESTAMP_KEY = "login_timestamp";
+export const SESSION_DURATION_MS = 12 * 60 * 60 * 1000; // 12 小时
+
+export function getLoginTimestamp(): string | null {
+  return localStorage.getItem(LOGIN_TIMESTAMP_KEY);
+}
+
+export function setLoginTimestamp(): void {
+  localStorage.setItem(LOGIN_TIMESTAMP_KEY, String(Date.now()));
+}
+
+export function clearLoginTimestamp(): void {
+  localStorage.removeItem(LOGIN_TIMESTAMP_KEY);
 }
 
 export class ApiError extends Error {

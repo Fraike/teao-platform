@@ -77,6 +77,34 @@ export interface QuotationRecord {
   totalAmount: number;
 }
 
+export type QuotationMarket = "domestic" | "international";
+
+export interface QuotationProductPreview {
+  id: string;
+  name: string;
+  partNo: string;
+  spec: string;
+  image?: string;
+}
+
+export interface ManagedQuotation {
+  id: string;
+  market: QuotationMarket;
+  quoteNo: string;
+  quoteDate: string;
+  customerName: string;
+  currency: string;
+  salesName: string;
+  productCount: number;
+  totalAmount: number;
+  previewProducts?: QuotationProductPreview[];
+  quotation: Quotation;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
 export interface ProductTableColumnWidths {
   index: number;
   image: number;

@@ -98,6 +98,7 @@ interface QuotationStore {
   updateMold: (id: string, fn: (prev: MoldItem) => MoldItem) => void;
   resetToSample: () => void;
   resetTerms: () => void;
+  replaceQuotation: (quotation: Quotation) => void;
   exportJSON: () => string;
   importJSON: (json: string) => boolean;
 }
@@ -216,6 +217,12 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
         save(opts.storageKey, next);
         return { quotation: next };
       });
+    },
+
+    replaceQuotation: (quotation) => {
+      const next = normalizeQuotation(quotation, opts);
+      save(opts.storageKey, next);
+      set({ quotation: next });
     },
 
     exportJSON: () => JSON.stringify(get().quotation, null, 2),

@@ -1,11 +1,11 @@
-import { jwtAuth } from "../middleware/jwt-auth.js";
+import { adminAuth, jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
 import { readConfig, writeConfig, formatShanghaiDate, readReport } from "../config.js";
 import { fetchAndStoreReport, hasProductionData, buildWecomContent, buildEmptyContent } from "../services/report.js";
 import { sendWecomMessage } from "../services/wecom.js";
 
 export function registerProductionRoutes(app) {
   // Get config (masks sensitive fields)
-  app.get("/api/production/config", jwtAuth, (_req, res) => {
+  app.get("/api/production/config", jwtAuth, requirePermission("production"), (_req, res) => {
     const config = readConfig();
     res.json({
       enabled: config.enabled,
@@ -19,7 +19,7 @@ export function registerProductionRoutes(app) {
   });
 
   // Save config
-  app.post("/api/production/config", jwtAuth, (req, res) => {
+  app.post("/api/production/config", jwtAuth, adminAuth, (req, res) => {
     const config = readConfig();
     const updates = req.body;
     const fields = [
@@ -36,7 +36,7 @@ export function registerProductionRoutes(app) {
   });
 
   // Fetch & store report for a date
-  app.post("/api/production/fetch", jwtAuth, async (req, res) => {
+  app.post("/api/production/fetch", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
       const date = req.query.date || formatShanghaiDate();
       const report = await fetchAndStoreReport(date);
@@ -52,7 +52,7 @@ export function registerProductionRoutes(app) {
   });
 
   // Get stored report
-  app.get("/api/production/report", jwtAuth, (req, res) => {
+  app.get("/api/production/report", jwtAuth, requirePermission("production"), (req, res) => {
     const date = req.query.date || formatShanghaiDate();
     const report = readReport(date);
     if (!report) return res.json({ exists: false, date });
@@ -60,7 +60,7 @@ export function registerProductionRoutes(app) {
   });
 
   // Manually send WeCom message for a date
-  app.post("/api/production/send", jwtAuth, async (req, res) => {
+  app.post("/api/production/send", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
       const date = req.query.date || formatShanghaiDate();
       let report = readReport(date);
@@ -80,7 +80,7 @@ export function registerProductionRoutes(app) {
   });
 
   // Preview WeCom message content (without sending)
-  app.post("/api/production/preview", jwtAuth, async (req, res) => {
+  app.post("/api/production/preview", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
       const date = req.query.date || formatShanghaiDate();
       let report = readReport(date);

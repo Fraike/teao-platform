@@ -31,12 +31,18 @@ jobs:
         uses: easingthemes/ssh-deploy@v5.1.1
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i --exclude='production-config.json'"
+          ARGS: "-rlgoDzvc -i --exclude='production-config.json' --exclude='.env' --exclude='.env.*' --exclude='node_modules/'"
           REMOTE_HOST: 8.134.18.9
           REMOTE_USER: root
           SOURCE: "server/"
           TARGET: "/var/www/teao-platform/server/"
           SCRIPT_AFTER: |
+            install -d -m 700 /etc/teao-platform
+            test -s /etc/teao-platform/teao-api.env
+            chmod 600 /etc/teao-platform/teao-api.env
+            for key in JWT_SECRET DATA_DIR KINGDEE_CLIENT_ID KINGDEE_CLIENT_SECRET INITIAL_ADMIN_PASSWORD; do
+              grep -q "^${key}=." /etc/teao-platform/teao-api.env
+            done
             cd /var/www/teao-platform/server && npm install --production
             cp -f /var/www/teao-platform/server/teao-api.service /etc/systemd/system/teao-api.service
             systemctl daemon-reload

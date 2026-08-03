@@ -12,6 +12,7 @@ const PERMISSION_OPTIONS = [
   { key: "production", label: "装配" },
   { key: "hr", label: "人事" },
   { key: "tools", label: "工具" },
+  { key: "basic_data", label: "基础资料" },
 ];
 
 export function AdminPage() {

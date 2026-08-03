@@ -1,4 +1,5 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Space, message, Modal } from "antd";
 import {
   FilePdfOutlined,
@@ -6,7 +7,7 @@ import {
   ImportOutlined,
   ExportOutlined,
   FileAddOutlined,
-  HistoryOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 import { DomesticCustomerCard } from "../components/CustomerCard";
 import { DomesticQuoteMetaCard } from "../components/QuoteMetaCard";
@@ -15,11 +16,11 @@ import TermsCard from "../components/TermsCard";
 import MoldCard from "../components/MoldCard";
 import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
-import { QuotationHistoryDrawer } from "../components/QuotationHistoryDrawer";
 import { useQuotationStore } from "../lib/store";
-import { useQuotationHistoryStore } from "../lib/historyStore";
 import { exportPDF } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
+import { api } from "../lib/api";
+import type { ManagedQuotation } from "../types/quotation";
 
 interface Props {
   headerHeight: number;
@@ -34,12 +35,33 @@ export default function QuotationPage({ headerHeight }: Props) {
   const previewRef = useRef<HTMLDivElement>(null);
   const quotation = useQuotationStore((s) => s.quotation);
   const resetToSample = useQuotationStore((s) => s.resetToSample);
+  const replaceQuotation = useQuotationStore((s) => s.replaceQuotation);
   const exportJSON = useQuotationStore((s) => s.exportJSON);
   const importJSON = useQuotationStore((s) => s.importJSON);
   const fileRef = useRef<HTMLInputElement>(null);
   const [messageApi, contextHolder] = message.useMessage();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const addRecord = useQuotationHistoryStore((s) => s.addRecord);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingQueryId = searchParams.get("id");
+  const activeEditingId = editingQueryId ? editingId : null;
+
+  useEffect(() => {
+    if (!editingQueryId) {
+      return;
+    }
+    let active = true;
+    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(editingQueryId)}`)
+      .then((result) => {
+        if (!active) return;
+        if (result.data.market !== "domestic") throw new Error("该报价不属于国内报价");
+        replaceQuotation(result.data.quotation);
+        setEditingId(result.data.id);
+      })
+      .catch((err: unknown) => {
+        if (active) messageApi.error(err instanceof Error ? err.message : "报价读取失败");
+      });
+    return () => { active = false; };
+  }, [editingQueryId, messageApi, replaceQuotation]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
@@ -60,34 +82,40 @@ export default function QuotationPage({ headerHeight }: Props) {
     try {
       await exportPDF(previewRef.current, quotation);
 
-      const totalAmount = quotation.products.reduce((sum, p) => sum + (p.price ?? 0), 0);
-      const cleanProducts = quotation.products.map((product) => {
-        const { image, ...rest } = product;
-        void image;
-        return rest;
-      });
-      addRecord({
-        id: `${Date.now()}_${quotation.quoteMeta.no}`,
-        createdAt: new Date().toISOString(),
-        quoteNo: quotation.quoteMeta.no,
-        date: quotation.quoteMeta.date,
-        customerName: quotation.customer.name,
-        contact: quotation.customer.contact || "",
-        currency: quotation.quoteMeta.currency,
-        products: cleanProducts,
-        molds: quotation.molds || [],
-        terms: quotation.terms,
-        salesName: quotation.quoteMeta.salesName,
-        totalAmount,
-      });
-
-      messageApi.success("PDF 导出成功，已保存至报价汇总");
+      messageApi.success("PDF 导出成功");
     } catch (err) {
       console.error("PDF export failed:", err);
       const msg = err instanceof Error ? err.message : "PDF 导出失败，请重试";
       messageApi.error(msg);
     }
-  }, [quotation, messageApi, addRecord]);
+  }, [quotation, messageApi]);
+
+  const handleSubmit = async () => {
+    const hasCustomer = quotation.customer.name.trim() !== "";
+    const hasQuoteNo = quotation.quoteMeta.no.trim() !== "";
+    const hasProduct = quotation.products.length > 0 && quotation.products.every((product) => product.name.trim() !== "");
+    if (!hasCustomer || !hasQuoteNo || !hasProduct) {
+      Modal.warning({
+        title: "报价信息不完整",
+        content: [!hasQuoteNo && "报价单号不能为空", !hasCustomer && "客户名称不能为空", !hasProduct && "产品名称不能为空"]
+          .filter(Boolean)
+          .join("；"),
+        okText: "知道了",
+      });
+      return;
+    }
+    try {
+      const payload = { market: "domestic" as const, quotation };
+      const result = activeEditingId
+        ? await api.put<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(activeEditingId)}`, payload)
+        : await api.post<{ ok: true; data: ManagedQuotation }>("/api/quotations", payload);
+      setEditingId(result.data.id);
+      setSearchParams({ id: result.data.id });
+      messageApi.success(activeEditingId ? "报价已更新并提交后台" : "报价已提交后台");
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "报价提交失败");
+    }
+  };
 
   const handleSave = () => {
     exportJSON();
@@ -115,6 +143,8 @@ export default function QuotationPage({ headerHeight }: Props) {
     reader.onload = () => {
       const ok = importJSON(reader.result as string);
       if (ok) {
+        setEditingId(null);
+        setSearchParams({});
         messageApi.success("导入成功");
       } else {
         messageApi.error("导入失败：JSON 格式不正确");
@@ -151,7 +181,11 @@ export default function QuotationPage({ headerHeight }: Props) {
         </span>
         <Space size={isMobile ? 4 : "small"}>
           <Button size="small" icon={<FileAddOutlined />} onClick={() => {
-            if (window.confirm("确定新建报价单？")) resetToSample();
+            if (window.confirm("确定新建报价单？")) {
+              resetToSample();
+              setEditingId(null);
+              setSearchParams({});
+            }
           }}>
             {!isMobile && "新建"}
           </Button>
@@ -164,11 +198,11 @@ export default function QuotationPage({ headerHeight }: Props) {
           <Button size="small" icon={<SaveOutlined />} onClick={handleSave}>
             {!isMobile && "保存草稿"}
           </Button>
+          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={() => void handleSubmit()}>
+            {!isMobile && (activeEditingId ? "更新报价" : "提交报价")}
+          </Button>
           <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
             {!isMobile && "导出 PDF"}
-          </Button>
-          <Button size="small" icon={<HistoryOutlined />} onClick={() => setDrawerOpen(true)}>
-            {!isMobile && "报价汇总"}
           </Button>
         </Space>
       </div>
@@ -237,8 +271,6 @@ export default function QuotationPage({ headerHeight }: Props) {
           </div>
         )}
       </div>
-
-      <QuotationHistoryDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

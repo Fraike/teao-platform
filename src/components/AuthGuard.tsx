@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Spin, Result, Button } from "antd";
-import { useAuthStore } from "../lib/authStore";
+import { useAuthStore, isSessionExpired } from "../lib/authStore";
+import { clearToken } from "../lib/api";
 import styles from "./AuthGuard.module.css";
 
 interface AuthGuardProps {
@@ -17,12 +18,20 @@ export function AuthGuard({ children, requireAdmin = false, permission }: AuthGu
   const fetchMe = useAuthStore((s) => s.fetchMe);
   const navigate = useNavigate();
   const location = useLocation();
+  const [sessionExpired] = useState(() => isSessionExpired());
 
   useEffect(() => {
-    if (!initialized) {
-      fetchMe();
+    if (initialized) return;
+
+    // 检查前端会话是否过期（12 小时）
+    if (sessionExpired) {
+      clearToken();
+      useAuthStore.setState({ user: null, initialized: true });
+      return;
     }
-  }, [initialized, fetchMe]);
+
+    fetchMe();
+  }, [initialized, fetchMe, sessionExpired]);
 
   if (!initialized || loading) {
     return (
@@ -33,7 +42,13 @@ export function AuthGuard({ children, requireAdmin = false, permission }: AuthGu
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location.pathname, expired: sessionExpired || undefined }}
+        replace
+      />
+    );
   }
 
   if (requireAdmin && user.role !== "admin") {

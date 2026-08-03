@@ -21,3 +21,21 @@ export function adminAuth(req, res, next) {
   }
   next();
 }
+
+export function requirePermission(permission) {
+  return (req, res, next) => {
+    if (req.user?.role === "admin" || req.user?.permissions?.includes(permission)) {
+      return next();
+    }
+    return res.status(403).json({ error: "无权限" });
+  };
+}
+
+export function requireAnyPermission(permissions) {
+  return (req, res, next) => {
+    if (req.user?.role === "admin" || permissions.some((permission) => req.user?.permissions?.includes(permission))) {
+      return next();
+    }
+    return res.status(403).json({ error: "无权限" });
+  };
+}

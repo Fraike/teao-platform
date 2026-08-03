@@ -7,6 +7,7 @@ import {
   CalculatorOutlined,
   BarChartOutlined,
   ReadOutlined,
+  DatabaseOutlined,
 } from "@ant-design/icons";
 import { useIsMobile } from "../lib/useIsMobile";
 import { useAuthStore } from "../lib/authStore";
@@ -88,9 +89,40 @@ const SYSTEMS: SystemEntry[] = [
     permission: "tools",
     category: "工具",
   },
+  // 基础资料
+  {
+    key: "materials",
+    title: "商品资料",
+    description: "从金蝶云星辰同步全部商品，按分类浏览与搜索",
+    icon: <DatabaseOutlined />,
+    color: "#2f54eb",
+    path: "/materials",
+    permission: "basic_data",
+    category: "基础资料",
+  },
+  {
+    key: "customers",
+    title: "客户资料",
+    description: "客户信息管理，从金蝶云星辰实时同步",
+    icon: <DatabaseOutlined />,
+    color: "#531dab",
+    path: "/customers",
+    permission: "basic_data",
+    category: "基础资料",
+  },
+  {
+    key: "suppliers",
+    title: "供应商资料",
+    description: "供应商信息管理，从金蝶云星辰实时同步",
+    icon: <DatabaseOutlined />,
+    color: "#08979c",
+    path: "/suppliers",
+    permission: "basic_data",
+    category: "基础资料",
+  },
 ];
 
-const CATEGORY_ORDER = ["人事管理", "业务系统", "生产管理", "工具"];
+const CATEGORY_ORDER = ["人事管理", "业务系统", "生产管理", "工具", "基础资料"];
 
 export function Dashboard() {
   const navigate = useNavigate();

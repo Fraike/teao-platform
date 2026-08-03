@@ -1,0 +1,147 @@
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 8px 4px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  border: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.topTitle {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #1a1a1a;
+  padding-right: 6px;
+  border-right: 1px solid #f0f0f0;
+}
+
+.topFilters {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.topActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 纵向滚动 + 横向滚动的统一容器 */
+.content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* 内容包裹器 — 固定宽度，触发横向滚动条 */
+.scrollWrapper {
+  min-width: 2050px;
+  width: max-content;
+}
+
+/* 隐藏各表格内部的横向滚动，让父容器统一滚动 */
+.scrollWrapper :global(.ant-table-content),
+.scrollWrapper :global(.ant-table-body) {
+  overflow-x: visible !important;
+}
+.scrollWrapper :global(.ant-table-container) {
+  overflow: visible !important;
+}
+.scrollWrapper :global(.ant-table) {
+  width: auto !important;
+}
+.scrollWrapper table {
+  min-width: 2050px !important;
+  table-layout: auto !important;
+}
+
+.dailyCard {
+  margin-bottom: 8px;
+}
+
+.dailyCard :global(.ant-card-body) {
+  padding: 0;
+}
+
+.dailyCard :global(.ant-card-head) {
+  padding: 6px 10px;
+  min-height: auto;
+}
+.dailyCard :global(.ant-card-head-title) {
+  padding: 0;
+  font-size: 14px;
+}
+
+.loadMore {
+  text-align: center;
+  padding: 12px;
+  color: #999;
+}
+
+.quickAddRow {
+  padding: 6px 8px;
+  background: #e6f4ff;
+  border-top: 1px dashed #91caff;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  overflow-x: auto;
+}
+
+.quickAddRow :global(.ant-select-selector),
+.quickAddRow :global(.ant-input) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+.quickAddRow :global(.ant-input-number-input) {
+  height: 26px !important;
+  line-height: 26px !important;
+}
+.quickAddRow :global(.ant-form-item) {
+  margin-right: 3px;
+}
+
+:global(.editable-cell):hover {
+  background: #e6f4ff;
+  outline: 1px dashed #91caff;
+}
+
+:global(.table-row-even) > td {
+  background: #fafafa !important;
+}
+:global(.table-row-odd) > td {
+  background: #fff !important;
+}
+:global(.ant-table-tbody > tr):hover > td {
+  background: #e6f4ff !important;
+}
+
+:global(.ant-table-small) :global(.ant-table-thead) > tr > th {
+  padding: 4px 3px !important;
+  font-size: 12px;
+  white-space: nowrap;
+  background: #fafafa;
+}
+:global(.ant-table-small) :global(.ant-table-tbody) > tr > td {
+  padding: 3px 4px !important;
+  font-size: 12px;
+}

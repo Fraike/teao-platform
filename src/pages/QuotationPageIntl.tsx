@@ -1,4 +1,5 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button, Space, message, Modal } from "antd";
 import {
   FilePdfOutlined,
@@ -6,7 +7,7 @@ import {
   ImportOutlined,
   ExportOutlined,
   FileAddOutlined,
-  HistoryOutlined,
+  CloudUploadOutlined,
 } from "@ant-design/icons";
 import { CustomerCardIntl } from "../components/CustomerCard";
 import { QuoteMetaCardIntl } from "../components/QuoteMetaCard";
@@ -15,11 +16,11 @@ import { TermsCardIntl } from "../components/TermsCard";
 import { MoldCardIntl } from "../components/MoldCard";
 import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
-import { QuotationHistoryDrawer } from "../components/QuotationHistoryDrawer";
 import { useIntlQuotationStore } from "../lib/store";
-import { useQuotationHistoryStore } from "../lib/historyStore";
 import { exportPDFIntl } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
+import { api } from "../lib/api";
+import type { ManagedQuotation } from "../types/quotation";
 
 interface Props {
   headerHeight: number;
@@ -34,12 +35,33 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
   const previewRef = useRef<HTMLDivElement>(null);
   const quotation = useIntlQuotationStore((s) => s.quotation);
   const resetToSample = useIntlQuotationStore((s) => s.resetToSample);
+  const replaceQuotation = useIntlQuotationStore((s) => s.replaceQuotation);
   const exportJSON = useIntlQuotationStore((s) => s.exportJSON);
   const importJSON = useIntlQuotationStore((s) => s.importJSON);
   const fileRef = useRef<HTMLInputElement>(null);
   const [messageApi, contextHolder] = message.useMessage();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const addRecord = useQuotationHistoryStore((s) => s.addRecord);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingQueryId = searchParams.get("id");
+  const activeEditingId = editingQueryId ? editingId : null;
+
+  useEffect(() => {
+    if (!editingQueryId) {
+      return;
+    }
+    let active = true;
+    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(editingQueryId)}`)
+      .then((result) => {
+        if (!active) return;
+        if (result.data.market !== "international") throw new Error("This quotation is not an international quotation");
+        replaceQuotation(result.data.quotation);
+        setEditingId(result.data.id);
+      })
+      .catch((err: unknown) => {
+        if (active) messageApi.error(err instanceof Error ? err.message : "Failed to load quotation");
+      });
+    return () => { active = false; };
+  }, [editingQueryId, messageApi, replaceQuotation]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
@@ -60,34 +82,40 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
     try {
       await exportPDFIntl(previewRef.current, quotation);
 
-      const totalAmount = quotation.products.reduce((sum, p) => sum + (p.qty ?? 0) * (p.price ?? 0) + (p.freight ?? 0), 0);
-      const cleanProducts = quotation.products.map((product) => {
-        const { image, ...rest } = product;
-        void image;
-        return rest;
-      });
-      addRecord({
-        id: `${Date.now()}_${quotation.quoteMeta.no}`,
-        createdAt: new Date().toISOString(),
-        quoteNo: quotation.quoteMeta.no,
-        date: quotation.quoteMeta.date,
-        customerName: quotation.customer.name,
-        contact: quotation.customer.contact || "",
-        currency: quotation.quoteMeta.currency,
-        products: cleanProducts,
-        molds: quotation.molds || [],
-        terms: quotation.terms,
-        salesName: quotation.quoteMeta.salesName,
-        totalAmount,
-      });
-
-      messageApi.success("PDF exported and saved to history");
+      messageApi.success("PDF exported");
     } catch (err) {
       console.error("PDF export failed:", err);
       const msg = err instanceof Error ? err.message : "PDF export failed, please try again";
       messageApi.error(msg);
     }
-  }, [quotation, messageApi, addRecord]);
+  }, [quotation, messageApi]);
+
+  const handleSubmit = async () => {
+    const hasCustomer = quotation.customer.name.trim() !== "";
+    const hasQuoteNo = quotation.quoteMeta.no.trim() !== "";
+    const hasProduct = quotation.products.length > 0 && quotation.products.every((product) => product.name.trim() !== "");
+    if (!hasCustomer || !hasQuoteNo || !hasProduct) {
+      Modal.warning({
+        title: "Incomplete quotation",
+        content: [!hasQuoteNo && "Quotation number is required", !hasCustomer && "Customer name is required", !hasProduct && "Every product needs a name"]
+          .filter(Boolean)
+          .join("; "),
+        okText: "OK",
+      });
+      return;
+    }
+    try {
+      const payload = { market: "international" as const, quotation };
+      const result = activeEditingId
+        ? await api.put<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(activeEditingId)}`, payload)
+        : await api.post<{ ok: true; data: ManagedQuotation }>("/api/quotations", payload);
+      setEditingId(result.data.id);
+      setSearchParams({ id: result.data.id });
+      messageApi.success(activeEditingId ? "Quotation updated and submitted" : "Quotation submitted");
+    } catch (err) {
+      messageApi.error(err instanceof Error ? err.message : "Quotation submission failed");
+    }
+  };
 
   const handleSave = () => {
     exportJSON();
@@ -115,6 +143,8 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
     reader.onload = () => {
       const ok = importJSON(reader.result as string);
       if (ok) {
+        setEditingId(null);
+        setSearchParams({});
         messageApi.success("Import successful");
       } else {
         messageApi.error("Import failed: Invalid JSON format");
@@ -145,7 +175,11 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
         </span>
         <Space size={isMobile ? 4 : "small"}>
           <Button size="small" icon={<FileAddOutlined />} onClick={() => {
-            if (window.confirm("Create a new quotation? Unsaved changes will be lost.")) resetToSample();
+            if (window.confirm("Create a new quotation? Unsaved changes will be lost.")) {
+              resetToSample();
+              setEditingId(null);
+              setSearchParams({});
+            }
           }}>
             {!isMobile && "New"}
           </Button>
@@ -158,11 +192,11 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
           <Button size="small" icon={<SaveOutlined />} onClick={handleSave}>
             {!isMobile && "Save Draft"}
           </Button>
+          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={() => void handleSubmit()}>
+            {!isMobile && (activeEditingId ? "Update Quote" : "Submit Quote")}
+          </Button>
           <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
             {!isMobile && "Export PDF"}
-          </Button>
-          <Button size="small" icon={<HistoryOutlined />} onClick={() => setDrawerOpen(true)}>
-            {!isMobile && "History"}
           </Button>
         </Space>
       </div>
@@ -231,8 +265,6 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
           </div>
         )}
       </div>
-
-      <QuotationHistoryDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

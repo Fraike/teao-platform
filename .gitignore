@@ -38,6 +38,10 @@ trash_review/
 # Runtime data (production config is now in server/)
 data/
 public/members/
+public/生产流程/
+private/
+装配部生产日报-表格全文.xlsx
+注塑部生产日报-表格全文 (1).xlsx
 
 # Server secrets (deployed separately)
 server/production-config.json

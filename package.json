@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node test/production-entry.test.js && node test/kingdee-cache.test.js && node test/users-production.test.js && node test/quotation-store.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -14,14 +15,15 @@
     "@antv/x6": "^3.1.7",
     "@antv/x6-react-shape": "^3.0.1",
     "antd": "^5.29.3",
+    "better-sqlite3": "^13.0.1",
     "dayjs": "^1.11.20",
     "html2canvas": "^1.4.1",
-
     "jspdf": "^4.2.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",
     "tslib": "^2.8.1",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

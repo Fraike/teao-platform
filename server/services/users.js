@@ -26,17 +26,21 @@ function resolveDataDir() {
 
 const DATA_DIR = resolveDataDir();
 const USERS_FILE = path.join(DATA_DIR, "users.json");
-if (!process.env.JWT_SECRET) {
-  console.error("[auth] FATAL: JWT_SECRET environment variable is not set");
-  console.error("[auth] Set it via: export JWT_SECRET=<your-secret-key>");
+const JWT_SECRET = process.env.JWT_SECRET;
+const isPlaceholderSecret = !JWT_SECRET || JWT_SECRET.length < 32 || /^(change-me|your[-_ ]?secret|replace-me)/i.test(JWT_SECRET);
+if (isPlaceholderSecret && process.env.NODE_ENV !== "development") {
+  console.error("[auth] FATAL: JWT_SECRET must be a non-placeholder secret of at least 32 characters");
+  console.error("[auth] Set it via: export JWT_SECRET=<random-32-plus-character-secret>");
   process.exit(1);
 }
-const JWT_SECRET = process.env.JWT_SECRET;
+if (isPlaceholderSecret) {
+  console.warn("[auth] WARNING: development is using an insecure JWT_SECRET");
+}
 const JWT_EXPIRES_IN = "7d";
 const JWT_REFRESH_WINDOW = "1d"; // allow refresh within 1 day of expiry
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
-const ALL_PERMISSIONS = ["business", "production", "hr", "tools", "admin"];
+const ALL_PERMISSIONS = ["business", "production", "hr", "tools", "admin", "basic_data"];
 
 const userMutex = createMutex();
 
@@ -117,26 +121,26 @@ export async function initDefaultAdmin() {
     const users = readUsersUnsafe();
     if (users.some((u) => u.role === "admin")) return;
 
-    const salt = crypto.randomBytes(16).toString("hex");
-    const hash = await new Promise((resolve, reject) => {
-      crypto.scrypt("admin123", salt, 64, (err, derivedKey) => {
-        if (err) reject(err);
-        resolve(derivedKey.toString("hex"));
-      });
-    });
+    let initialPassword = "admin123";
+    if (process.env.NODE_ENV === "production") {
+      initialPassword = process.env.INITIAL_ADMIN_PASSWORD || "";
+      if (initialPassword.length < 12 || !/[a-zA-Z]/.test(initialPassword) || !/\d/.test(initialPassword)) {
+        throw new Error("生产环境首次启动必须配置至少 12 位且包含字母和数字的 INITIAL_ADMIN_PASSWORD");
+      }
+    }
 
     users.push({
       id: generateId(),
       name: "管理员",
       username: "admin",
-      passwordHash: `${salt}:${hash}`,
+      passwordHash: await hashPassword(initialPassword),
       role: "admin",
       status: "active",
       permissions: [...ALL_PERMISSIONS],
       createdAt: new Date().toISOString(),
     });
     writeUsersUnsafe(users);
-    console.log("[auth] default admin created (admin / admin123)");
+    console.log(`[auth] default admin created (${process.env.NODE_ENV === "production" ? "production credentials" : "admin / admin123"})`);
   });
 }
 

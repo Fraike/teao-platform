@@ -1,6 +1,7 @@
 import { parseNum, parseRate, extractDateStr } from "./vika.js";
 import { readConfig, formatShanghaiDate, writeReport } from "../config.js";
 import { fetchVikaRecords } from "./vika.js";
+import { getAssemblyEntriesForDate, getInjectionEntriesForDate } from "./production-store.js";
 
 // ---- aggregation ----
 
@@ -138,6 +139,112 @@ export function aggregateInjection(records, dateStr) {
   return { records: machineList, summary, rawCount: filtered.length };
 }
 
+function aggregateLocalAssembly(records) {
+  const lines = new Map();
+  for (const record of records) {
+    if (!lines.has(record.line)) {
+      lines.set(record.line, {
+        line: record.line,
+        products: [],
+        totalPlan: 0,
+        totalActual: 0,
+        totalDefects: 0,
+        totalBackorder: 0,
+        recordCount: 0,
+      });
+    }
+    const line = lines.get(record.line);
+    line.products.push({
+      date: record.date,
+      name: record.productName,
+      spec: record.spec || "-",
+      customer: record.customer || "-",
+      planQty: record.planQty,
+      actualQty: record.dailyQty,
+      achievementRate: record.achievementRate,
+      defects: record.defects,
+      qualifiedRate: record.qualifiedRate,
+      backorder: record.backorder,
+      batchNo: record.productionBatch || "-",
+      remark: record.remark || "",
+    });
+    line.totalPlan += record.planQty || 0;
+    line.totalActual += record.dailyQty || 0;
+    line.totalDefects += record.defects || 0;
+    line.totalBackorder += record.backorder || 0;
+    line.recordCount++;
+  }
+
+  const lineList = Array.from(lines.values());
+  const totalActualQty = lineList.reduce((sum, line) => sum + line.totalActual, 0);
+  const totalDefects = lineList.reduce((sum, line) => sum + line.totalDefects, 0);
+  const totalPlanQty = lineList.reduce((sum, line) => sum + line.totalPlan, 0);
+  return {
+    records: lineList,
+    summary: {
+      lines: lineList.length,
+      totalPlanQty,
+      totalActualQty,
+      totalDefects,
+      totalBackorder: lineList.reduce((sum, line) => sum + line.totalBackorder, 0),
+      avgAchievementRate: totalPlanQty > 0 ? totalActualQty / totalPlanQty : 0,
+      avgQualifiedRate: totalActualQty > 0 ? (totalActualQty - totalDefects) / totalActualQty : 0,
+    },
+    rawCount: records.length,
+  };
+}
+
+function aggregateLocalInjection(records) {
+  const machines = new Map();
+  for (const record of records) {
+    const key = `${record.machine}-${record.shift}`;
+    if (!machines.has(key)) {
+      machines.set(key, {
+        machine: record.machine,
+        shift: record.shift,
+        products: [],
+        totalQty: 0,
+        totalDefects: 0,
+        totalBackorder: 0,
+        recordCount: 0,
+      });
+    }
+    const machine = machines.get(key);
+    machine.products.push({
+      date: record.date,
+      name: record.productName,
+      material: record.material || "-",
+      planQty: record.orderQty,
+      actualQty: record.dailyQty,
+      defects: record.defects,
+      qualifiedRate: record.qualifiedRate,
+      backorder: record.backorder,
+      batchNo: record.batchNo || "-",
+      operator: record.operator || "-",
+      remark: record.remark || "",
+    });
+    machine.totalQty += record.dailyQty || 0;
+    machine.totalDefects += record.defects || 0;
+    machine.totalBackorder += record.backorder || 0;
+    machine.recordCount++;
+  }
+
+  const machineList = Array.from(machines.values());
+  const totalQty = machineList.reduce((sum, machine) => sum + machine.totalQty, 0);
+  const totalDefects = machineList.reduce((sum, machine) => sum + machine.totalDefects, 0);
+  return {
+    records: machineList,
+    summary: {
+      machines: machineList.length,
+      totalQty,
+      totalDefects,
+      totalBackorder: machineList.reduce((sum, machine) => sum + machine.totalBackorder, 0),
+      avgQualifiedRate: totalQty > 0 ? (totalQty - totalDefects) / totalQty : 0,
+    },
+    rawCount: records.length,
+  };
+}
+
 // ---- WeCom content builder ----
 
 export function buildWecomContent(date, assembly, injection) {
@@ -222,7 +329,7 @@ export function buildWecomContent(date, assembly, injection) {
   }
   lines.push("");
 
-  lines.push(`> 数据来源：维格表 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
+  lines.push(`> 数据来源：生产日报系统 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
   lines.push(`> 详情查阅：[teao.work/production-report](https://teao.work/production-report)`);
 
   return lines.join("\n");
@@ -235,10 +342,10 @@ export function buildEmptyContent(date) {
     "> ⚠️ **暂无生产数据**",
     "> ",
     "> 装配部和注塑部昨日均无生产记录。",
-    "> 请相关人员及时前往维格表录入生产数据！",
+    "> 请相关人员及时前往生产日报录入页面补充数据！",
     "> ",
     `> 推送时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
-    "> 录入入口：[维格表](https://vika.cn)",
+    "> 录入入口：[teao.work/production-entry](https://teao.work/production-entry)",
   ].join("\n");
 }
 
@@ -249,16 +356,21 @@ export function hasProductionData(report) {
 }
 
 export async function fetchAndStoreReport(date) {
-  const config = readConfig();
-  if (!config.enabled) throw new Error("生产日报功能未启用");
+  const localAssembly = getAssemblyEntriesForDate(date);
+  const localInjection = getInjectionEntriesForDate(date);
+  let assembly = localAssembly.length > 0 ? aggregateLocalAssembly(localAssembly) : null;
+  let injection = localInjection.length > 0 ? aggregateLocalInjection(localInjection) : null;
 
-  const [assemblyRaw, injectionRaw] = await Promise.all([
-    fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
-    fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
-  ]);
-
-  const assembly = aggregateAssembly(assemblyRaw, date);
-  const injection = aggregateInjection(injectionRaw, date);
+  if (!assembly || !injection) {
+    const config = readConfig();
+    if (!config.enabled) throw new Error("生产日报功能未启用");
+    const [assemblyRaw, injectionRaw] = await Promise.all([
+      assembly ? Promise.resolve(null) : fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
+      injection ? Promise.resolve(null) : fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
+    ]);
+    if (!assembly) assembly = aggregateAssembly(assemblyRaw, date);
+    if (!injection) injection = aggregateInjection(injectionRaw, date);
+  }
 
   const report = {
     date,

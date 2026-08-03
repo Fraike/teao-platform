@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { User, LoginRequest, RegisterRequest } from "../types/auth";
-import { api, setToken, clearToken, getToken, isApiError } from "./api";
+import { api, setToken, clearToken, getToken, isApiError, setLoginTimestamp, clearLoginTimestamp, getLoginTimestamp, SESSION_DURATION_MS } from "./api";
+import { clearKingdeeCache } from "./kingdeeCache";
 
 interface AuthState {
   user: User | null;
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       req
     );
     setToken(data.token);
+    setLoginTimestamp();
     set({ user: data.user });
   },
 
@@ -36,6 +38,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     clearToken();
+    clearLoginTimestamp();
+    clearKingdeeCache();
     set({ user: null });
   },
 
@@ -62,3 +66,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
+export function isSessionExpired(): boolean {
+  const ts = getLoginTimestamp();
+  if (!ts) return false;
+  const elapsed = Date.now() - Number(ts);
+  return elapsed > SESSION_DURATION_MS;
+}
