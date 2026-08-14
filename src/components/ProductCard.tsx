@@ -1,15 +1,16 @@
 import React from "react";
-import { Card, Table, Button, Input, InputNumber, Space, Popconfirm, Tooltip } from "antd";
+import { Card, Table, Button, Input, Space, Popconfirm } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
   CopyOutlined,
-  CameraOutlined,
 } from "@ant-design/icons";
 import { useQuotationStore } from "../lib/store";
 import { useIsMobile } from "../lib/useIsMobile";
 import type { Product } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
+import { TierPricingEditor } from "./TierPricingEditor";
+import { ProductImageUploader } from "./ProductImageUploader";
 
 type ProductRow = Product & { index: number };
 
@@ -25,17 +26,6 @@ export default function ProductCard() {
     updateProduct(id, (prev) => {
       return { ...prev, [field]: value };
     });
-  };
-
-  const handleImageUpload = (id: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      scaleImage(base64, 200).then((scaled) => {
-        updateProduct(id, (prev) => ({ ...prev, image: scaled }));
-      });
-    };
-    reader.readAsDataURL(file);
   };
 
   const columns: ColumnsType<ProductRow> = [
@@ -107,15 +97,14 @@ export default function ProductCard() {
     {
       title: "单价",
       dataIndex: "price",
-      width: 90,
+      width: 280,
       render: (_price: number, r: ProductRow) => (
-        <InputNumber
-          size="small"
-          style={{ width: "100%" }}
-          value={r.price}
-          onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
-          precision={2}
-          min={0}
+        <TierPricingEditor
+          product={r}
+          onChange={(product) => updateProduct(r.id, () => product)}
+          labels={{ toggle: "启用阶梯报价", enabled: "阶梯报价", add: "添加档位" }}
+          pricePrecision={2}
+          currencyLabel="¥"
         />
       ),
     },
@@ -138,48 +127,9 @@ export default function ProductCard() {
       title: "图片",
       dataIndex: "image",
       width: 86,
-      render: (_image: string | undefined, r: ProductRow) =>
-        r.image ? (
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <Tooltip title={<img src={r.image} style={{ maxWidth: 260 }} alt="" />}>
-              <img src={r.image} style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4 }} alt="" />
-            </Tooltip>
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => update(r.id, "image", undefined)}
-              style={{
-                position: "absolute",
-                top: -6,
-                right: -6,
-                width: 18,
-                height: 18,
-                minWidth: 18,
-                padding: 0,
-                fontSize: 10,
-                borderRadius: "50%",
-                background: "#fff",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-              }}
-            />
-          </div>
-        ) : (
-          <label style={{ cursor: "pointer", color: "#bbb" }}>
-            <CameraOutlined />
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageUpload(r.id, file);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        ),
+      render: (_image: string | undefined, r: ProductRow) => (
+        <ProductImageUploader image={r.image} onChange={(image) => update(r.id, "image", image)} uploadLabel="点击/拖入" />
+      ),
     },
     {
       title: "备注",
@@ -243,11 +193,9 @@ export default function ProductCard() {
         dataSource={dataSource}
         pagination={false}
         size="small"
-        scroll={{ x: isMobile ? 700 : 900 }}
+        scroll={{ x: isMobile ? 1000 : 1120 }}
         bordered
       />
     </Card>
   );
 }
-
-import { scaleImage } from "../lib/imageUtils";

@@ -1,3 +1,7 @@
+export function isSupportedImageFile(file: Pick<File, "type">): boolean {
+  return file.type.startsWith("image/");
+}
+
 export function scaleImage(base64: string, maxWidth: number): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();

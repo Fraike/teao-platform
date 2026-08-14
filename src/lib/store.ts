@@ -9,8 +9,26 @@ import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_AMORTIZE_QTY, DEFAULT_TERM
 export function quoteNoForDate(no: string, date: string): string {
   const suffix = date && date.length >= 10 ? `${date.slice(5, 7)}${date.slice(8, 10)}` : "";
   if (!suffix) return no;
-  if (/\d{4}$/.test(no)) return no.replace(/\d{4}$/, suffix);
-  return no ? `${no}-${suffix}` : `Q-${date.slice(0, 4)}-${suffix}`;
+  const revision = no.match(/-R\d+$/i)?.[0] ?? "";
+  const base = revision ? no.slice(0, -revision.length) : no;
+  if (/\d{4}$/.test(base)) return `${base.replace(/\d{4}$/, suffix)}${revision}`;
+  return base ? `${base}-${suffix}${revision}` : `Q-${date.slice(0, 4)}-${suffix}${revision}`;
+}
+
+export function prepareQuotationCopy(quotation: Quotation, date = new Date().toISOString().slice(0, 10)): Quotation {
+  const copy = structuredClone(quotation);
+  const datedQuoteNo = quoteNoForDate(copy.quoteMeta.no, date);
+  const revisionMatch = datedQuoteNo.match(/-R(\d+)$/i);
+  const nextQuoteNo = revisionMatch
+    ? datedQuoteNo.replace(/-R\d+$/i, `-R${Number(revisionMatch[1]) + 1}`)
+    : `${datedQuoteNo}-R1`;
+
+  copy.quoteMeta = {
+    ...copy.quoteMeta,
+    no: nextQuoteNo,
+    date,
+  };
+  return copy;
 }
 
 let idCounter = Date.now();
@@ -23,6 +41,7 @@ function genId(): string {
 export interface QuotationStoreOptions {
   storageKey: string;
   sampleData: Quotation;
+  enableLegacyTierPricing?: boolean;
   defaults: {
     salesName: string;
     salesTel: string;
@@ -62,6 +81,7 @@ function normalizeQuotation(data: Quotation, opts: QuotationStoreOptions): Quota
     products: data.products.map((product) => ({
       ...d.productDefaults,
       ...product,
+      tierPricingEnabled: product.tierPricingEnabled ?? (opts.enableLegacyTierPricing === true && Boolean(product.tiers?.length)),
       partNo: product.partNo || "",
       unit: !product.unit || product.unit === "个" ? "PCS" : product.unit,
     })),
@@ -259,6 +279,7 @@ export const useQuotationStore = createQuotationStore({
 export const useIntlQuotationStore = createQuotationStore({
   storageKey: "quotation-intl-data-v1",
   sampleData: sampleIntlQuotation,
+  enableLegacyTierPricing: true,
   defaults: {
     salesName: "Mark",
     salesTel: "+86 18813935128",

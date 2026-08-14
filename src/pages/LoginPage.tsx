@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Card, Form, Input, Button, Typography, App, Alert } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../lib/authStore";
+import { LOGIN_AUTOCOMPLETE } from "../lib/loginConfig";
 import styles from "./AuthPage.module.css";
 
 const { Title, Text } = Typography;
@@ -39,7 +40,7 @@ export function LoginPage() {
           <Text type="secondary">请登录以继续</Text>
         </div>
 
-        <Form onFinish={onFinish} size="large">
+        <Form onFinish={onFinish} size="large" autoComplete={LOGIN_AUTOCOMPLETE.form}>
           {expired && (
             <Alert
               type="warning"
@@ -52,10 +53,10 @@ export function LoginPage() {
             <Alert type="error" showIcon message={loginError} style={{ marginBottom: 16 }} closable onClose={() => setLoginError("")} />
           )}
           <Form.Item name="username" rules={[{ required: true, message: "请输入用户名" }]}>
-            <Input prefix={<UserOutlined />} placeholder="用户名" />
+            <Input name="username" autoComplete={LOGIN_AUTOCOMPLETE.username} prefix={<UserOutlined />} placeholder="用户名" />
           </Form.Item>
           <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+            <Input.Password name="password" autoComplete={LOGIN_AUTOCOMPLETE.password} prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
           <Form.Item style={{ marginBottom: 8 }}>
             <Button type="primary" htmlType="submit" loading={loading} block>

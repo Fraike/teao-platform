@@ -27,8 +27,8 @@ export const DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS = {
 export const DEFAULT_AMORTIZE_QTY = 50000;
 
 export const DEFAULT_TERMS = [
-  "1. 以上产品价格为不含13%税单价。",
-  "2. 包装方式：纸箱。",
+  "1. 以上产品价格为含13%税单价，含运费。",
+  "2. 包装方式：客户没有特殊要求，则按我司正常标准包装。",
   "3. 交货地点：贵司工厂，交期10-15天。",
   "4. 付款方式：月结。",
   "5. 报价有效期：本报价单自发出之日起30天内有效。",

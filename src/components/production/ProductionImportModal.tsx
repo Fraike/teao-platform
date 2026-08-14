@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Modal, Popconfirm, Table, Upload, message } from "antd";
+import { Alert, Button, Collapse, Modal, Popconfirm, Table, Upload, message } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import type { UploadProps } from "antd";
 import * as XLSX from "xlsx";
 import dayjs from "dayjs";
 import { api } from "../../lib/api";
+import { validateSpreadsheetFileSize, validateSpreadsheetShape } from "../../lib/spreadsheetImport";
+import styles from "./ProductionImportModal.module.css";
 
 type Department = "assembly" | "injection";
 type ImportedRecord = Record<string, string | number>;
@@ -68,7 +70,7 @@ function parseAssembly(row: Record<string, unknown>): ImportedRecord {
     spec: toText(getValue(row, ["规格"])),
     productName: toText(getValue(row, ["品名", "品名/型号"])),
     materialBatch: toText(getValue(row, ["原材料批号"])),
-    workHours: toNumber(getValue(row, ["当天工作时间（小时）", "工作时间（小时）"])),
+    workHours: toNumber(getValue(row, ["当天工作时间（小时）", "工作时间（小时）", "工作时间"])),
     productionBatch: toText(getValue(row, ["生产批号"])),
     orderQty: toNumber(getValue(row, ["订单数量"])),
     dailyQty: toNumber(getValue(row, ["当天生产数量"])),
@@ -108,7 +110,7 @@ function parseInjection(row: Record<string, unknown>): ImportedRecord {
 function validate(record: ImportedRecord, department: Department): string | null {
   const fields = department === "assembly" ? ["date", "line", "customer", "productName"] : ["date", "machine", "shift", "productName"];
   const missing = fields.find((field) => !toText(record[field]));
-  if (missing) return `缺少 ${missing}`;
+  if (missing) return `缺少${CONFIG[department].columnLabels[missing]}`;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(toText(record.date))) return "日期无效";
   if (Number(record.defects) > Number(record.dailyQty)) return "不良数大于当天生产数量";
   return null;
@@ -144,10 +146,15 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
 
   const parseFile = async (file: File) => {
     try {
+      const fileSizeError = validateSpreadsheetFileSize(file.size);
+      if (fileSizeError) throw new Error(fileSizeError);
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!firstSheet) throw new Error("文件中没有可读取的工作表");
       const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: "", raw: false });
+      const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+      const shapeError = validateSpreadsheetShape(rows.length, columnCount);
+      if (shapeError) throw new Error(shapeError);
       const [headerRow, ...dataRows] = rows;
       const headers = (headerRow || []).map((value) => toText(value));
       if (headers.length === 0) throw new Error("未识别到表头");
@@ -212,9 +219,9 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
           onConfirm={importRecords}
           okText="确认覆盖"
           cancelText="返回检查"
-          disabled={records.length === 0 || errors.length > 0}
+          disabled={records.length === 0}
         >
-          <Button type="primary" danger loading={importing} disabled={records.length === 0 || errors.length > 0}>
+          <Button type="primary" danger loading={importing} disabled={records.length === 0}>
             确认覆盖导入
           </Button>
         </Popconfirm>,
@@ -229,17 +236,33 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
 
       {fileName && (
         <Alert
-          style={{ marginTop: 16 }}
+          className={styles.resultAlert}
           type={errors.length > 0 ? "warning" : "success"}
           showIcon
-          message={`${fileName}：识别到 ${records.length} 条有效记录`}
-          description={errors.length > 0 ? `存在 ${errors.length} 条错误，修正后才能覆盖导入。${errors.slice(0, 3).join("；")}` : "字段校验通过，可查看预览后确认覆盖。"}
+          message={`${fileName}：识别到 ${records.length} 条有效记录${errors.length > 0 ? `，已剔除 ${errors.length} 条脏数据` : ""}`}
+          description={errors.length > 0 ? "缺少必填项或校验不通过的数据不会录入，其余有效记录可直接导入。" : "字段校验通过，可查看预览后确认覆盖。"}
+        />
+      )}
+
+      {errors.length > 0 && (
+        <Collapse
+          className={styles.rejectedRows}
+          size="small"
+          items={[{
+            key: "rejected-rows",
+            label: `查看已剔除的 ${errors.length} 条数据`,
+            children: (
+              <ul className={styles.errorList}>
+                {errors.map((error) => <li key={error}>{error}</li>)}
+              </ul>
+            ),
+          }]}
         />
       )}
 
       {records.length > 0 && (
         <Table
-          style={{ marginTop: 16 }}
+          className={styles.previewTable}
           columns={previewColumns}
           dataSource={records.slice(0, 8).map((record, index) => ({ ...record, key: index }))}
           pagination={false}

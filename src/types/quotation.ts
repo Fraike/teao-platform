@@ -11,6 +11,7 @@ export interface Product {
   spec?: string;
   unit: string;
   price: number;
+  tierPricingEnabled?: boolean;
   tiers?: Tier[];
   qty?: number;
   amount?: number;
@@ -95,6 +96,7 @@ export interface ManagedQuotation {
   customerName: string;
   currency: string;
   salesName: string;
+  actualQuoterName: string;
   productCount: number;
   totalAmount: number;
   previewProducts?: QuotationProductPreview[];

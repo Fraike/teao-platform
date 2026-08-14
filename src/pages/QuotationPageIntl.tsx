@@ -16,11 +16,12 @@ import { TermsCardIntl } from "../components/TermsCard";
 import { MoldCardIntl } from "../components/MoldCard";
 import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
-import { useIntlQuotationStore } from "../lib/store";
+import { prepareQuotationCopy, useIntlQuotationStore } from "../lib/store";
 import { exportPDFIntl } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
+import { confirmTierPricing } from "../components/confirmTierPricing";
 
 interface Props {
   headerHeight: number;
@@ -43,31 +44,39 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingQueryId = searchParams.get("id");
+  const copyingQueryId = searchParams.get("copyId");
+  const loadingQueryId = editingQueryId ?? copyingQueryId;
   const activeEditingId = editingQueryId ? editingId : null;
 
   useEffect(() => {
-    if (!editingQueryId) {
+    if (!loadingQueryId) {
       return;
     }
     let active = true;
-    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(editingQueryId)}`)
+    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(loadingQueryId)}`)
       .then((result) => {
         if (!active) return;
         if (result.data.market !== "international") throw new Error("This quotation is not an international quotation");
-        replaceQuotation(result.data.quotation);
-        setEditingId(result.data.id);
+        replaceQuotation(copyingQueryId ? prepareQuotationCopy(result.data.quotation) : result.data.quotation);
+        setEditingId(copyingQueryId ? null : result.data.id);
       })
       .catch((err: unknown) => {
         if (active) messageApi.error(err instanceof Error ? err.message : "Failed to load quotation");
       });
     return () => { active = false; };
-  }, [editingQueryId, messageApi, replaceQuotation]);
+  }, [copyingQueryId, loadingQueryId, messageApi, replaceQuotation]);
+
+  const confirmTierValidation = useCallback(async (): Promise<boolean> => {
+    return confirmTierPricing(quotation.products, "en");
+  }, [quotation.products]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
 
     const hasCustomer = quotation.customer.name.trim() !== "";
-    const hasPrice = quotation.products.some((p) => (p.price ?? 0) > 0);
+    const hasPrice = quotation.products.some((product) => product.tierPricingEnabled
+      ? product.tiers?.some((tier) => tier.price > 0)
+      : (product.price ?? 0) > 0);
     if (!hasCustomer || !hasPrice) {
       Modal.warning({
         title: "Incomplete Quotation",
@@ -78,6 +87,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       });
       return;
     }
+    if (!await confirmTierValidation()) return;
 
     try {
       await exportPDFIntl(previewRef.current, quotation);
@@ -88,7 +98,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       const msg = err instanceof Error ? err.message : "PDF export failed, please try again";
       messageApi.error(msg);
     }
-  }, [quotation, messageApi]);
+  }, [confirmTierValidation, quotation, messageApi]);
 
   const handleSubmit = async () => {
     const hasCustomer = quotation.customer.name.trim() !== "";
@@ -104,6 +114,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       });
       return;
     }
+    if (!await confirmTierValidation()) return;
     try {
       const payload = { market: "international" as const, quotation };
       const result = activeEditingId
@@ -171,7 +182,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
         }}
       >
         <span style={{ fontSize: 13, fontWeight: 500, color: "#1e293b" }}>
-          Intl. Quotation Editor
+          {copyingQueryId ? "Copied Quotation (New Quote)" : "Intl. Quotation Editor"}
         </span>
         <Space size={isMobile ? 4 : "small"}>
           <Button size="small" icon={<FileAddOutlined />} onClick={() => {

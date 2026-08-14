@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, Fragment } from "react";
 import { useQuotationStore } from "../lib/store";
 import { COMPANY_INFO, LOGO_PATH, STAMP_PATH } from "../lib/constants";
 
@@ -16,6 +16,7 @@ const S = {
 };
 
 import { useBase64Image } from "../lib/useBase64Image";
+import styles from "./PreviewPanel.module.css";
 
 const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
   const { customer, quoteMeta, products, terms, molds } = useQuotationStore((s) => s.quotation);
@@ -190,7 +191,8 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
           </thead>
           <tbody>
             {products.map((p, idx) => (
-              <tr key={p.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <Fragment key={p.id}>
+              <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                 <td style={td("center", "#94a3b8", 10)}>{idx + 1}</td>
                 <td style={tdName()}>
                   <span style={{ fontWeight: 600, wordBreak: "keep-all", whiteSpace: "normal", overflowWrap: "normal" }}>{p.name || "-"}</span>
@@ -199,7 +201,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                 <td style={td("left", S.muted, 10)}>{p.spec || "-"}</td>
                 <td style={td("left", S.muted, 10)}>{p.unit}</td>
                 <td style={td("right", "#334155", 11, "monospace")}>
-                  {(p.price ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {p.tierPricingEnabled ? "阶梯报价" : (p.price ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
                 <td style={td("left", S.muted, 10)}>{p.torque || ""}</td>
                 <td style={td("center", S.muted, 10)}>
@@ -222,6 +224,19 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                 </td>
                 <td style={td("left", S.light, 10)}>{p.remark || ""}</td>
               </tr>
+              {p.tierPricingEnabled && p.tiers && [...p.tiers].sort((a, b) => a.minQty - b.minQty).map((tier) => (
+                <tr key={tier.id} className={styles.tierRow}>
+                  <td style={td("center", S.light, 9)}></td>
+                  <td colSpan={4} style={td("right", S.muted, 9)}>
+                    MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {p.unit || "PCS"}
+                  </td>
+                  <td style={td("right", "#1677ff", 10, "monospace", 600)}>
+                    ¥{tier.price.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td colSpan={3} style={td("left", S.light, 9)}></td>
+                </tr>
+              ))}
+              </Fragment>
             ))}
             {products.length === 0 && (
               <tr>

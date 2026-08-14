@@ -1,6 +1,8 @@
 import { forwardRef, Fragment } from "react";
 import { useIntlQuotationStore } from "../../lib/store";
 import { COMPANY_INFO_EN, LOGO_PATH, STAMP_PATH } from "../../lib/constants";
+import { formatIntlTierLabel } from "../../lib/quotationDisplay";
+import styles from "./PreviewPanelIntl.module.css";
 
 const A4_WIDTH = 794;
 const A4_HEIGHT = 1122;
@@ -31,7 +33,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
   const logoSrc = useBase64Image(LOGO_PATH);
   const stampSrc = useBase64Image(STAMP_PATH);
   const totalProductAmount = products.reduce(
-    (sum, p) => sum + (p.tiers && p.tiers.length > 0 ? 0 : (p.qty ?? 0) * (p.price ?? 0)),
+    (sum, p) => sum + (p.tierPricingEnabled ? 0 : (p.qty ?? 0) * (p.price ?? 0)),
     0
   );
   const totalFreight = products.reduce((sum, p) => sum + (p.freight ?? 0), 0);
@@ -200,7 +202,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           </thead>
           <tbody>
             {products.map((p, idx) => {
-              const hasTiers = p.tiers && p.tiers.length > 0;
+              const hasTiers = p.tierPricingEnabled === true;
               return (
                 <Fragment key={p.id}>
                   {/* Main product row */}
@@ -270,17 +272,15 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                     <tr key={tier.id} style={{ background: C.bg }}>
                       <td style={{ ...td("#", C.subtle), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }} colSpan={3}></td>
-                      <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}>
-                        <span style={{ fontSize: 7.5, color: C.muted, fontWeight: 400, fontFamily: "inherit" }}>
-                          ≥ {tier.minQty.toLocaleString("en-US")} PCS&nbsp;&nbsp;
-                        </span>
-                        <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                        <span style={{ fontSize: 8 }}>
-                          {tier.price.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                      <td
+                        className={styles.tierPriceCell}
+                        style={{ ...td("right", C.heading), background: C.bg }}
+                        colSpan={3}
+                      >
+                        <span className={styles.tierPriceLabel}>
+                          {formatIntlTierLabel(tier.minQty, p.unit, quoteMeta.currency, tier.price)}
                         </span>
                       </td>
-                      <td style={{ ...td("right", C.text), background: C.bg }}></td>
-                      <td style={{ ...td("right", C.heading, "monospace"), background: C.bg }}></td>
                       <td style={{ ...td("right", C.text), background: C.bg }}></td>
                       <td style={{ ...td("left", C.muted), background: C.bg }}></td>
                       <td style={{ ...td("left", C.subtle), background: C.bg }}></td>
@@ -302,7 +302,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           marginTop: 2,
           gap: 6,
         }}>
-          {products.some((p) => p.tiers && p.tiers.length > 0) && (
+          {products.some((p) => p.tierPricingEnabled) && (
             <span style={{ fontSize: 7.5, color: C.subtle, fontStyle: "italic" }}>
               * Some products use tiered pricing, product total excludes tiered items
             </span>

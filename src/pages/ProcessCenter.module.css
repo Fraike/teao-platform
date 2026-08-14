@@ -1,0 +1,181 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.mobilePage {
+  padding: 16px;
+}
+
+.title {
+  margin-bottom: 8px !important;
+}
+
+.intro {
+  margin-bottom: 16px !important;
+}
+
+.alert {
+  margin-bottom: 16px;
+}
+
+.filters,
+.processList {
+  width: 100%;
+}
+
+.filters {
+  margin-bottom: 24px;
+}
+
+.search {
+  max-width: 480px;
+}
+
+.departmentList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.departmentButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 4px;
+  color: #333;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #f0f0f0;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.departmentCount {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  background: #1677ff;
+}
+
+.departmentCountActive {
+  color: #1677ff;
+  background: #fff;
+}
+
+.departmentButton:hover {
+  color: #1677ff;
+  background: #e6f4ff;
+}
+
+.departmentButtonActive,
+.departmentButtonActive:hover {
+  color: #fff;
+  background: #1677ff;
+}
+
+.empty {
+  padding: 48px;
+  color: #999;
+  text-align: center;
+}
+
+.processCard {
+  width: 100%;
+}
+
+.cardTitle {
+  font-size: 16px;
+}
+
+.cardMeta {
+  font-size: 13px;
+}
+
+.summary {
+  margin-bottom: 16px !important;
+  font-size: 14px;
+}
+
+.descriptions {
+  margin-bottom: 20px;
+}
+
+.section {
+  margin-top: 20px;
+}
+
+.sectionTitle {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.responsibilityItem {
+  display: block !important;
+  padding: 5px 0 !important;
+  border: 0 !important;
+}
+
+.stepList {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.stepItem {
+  padding: 5px 0 8px 4px;
+  color: #555;
+}
+
+.responsibleTag {
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+.stepDescription {
+  margin: 3px 0 0 !important;
+  color: #666;
+  font-size: 13px;
+}
+
+.ioRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.noteItem {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 8px;
+  padding: 4px 0 !important;
+  border: 0 !important;
+}
+
+.noteIcon {
+  margin-top: 4px;
+  color: #faad14;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+  }
+
+  .departmentButton {
+    padding: 5px 10px;
+  }
+}

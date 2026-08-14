@@ -34,6 +34,7 @@ export function initQuotationDB() {
       customer_name TEXT NOT NULL,
       currency TEXT NOT NULL DEFAULT '',
       sales_name TEXT NOT NULL DEFAULT '',
+      actual_quoter_name TEXT NOT NULL DEFAULT '',
       product_count INTEGER NOT NULL DEFAULT 0,
       total_amount REAL NOT NULL DEFAULT 0,
       quotation_json TEXT NOT NULL,
@@ -63,6 +64,9 @@ export function initQuotationDB() {
   if (!columns.some((column) => column.name === "legacy_history_id")) {
     database.exec("ALTER TABLE quotations ADD COLUMN legacy_history_id TEXT");
   }
+  if (!columns.some((column) => column.name === "actual_quoter_name")) {
+    database.exec("ALTER TABLE quotations ADD COLUMN actual_quoter_name TEXT NOT NULL DEFAULT ''");
+  }
   database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quotations_legacy_history_id ON quotations(legacy_history_id)");
 }
 
@@ -82,6 +86,22 @@ function asText(value, field, { required = false, max = 500 } = {}) {
 function asNumber(value) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function validateProductTiers(product, index) {
+  if (!product.tierPricingEnabled) return;
+  const tiers = Array.isArray(product.tiers) ? product.tiers : [];
+  if (tiers.length < 2) throw validationError(`第${index + 1}个产品的阶梯报价至少需要两档`);
+  const quantities = tiers.map((tier) => asNumber(tier?.minQty));
+  if (quantities.some((quantity) => !Number.isInteger(quantity) || quantity <= 0)) {
+    throw validationError(`第${index + 1}个产品的MOQ必须是正整数`);
+  }
+  if (new Set(quantities).size !== quantities.length) {
+    throw validationError(`第${index + 1}个产品的MOQ不能重复`);
+  }
+  if (tiers.some((tier) => asNumber(tier?.price) <= 0)) {
+    throw validationError(`第${index + 1}个产品的阶梯单价必须大于0`);
+  }
 }
 
 function validateQuotation(market, quotation) {
@@ -116,6 +136,7 @@ function validateQuotation(market, quotation) {
     if (asNumber(product.price) < 0 || asNumber(product.qty) < 0 || asNumber(product.freight) < 0) {
       throw validationError(`第${index + 1}个产品的数量或金额不能小于0`);
     }
+    validateProductTiers(product, index);
   });
 
   const snapshot = JSON.stringify(quotation);
@@ -124,7 +145,11 @@ function validateQuotation(market, quotation) {
   }
 
   const totalAmount = quotation.products.reduce(
-    (sum, product) => sum + asNumber(product.qty || 1) * asNumber(product.price) + asNumber(product.freight),
+    (sum, product) => {
+      const quantity = market === "international" ? asNumber(product.qty) : asNumber(product.qty || 1);
+      const productAmount = product.tierPricingEnabled ? 0 : quantity * asNumber(product.price);
+      return sum + productAmount + asNumber(product.freight);
+    },
     0,
   );
   return {
@@ -150,6 +175,7 @@ function rowToQuotation(row) {
     customerName: row.customer_name,
     currency: row.currency,
     salesName: row.sales_name,
+    actualQuoterName: row.actual_quoter_name,
     productCount: row.product_count,
     totalAmount: row.total_amount,
     quotation: JSON.parse(row.quotation_json),
@@ -185,6 +211,7 @@ function rowToSummary(row) {
     customerName: summary.customer_name,
     currency: summary.currency,
     salesName: summary.sales_name,
+    actualQuoterName: summary.actual_quoter_name,
     productCount: summary.product_count,
     totalAmount: summary.total_amount,
     previewProducts,
@@ -201,7 +228,7 @@ export function listQuotations({ keyword = "", market = "", dateFrom = "", dateT
   const params = {};
 
   if (keyword) {
-    conditions.push("(quote_no LIKE @keyword OR customer_name LIKE @keyword OR sales_name LIKE @keyword)");
+    conditions.push("(quote_no LIKE @keyword OR customer_name LIKE @keyword OR sales_name LIKE @keyword OR actual_quoter_name LIKE @keyword)");
     params.keyword = `%${keyword.trim()}%`;
   }
   if (market === "domestic" || market === "international") {
@@ -243,21 +270,24 @@ export function createQuotation({ market, quotation }, user) {
   const database = getDB();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const createdBy = user || "unknown";
+  const createdBy = typeof user === "string" ? user : user?.username;
+  const actualQuoterName = typeof user === "object"
+    ? asText(user?.actualQuoterName, "实际报价人", { max: 100 })
+    : "";
   database.transaction(() => {
     database.prepare(`
       INSERT INTO quotations (
-        id, market, quote_no, quote_date, customer_name, currency, sales_name, product_count,
+        id, market, quote_no, quote_date, customer_name, currency, sales_name, actual_quoter_name, product_count,
         total_amount, quotation_json, created_at, updated_at, created_by, updated_by
       ) VALUES (
-        @id, @market, @quoteNo, @quoteDate, @customerName, @currency, @salesName, @productCount,
+        @id, @market, @quoteNo, @quoteDate, @customerName, @currency, @salesName, @actualQuoterName, @productCount,
         @totalAmount, @quotationJson, @createdAt, @updatedAt, @createdBy, @updatedBy
       )
-    `).run({ ...values, id, createdAt: now, updatedAt: now, createdBy, updatedBy: createdBy });
+    `).run({ ...values, id, actualQuoterName, createdAt: now, updatedAt: now, createdBy: createdBy || "unknown", updatedBy: createdBy || "unknown" });
     database.prepare(`
       INSERT INTO quotation_revisions (quotation_id, action, quotation_json, changed_at, changed_by)
       VALUES (?, 'created', ?, ?, ?)
-    `).run(id, values.quotationJson, now, createdBy);
+    `).run(id, values.quotationJson, now, createdBy || "unknown");
   })();
   return getQuotation(id);
 }

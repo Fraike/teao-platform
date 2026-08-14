@@ -1,0 +1,14 @@
+.resultAlert,
+.rejectedRows,
+.previewTable {
+  margin-top: 16px;
+}
+
+.errorList {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.errorList li + li {
+  margin-top: 6px;
+}

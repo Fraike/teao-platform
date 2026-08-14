@@ -1,0 +1,58 @@
+.editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.enabledLabel {
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tierList {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.tierRow {
+  display: grid;
+  grid-template-columns: 22px 10px minmax(72px, 1fr) auto 12px minmax(72px, 1fr);
+  align-items: center;
+  gap: 4px;
+}
+
+.tierRow :global(.ant-input-number) {
+  width: 100%;
+  min-width: 0;
+}
+
+.tierRow + .tierRow {
+  margin-top: 6px;
+}
+
+.deleteButton {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.muted {
+  color: #8c8c8c;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.addButton {
+  margin-top: 8px;
+}

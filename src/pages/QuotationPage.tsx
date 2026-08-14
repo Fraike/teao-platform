@@ -16,11 +16,12 @@ import TermsCard from "../components/TermsCard";
 import MoldCard from "../components/MoldCard";
 import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
-import { useQuotationStore } from "../lib/store";
+import { prepareQuotationCopy, useQuotationStore } from "../lib/store";
 import { exportPDF } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
+import { confirmTierPricing } from "../components/confirmTierPricing";
 
 interface Props {
   headerHeight: number;
@@ -43,31 +44,39 @@ export default function QuotationPage({ headerHeight }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingQueryId = searchParams.get("id");
+  const copyingQueryId = searchParams.get("copyId");
+  const loadingQueryId = editingQueryId ?? copyingQueryId;
   const activeEditingId = editingQueryId ? editingId : null;
 
   useEffect(() => {
-    if (!editingQueryId) {
+    if (!loadingQueryId) {
       return;
     }
     let active = true;
-    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(editingQueryId)}`)
+    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(loadingQueryId)}`)
       .then((result) => {
         if (!active) return;
         if (result.data.market !== "domestic") throw new Error("该报价不属于国内报价");
-        replaceQuotation(result.data.quotation);
-        setEditingId(result.data.id);
+        replaceQuotation(copyingQueryId ? prepareQuotationCopy(result.data.quotation) : result.data.quotation);
+        setEditingId(copyingQueryId ? null : result.data.id);
       })
       .catch((err: unknown) => {
         if (active) messageApi.error(err instanceof Error ? err.message : "报价读取失败");
       });
     return () => { active = false; };
-  }, [editingQueryId, messageApi, replaceQuotation]);
+  }, [copyingQueryId, loadingQueryId, messageApi, replaceQuotation]);
+
+  const confirmTierValidation = useCallback(async (): Promise<boolean> => {
+    return confirmTierPricing(quotation.products, "zh");
+  }, [quotation.products]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
 
     const hasCustomer = quotation.customer.name.trim() !== "";
-    const hasPrice = quotation.products.some((p) => (p.price ?? 0) > 0);
+    const hasPrice = quotation.products.some((p) => p.tierPricingEnabled
+      ? p.tiers?.some((tier) => tier.price > 0)
+      : (p.price ?? 0) > 0);
     if (!hasCustomer || !hasPrice) {
       Modal.warning({
         title: "报价信息不完整",
@@ -78,6 +87,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       });
       return;
     }
+    if (!await confirmTierValidation()) return;
 
     try {
       await exportPDF(previewRef.current, quotation);
@@ -88,7 +98,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       const msg = err instanceof Error ? err.message : "PDF 导出失败，请重试";
       messageApi.error(msg);
     }
-  }, [quotation, messageApi]);
+  }, [confirmTierValidation, quotation, messageApi]);
 
   const handleSubmit = async () => {
     const hasCustomer = quotation.customer.name.trim() !== "";
@@ -104,6 +114,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       });
       return;
     }
+    if (!await confirmTierValidation()) return;
     try {
       const payload = { market: "domestic" as const, quotation };
       const result = activeEditingId
@@ -177,7 +188,7 @@ export default function QuotationPage({ headerHeight }: Props) {
         }}
       >
         <span style={{ fontSize: 13, fontWeight: 500, color: "#1e293b" }}>
-          报价单编辑
+          {copyingQueryId ? "复制报价单（新报价）" : "报价单编辑"}
         </span>
         <Space size={isMobile ? 4 : "small"}>
           <Button size="small" icon={<FileAddOutlined />} onClick={() => {

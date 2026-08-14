@@ -39,14 +39,53 @@ const quotation = {
 
 try {
   initQuotationDB();
-  const created = createQuotation({ market: "domestic", quotation }, "tester");
+  const created = createQuotation({ market: "domestic", quotation }, { username: "tester", actualQuoterName: "测试登录人" });
   assert.equal(created.quoteNo, "Q-TEST-001");
   assert.equal(created.totalAmount, 1280);
   assert.equal(created.quotation.products[0].image, "data:image/png;base64,AA==");
+  assert.equal(created.actualQuoterName, "测试登录人");
+
+  const zeroQuantityInternational = structuredClone(quotation);
+  zeroQuantityInternational.quoteMeta.no = "Q-INTL-ZERO";
+  zeroQuantityInternational.quoteMeta.currency = "USD";
+  zeroQuantityInternational.products[0].qty = 0;
+  zeroQuantityInternational.products[0].price = 12.5;
+  zeroQuantityInternational.products[0].freight = 30;
+  const zeroQuantityCreated = createQuotation(
+    { market: "international", quotation: zeroQuantityInternational },
+    "tester",
+  );
+  assert.equal(zeroQuantityCreated.totalAmount, 30, "国际报价数量为0时只能保留运费，不能按数量1计算");
+  assert.equal(deleteQuotation(zeroQuantityCreated.id, "tester"), true);
+
+  const tierQuotation = structuredClone(quotation);
+  tierQuotation.quoteMeta.no = "Q-TIER-001";
+  tierQuotation.products = [{
+    id: "tier-p1",
+    name: "阶梯阻尼器",
+    unit: "PCS",
+    price: 99,
+    qty: 999,
+    tierPricingEnabled: true,
+    tiers: [
+      { id: "t1", minQty: 1000, price: 1.5 },
+      { id: "t2", minQty: 3000, price: 1.3 },
+    ],
+  }];
+  const tierCreated = createQuotation({ market: "domestic", quotation: tierQuotation }, "tester");
+  assert.equal(tierCreated.totalAmount, 0, "阶梯报价不应产生虚假的成交总额");
+  tierQuotation.quoteMeta.no = "Q-TIER-INVALID";
+  tierQuotation.products[0].tiers[1].minQty = 1000;
+  assert.throws(
+    () => createQuotation({ market: "domestic", quotation: tierQuotation }, "tester"),
+    /MOQ不能重复/,
+  );
+  assert.equal(deleteQuotation(tierCreated.id, "tester"), true);
 
   const listed = listQuotations({ keyword: "测试客户" });
   assert.equal(listed.total, 1);
   assert.equal(listed.data[0].quotation, undefined);
+  assert.equal(listed.data[0].actualQuoterName, "测试登录人");
   assert.equal(listQuotations({ createdBy: "tester" }).total, 1);
   assert.equal(listQuotations({ createdBy: "another-user" }).total, 0);
 

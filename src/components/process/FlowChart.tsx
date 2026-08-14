@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Graph } from "@antv/x6";
-import type { ProcessStep } from "../../data/processes";
+import type { ProcessStep } from "../../types/process";
 
 interface Props {
   steps: ProcessStep[];
@@ -207,7 +207,7 @@ export default function FlowChart({ steps }: Props) {
         source: { cell: e.source, port: "bottom" },
         target: { cell: e.target, port: "top" },
         vertices: e.vertices,
-        router: e.vertices ? "manhattan" : "orth",
+        router: "orth",
         attrs: {
           line: {
             stroke: "#bbb",

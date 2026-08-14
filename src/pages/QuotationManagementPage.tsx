@@ -16,7 +16,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
-import { DeleteOutlined, EditOutlined, EyeOutlined, PictureOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PictureOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
@@ -89,6 +89,11 @@ export default function QuotationManagementPage() {
     navigate(`${route}?id=${encodeURIComponent(record.id)}`);
   };
 
+  const copyQuotation = (record: ManagedQuotation) => {
+    const route = record.market === "international" ? "/quotation-intl" : "/quotation";
+    navigate(`${route}?copyId=${encodeURIComponent(record.id)}`);
+  };
+
   const deleteQuotation = async (id: string) => {
     try {
       await api.delete(`/api/quotations/${encodeURIComponent(id)}`);
@@ -144,17 +149,19 @@ export default function QuotationManagementPage() {
       ),
     },
     { title: "报价人", dataIndex: "salesName", width: 100, align: "left", ellipsis: true },
+    { title: "实际报价人", dataIndex: "actualQuoterName", width: 110, align: "left", ellipsis: true, render: (value: string) => value || "-" },
     { title: "最后更新", dataIndex: "updatedAt", width: 148, align: "left", render: (value: string) => dayjs(value).format("YYYY-MM-DD HH:mm") },
     {
       title: "操作",
       key: "actions",
-      width: 110,
+      width: 142,
       align: "left",
       fixed: "right",
       render: (_value, record) => (
         <Space size={0}>
           <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record.id)} title="查看报价" />
           <Button type="text" size="small" icon={<EditOutlined />} onClick={() => editQuotation(record)} title="编辑报价" />
+          <Button type="text" size="small" icon={<CopyOutlined />} onClick={() => copyQuotation(record)} title="复制为新报价" />
           <Popconfirm title="删除后无法在报价管理中恢复，确定继续？" onConfirm={() => void deleteQuotation(record.id)} okText="删除" cancelText="取消">
             <Button type="text" size="small" danger icon={<DeleteOutlined />} title="删除报价" />
           </Popconfirm>
@@ -221,7 +228,7 @@ export default function QuotationManagementPage() {
         dataSource={records}
         loading={loading}
         tableLayout="fixed"
-        scroll={{ x: 1450 }}
+        scroll={{ x: 1482 }}
         pagination={{
           current: page,
           pageSize,
@@ -233,12 +240,12 @@ export default function QuotationManagementPage() {
         locale={{ emptyText: "暂无已提交报价" }}
       />
 
-      <QuotationDetailDrawer record={selected} onClose={() => setSelected(null)} onEdit={editQuotation} />
+      <QuotationDetailDrawer record={selected} onClose={() => setSelected(null)} onEdit={editQuotation} onCopy={copyQuotation} />
     </div>
   );
 }
 
-function QuotationDetailDrawer({ record, onClose, onEdit }: { record: ManagedQuotation | null; onClose: () => void; onEdit: (record: ManagedQuotation) => void }) {
+function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: ManagedQuotation | null; onClose: () => void; onEdit: (record: ManagedQuotation) => void; onCopy: (record: ManagedQuotation) => void }) {
   const quotation = record?.quotation;
   const productColumns: ColumnsType<Product> = [
     {
@@ -251,8 +258,21 @@ function QuotationDetailDrawer({ record, onClose, onEdit }: { record: ManagedQuo
     { title: "产品名称", dataIndex: "name", width: 180, align: "left", ellipsis: true },
     { title: "产品型号", dataIndex: "partNo", width: 150, align: "left", ellipsis: true, render: (value: string) => value || "-" },
     { title: "规格", dataIndex: "spec", width: 150, align: "left", ellipsis: true, render: (value: string) => value || "-" },
-    { title: "数量", dataIndex: "qty", width: 80, align: "left", render: (value: number) => value ?? "-" },
-    { title: "单价", dataIndex: "price", width: 100, align: "left", render: (value: number) => (value ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 }) },
+    { title: "数量", dataIndex: "qty", width: 80, align: "left", render: (value: number, product) => product.tierPricingEnabled ? "-" : value ?? "-" },
+    {
+      title: "单价",
+      dataIndex: "price",
+      width: 220,
+      align: "left",
+      render: (value: number, product) => product.tierPricingEnabled ? (
+        <Space direction="vertical" size={2}>
+          <Tag color="blue">阶梯报价</Tag>
+          {[...(product.tiers || [])].sort((left, right) => left.minQty - right.minQty).map((tier) => (
+            <Text key={tier.id}>MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {product.unit || "PCS"}：{record?.currency || "CNY"} {tier.price.toFixed(record?.market === "international" ? 3 : 2)}</Text>
+          ))}
+        </Space>
+      ) : (value ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 }),
+    },
     { title: "运费", dataIndex: "freight", width: 100, align: "left", render: (value: number) => value ? value.toLocaleString("zh-CN", { minimumFractionDigits: 2 }) : "-" },
     { title: "备注", dataIndex: "remark", align: "left", ellipsis: true, render: (value: string) => value || "-" },
   ];
@@ -263,7 +283,12 @@ function QuotationDetailDrawer({ record, onClose, onEdit }: { record: ManagedQuo
       open={Boolean(record)}
       onClose={onClose}
       width={960}
-      extra={record ? <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(record)}>编辑报价</Button> : undefined}
+      extra={record ? (
+        <Space>
+          <Button icon={<CopyOutlined />} onClick={() => onCopy(record)}>复制报价</Button>
+          <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(record)}>编辑报价</Button>
+        </Space>
+      ) : undefined}
     >
       {record && quotation && (
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
@@ -271,6 +296,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit }: { record: ManagedQuo
             <Descriptions.Item label="报价单号">{record.quoteNo}</Descriptions.Item>
             <Descriptions.Item label="报价日期">{record.quoteDate}</Descriptions.Item>
             <Descriptions.Item label="报价人">{record.salesName || "-"}</Descriptions.Item>
+            <Descriptions.Item label="实际报价人">{record.actualQuoterName || "-"}</Descriptions.Item>
             <Descriptions.Item label="币种">{record.currency || "-"}</Descriptions.Item>
             <Descriptions.Item label="创建信息">{record.createdBy} / {dayjs(record.createdAt).format("YYYY-MM-DD HH:mm")}</Descriptions.Item>
             <Descriptions.Item label="更新信息">{record.updatedBy} / {dayjs(record.updatedAt).format("YYYY-MM-DD HH:mm")}</Descriptions.Item>

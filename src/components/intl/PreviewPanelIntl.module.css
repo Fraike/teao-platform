@@ -1,0 +1,14 @@
+.tierPriceCell {
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.tierPriceLabel {
+  display: block;
+  max-width: 100%;
+  font-family: monospace;
+  font-size: 8px;
+  line-height: 1.35;
+  text-align: right;
+}

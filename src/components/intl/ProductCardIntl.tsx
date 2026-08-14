@@ -1,16 +1,17 @@
 import React from "react";
-import { Card, Table, Button, Input, InputNumber, Space, Popconfirm, Tooltip } from "antd";
+import { Card, Table, Button, Input, InputNumber, Space, Popconfirm } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
   CopyOutlined,
-  CameraOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useIntlQuotationStore } from "../../lib/store";
 import { useIsMobile } from "../../lib/useIsMobile";
-import type { Product, Tier } from "../../types/quotation";
+import type { Product } from "../../types/quotation";
 import type { ColumnsType } from "antd/es/table";
+import { addTier as addTierItem, removeTier as removeTierItem, setTierPricingEnabled, sortTiers as sortTierItems, updateTier as updateTierItem } from "../../lib/tierPricing";
+import { ProductImageUploader } from "../ProductImageUploader";
 
 type ProductRow = Product & { index: number };
 
@@ -26,40 +27,16 @@ export default function ProductCardIntl() {
     updateProduct(id, (prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleImageUpload = (id: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      scaleImage(base64, 200).then((scaled) => {
-        updateProduct(id, (prev) => ({ ...prev, image: scaled }));
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // 生成 tier 唯一 ID
-  const genTierId = () => "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
   // 切换阶梯模式
   const toggleTierMode = (productId: string) => {
-    updateProduct(productId, (prev) => {
-      if (prev.tiers && prev.tiers.length > 0) {
-        return { ...prev, tiers: undefined };
-      }
-      return { ...prev, tiers: [
-        { id: genTierId(), minQty: 500, price: prev.price || 0 },
-        { id: genTierId(), minQty: 100, price: prev.price || 0 },
-      ]};
-    });
+    updateProduct(productId, (prev) => setTierPricingEnabled(prev, !prev.tierPricingEnabled, [500, 100]));
   };
 
   // 更新单个 tier（通过 id 定位，不排序避免焦点错位）
-  const updateTier = (productId: string, tierId: string, field: keyof Tier, value: number) => {
+  const updateTier = (productId: string, tierId: string, field: "minQty" | "price", value: number) => {
     updateProduct(productId, (prev) => {
       if (!prev.tiers || prev.tiers.length === 0) return prev;
-      const tiers = prev.tiers.map((t) =>
-        t.id === tierId ? { ...t, [field]: value } : t
-      );
+      const tiers = updateTierItem(prev.tiers, tierId, field, value);
       return { ...prev, tiers };
     });
   };
@@ -68,7 +45,7 @@ export default function ProductCardIntl() {
   const sortTiers = (productId: string) => {
     updateProduct(productId, (prev) => {
       if (!prev.tiers || prev.tiers.length <= 1) return prev;
-      const tiers = [...prev.tiers].sort((a, b) => b.minQty - a.minQty);
+      const tiers = sortTierItems(prev.tiers, "desc");
       return { ...prev, tiers };
     });
   };
@@ -76,10 +53,7 @@ export default function ProductCardIntl() {
   // 添加阶梯
   const addTier = (productId: string) => {
     updateProduct(productId, (prev) => {
-      const tiers = prev.tiers ? [...prev.tiers] : [{ id: genTierId(), minQty: 100, price: prev.price || 0 }];
-      const maxMinQty = tiers.length > 0 ? tiers[0].minQty : 0;
-      tiers.push({ id: genTierId(), minQty: maxMinQty + 500, price: tiers[tiers.length - 1].price || 0 });
-      tiers.sort((a, b) => b.minQty - a.minQty);
+      const tiers = addTierItem(prev.tiers || [], prev.tiers?.at(-1)?.price ?? prev.price, 500, "desc");
       return { ...prev, tiers };
     });
   };
@@ -87,10 +61,7 @@ export default function ProductCardIntl() {
   // 删除阶梯（通过 id 定位）
   const removeTier = (productId: string, tierId: string) => {
     updateProduct(productId, (prev) => {
-      const tiers = prev.tiers?.filter((t) => t.id !== tierId) || [];
-      if (tiers.length === 0) {
-        return { ...prev, tiers: undefined };
-      }
+      const tiers = removeTierItem(prev.tiers || [], tierId);
       return { ...prev, tiers };
     });
   };
@@ -166,7 +137,7 @@ export default function ProductCardIntl() {
       dataIndex: "price",
       width: 230,
       render: (_price: number, r: ProductRow) => {
-        const hasTiers = r.tiers && r.tiers.length > 0;
+        const hasTiers = r.tierPricingEnabled === true;
 
         return (
           <div style={{ minWidth: 200 }}>
@@ -255,7 +226,7 @@ export default function ProductCardIntl() {
       dataIndex: "qty",
       width: 100,
       render: (_qty: number | undefined, r: ProductRow) => {
-        if (r.tiers && r.tiers.length > 0) {
+        if (r.tierPricingEnabled) {
           return <span style={{ color: "#ccc" }}>—</span>;
         }
         return (
@@ -275,7 +246,7 @@ export default function ProductCardIntl() {
       dataIndex: "amount",
       width: 90,
       render: (_amount: number | undefined, r: ProductRow) => {
-        if (r.tiers && r.tiers.length > 0) {
+        if (r.tierPricingEnabled) {
           return <span style={{ color: "#ccc" }}>—</span>;
         }
         const amt = (r.qty ?? 0) * (r.price ?? 0);
@@ -335,48 +306,9 @@ export default function ProductCardIntl() {
       title: "Image",
       dataIndex: "image",
       width: 80,
-      render: (_image: string | undefined, r: ProductRow) =>
-        r.image ? (
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <Tooltip title={<img src={r.image} style={{ maxWidth: 260 }} alt="" />}>
-              <img src={r.image} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }} alt="" />
-            </Tooltip>
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => update(r.id, "image", undefined)}
-              style={{
-                position: "absolute",
-                top: -6,
-                right: -6,
-                width: 18,
-                height: 18,
-                minWidth: 18,
-                padding: 0,
-                fontSize: 10,
-                borderRadius: "50%",
-                background: "#fff",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-              }}
-            />
-          </div>
-        ) : (
-          <label style={{ cursor: "pointer", color: "#bbb" }}>
-            <CameraOutlined />
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageUpload(r.id, file);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        ),
+      render: (_image: string | undefined, r: ProductRow) => (
+        <ProductImageUploader image={r.image} onChange={(image) => update(r.id, "image", image)} uploadLabel="Click/Drop" />
+      ),
     },
     {
       title: "",
@@ -431,5 +363,3 @@ export default function ProductCardIntl() {
     </Card>
   );
 }
-
-import { scaleImage } from "../../lib/imageUtils";

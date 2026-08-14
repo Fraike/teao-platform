@@ -9,6 +9,7 @@ import {
   migrateLegacyHistory,
 } from "../services/quotation-store.js";
 import { readData } from "../config.js";
+import { getUserById } from "../services/users.js";
 
 initQuotationDB();
 const migratedCount = migrateLegacyHistory(readData());
@@ -42,7 +43,11 @@ export function registerQuotationRoutes(app) {
 
   app.post("/api/quotations", jwtAuth, requirePermission("business"), (req, res) => {
     try {
-      const quotation = createQuotation(req.body, req.user?.username);
+      const currentUser = getUserById(req.user?.id);
+      const quotation = createQuotation(req.body, {
+        username: req.user?.username,
+        actualQuoterName: currentUser?.name || req.user?.username || "",
+      });
       res.status(201).json({ ok: true, data: quotation });
     } catch (err) {
       res.status(err.status || 500).json({ error: err.message || "报价提交失败" });
