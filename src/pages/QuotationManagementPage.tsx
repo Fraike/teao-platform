@@ -21,6 +21,7 @@ import dayjs from "dayjs";
 import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
 import type { ManagedQuotation, Product, QuotationProductPreview } from "../types/quotation";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -221,14 +222,14 @@ export default function QuotationManagementPage() {
           font-weight: 600;
         }
       `}</style>
-      <Table<ManagedQuotation>
+      <ResponsiveTable<ManagedQuotation>
         className="quotation-management-table"
         rowKey="id"
         columns={columns}
         dataSource={records}
         loading={loading}
         tableLayout="fixed"
-        scroll={{ x: 1482 }}
+        minWidth={1482}
         pagination={{
           current: page,
           pageSize,

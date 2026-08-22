@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getNavigationItem } from "./navigation";
 
 export interface Tab {
   key: string;
@@ -13,16 +14,28 @@ interface TabState {
   closeOthers: (key: string) => void;
   closeAll: () => void;
   setActiveKey: (key: string) => void;
+  resetForAuthentication: () => void;
 }
 
-const STORAGE_KEY = "teao_tabs";
+const STORAGE_KEY = "teao_tabs_v2";
+const LEGACY_STORAGE_KEY = "teao_tabs";
+const HOME_TAB = { key: "/", label: "首页" };
 
 function loadTabs(): { tabs: Tab[]; activeKey: string } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { tabs?: Tab[]; activeKey?: string };
+      const tabs = (parsed.tabs || []).flatMap((tab) => {
+        const item = getNavigationItem(tab.key);
+        return item ? [{ key: tab.key, label: item.title }] : [];
+      });
+      const withHome = tabs.some((tab) => tab.key === "/") ? tabs : [HOME_TAB, ...tabs];
+      const activeKey = withHome.some((tab) => tab.key === parsed.activeKey) ? parsed.activeKey! : "/";
+      return { tabs: withHome, activeKey };
+    }
   } catch { /* ignore */ }
-  return { tabs: [{ key: "/", label: "首页" }], activeKey: "/" };
+  return { tabs: [HOME_TAB], activeKey: "/" };
 }
 
 function saveTabs(tabs: Tab[], activeKey: string) {
@@ -67,13 +80,13 @@ export const useTabStore = create<TabState>((set, get) => ({
     const { tabs } = get();
     const current = tabs.find((t) => t.key === key);
     const home = tabs.find((t) => t.key === "/");
-    const next = [home, current].filter(Boolean) as Tab[];
+    const next = key === "/" ? [HOME_TAB] : [home, current].filter(Boolean) as Tab[];
     set({ tabs: next, activeKey: key });
     saveTabs(next, key);
   },
 
   closeAll: () => {
-    const next = [{ key: "/", label: "首页" }];
+    const next = [HOME_TAB];
     set({ tabs: next, activeKey: "/" });
     saveTabs(next, "/");
   },
@@ -81,5 +94,12 @@ export const useTabStore = create<TabState>((set, get) => ({
   setActiveKey: (key) => {
     set({ activeKey: key });
     saveTabs(get().tabs, key);
+  },
+
+  resetForAuthentication: () => {
+    try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* ignore */ }
+    const next = [HOME_TAB];
+    set({ tabs: next, activeKey: "/" });
+    saveTabs(next, "/");
   },
 }));

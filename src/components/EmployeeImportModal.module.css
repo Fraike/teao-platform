@@ -1,0 +1,19 @@
+.dropzone {
+  margin-bottom: 16px;
+}
+
+.result {
+  display: grid;
+  gap: 12px;
+}
+
+.issueList :global(ul) {
+  max-height: 120px;
+  margin: 0;
+  padding-left: 20px;
+  overflow-y: auto;
+}
+
+.previewTable :global(.ant-table-wrapper) {
+  max-width: 100%;
+}

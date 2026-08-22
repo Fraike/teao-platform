@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { Table, Input, Select, Typography, Spin, Card, Space, Tag, Button } from "antd";
+import { Input, Select, Typography, Spin, Card, Space, Tag, Button } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
 import { getCache, setCache } from "../lib/kingdeeCache";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title } = Typography;
 
@@ -106,12 +107,12 @@ export function CustomerProductPage() {
       </Card>
 
       <Spin spinning={loading}>
-        <Table
+        <ResponsiveTable
           columns={columns}
           dataSource={data.map((r) => ({ ...r, key: r.id }))}
           pagination={{ pageSize: PAGE_SIZE, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
           size="small"
-          scroll={{ x: 1200 }}
+          minWidth={1200}
           bordered
           locale={{ emptyText: "暂无数据，点击搜索查询" }}
         />

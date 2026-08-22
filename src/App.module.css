@@ -1,0 +1,88 @@
+.sider {
+  background: #001529 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sider :global(.ant-layout-sider-children) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  flex: 0 0 48px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.logoCollapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.logoMark {
+  display: flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  background: #1677ff;
+  border-radius: 6px;
+}
+
+.logoTitle {
+  margin-left: 10px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 0 !important;
+}
+
+.menu :global(.ant-menu-item),
+.menu :global(.ant-menu-submenu-title) {
+  height: 36px !important;
+  margin: 0 !important;
+  padding-left: 16px !important;
+  font-size: 13px !important;
+  line-height: 36px !important;
+}
+
+.menu :global(.ant-menu-sub .ant-menu-item) {
+  display: flex;
+  align-items: center;
+  min-height: 38px !important;
+  height: auto !important;
+  padding: 6px 16px 6px 32px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+.menu :global(.ant-menu-sub .ant-menu-title-content) {
+  min-width: 0;
+  overflow: visible;
+  line-height: 18px;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.menuLabel {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

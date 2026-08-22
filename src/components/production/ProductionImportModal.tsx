@@ -5,6 +5,7 @@ import type { UploadProps } from "antd";
 import * as XLSX from "xlsx";
 import dayjs from "dayjs";
 import { api } from "../../lib/api";
+import { getImportedDateRange, type ImportDateRange } from "../../lib/productionImport";
 import { validateSpreadsheetFileSize, validateSpreadsheetShape } from "../../lib/spreadsheetImport";
 import styles from "./ProductionImportModal.module.css";
 
@@ -15,7 +16,7 @@ interface ProductionImportModalProps {
   department: Department;
   open: boolean;
   onClose: () => void;
-  onImported: () => void;
+  onImported: (dateRange: ImportDateRange) => void;
 }
 
 interface ImportConfig {
@@ -195,8 +196,9 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
     try {
       const result = await api.post<{ ok: boolean; count: number }>(config.endpoint, { records });
       message.success(`${config.label}生产日报已覆盖导入 ${result.count} 条记录`);
+      const dateRange = getImportedDateRange(records);
       handleClose();
-      onImported();
+      if (dateRange) onImported(dateRange);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "导入失败");
     } finally {

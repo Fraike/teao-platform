@@ -57,6 +57,10 @@ function readUsersUnsafe() {
         u.permissions = u.role === "admin" ? [...ALL_PERMISSIONS] : [...DEFAULT_PERMISSIONS];
         migrated = true;
       }
+      if (typeof u.passwordVersion !== "number") {
+        u.passwordVersion = 0;
+        migrated = true;
+      }
     }
     if (migrated) writeUsersUnsafe(users);
 
@@ -110,6 +114,26 @@ function verifyPassword(password, stored) {
   });
 }
 
+function isValidPassword(password) {
+  return typeof password === "string" && password.length >= 6 && /[a-zA-Z]/.test(password) && /\d/.test(password);
+}
+
+function isRecoveryCodeValid(input) {
+  const configured = process.env.ADMIN_RECOVERY_CODE;
+  if (!configured || configured.length < 32 || typeof input !== "string") return false;
+  const expected = Buffer.from(configured);
+  const received = Buffer.from(input);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
+function issueToken(user) {
+  return jwt.sign(
+    { id: user.id, username: user.username, role: user.role, permissions: user.permissions, passwordVersion: user.passwordVersion || 0 },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
 function generateId() {
   return `u_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
 }
@@ -137,6 +161,7 @@ export async function initDefaultAdmin() {
       role: "admin",
       status: "active",
       permissions: [...ALL_PERMISSIONS],
+      passwordVersion: 0,
       createdAt: new Date().toISOString(),
     });
     writeUsersUnsafe(users);
@@ -173,15 +198,44 @@ export async function loginUser({ username, password }) {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return { error: "用户名或密码错误" };
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role, permissions: user.permissions },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const token = issueToken(user);
     return {
       token,
       user: { id: user.id, name: user.name, username: user.username, role: user.role, permissions: user.permissions },
     };
+  });
+}
+
+export function isTokenSessionValid(token) {
+  try {
+    const payload = typeof token === "string" ? jwt.verify(token, JWT_SECRET) : token;
+    const user = readUsersUnsafe().find((item) => item.id === payload.id);
+    return Boolean(user && user.status === "active" && (user.passwordVersion || 0) === (payload.passwordVersion || 0));
+  } catch {
+    return false;
+  }
+}
+
+export async function recoverAdminPassword({ username, recoveryCode, newPassword }) {
+  if (!isRecoveryCodeValid(recoveryCode)) return { error: "管理员恢复信息无效" };
+  if (!isValidPassword(newPassword)) return { error: "密码必须至少6位且包含字母和数字" };
+  return withUsers(async (users) => {
+    const user = users.find((item) => item.username === username && item.role === "admin" && item.status === "active");
+    if (!user) return { error: "管理员恢复信息无效" };
+    user.passwordHash = await hashPassword(newPassword);
+    user.passwordVersion = (user.passwordVersion || 0) + 1;
+    return { ok: true };
+  });
+}
+
+export async function changeAdminPassword({ userId, currentPassword, newPassword }) {
+  if (!isValidPassword(newPassword)) return { error: "密码必须至少6位且包含字母和数字" };
+  return withUsers(async (users) => {
+    const user = users.find((item) => item.id === userId && item.role === "admin" && item.status === "active");
+    if (!user || !(await verifyPassword(currentPassword || "", user.passwordHash))) return { error: "当前密码错误" };
+    user.passwordHash = await hashPassword(newPassword);
+    user.passwordVersion = (user.passwordVersion || 0) + 1;
+    return { ok: true, token: issueToken(user) };
   });
 }
 
@@ -228,6 +282,7 @@ export async function resetUserPassword(id, newPassword) {
       return { error: "密码必须同时包含字母和数字" };
     }
     users[idx].passwordHash = await hashPassword(newPassword);
+    users[idx].passwordVersion = (users[idx].passwordVersion || 0) + 1;
     return { ok: true, reset: true };
   });
 }
@@ -256,11 +311,9 @@ export function refreshToken(oldToken) {
     if (payload.exp && (payload.exp + 86400) < now) {
       return { error: "token已过期超过24小时，请重新登录" };
     }
-    const newToken = jwt.sign(
-      { id: payload.id, username: payload.username, role: payload.role, permissions: payload.permissions },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const user = readUsersUnsafe().find((item) => item.id === payload.id);
+    if (!user || (user.passwordVersion || 0) !== (payload.passwordVersion || 0)) return { error: "登录状态已失效，请重新登录" };
+    const newToken = issueToken(user);
     return { token: newToken };
   } catch {
     return { error: "token无效" };

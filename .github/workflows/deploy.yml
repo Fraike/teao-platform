@@ -3,35 +3,51 @@ name: Deploy to Server
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: teao-platform-production
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
+          package-manager-cache: false
 
       - run: npm ci
+
+      - run: npm ci --prefix server
+
+      - run: npm run lint
+
+      - run: npm test
 
       - run: npm run build
 
       - name: Deploy static files
-        uses: easingthemes/ssh-deploy@v5.1.1
-        env:
+        uses: easingthemes/ssh-deploy@v6.0.3
+        with:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i --delete --exclude='data/' --exclude='server/'"
+          ARGS: "-rlgoDzvc -i"
+          EXCLUDE: "/data/, /server/"
           REMOTE_HOST: 8.134.18.9
           REMOTE_USER: root
           SOURCE: "dist/"
           TARGET: "/var/www/teao-platform/"
 
       - name: Deploy API server
-        uses: easingthemes/ssh-deploy@v5.1.1
-        env:
+        uses: easingthemes/ssh-deploy@v6.0.3
+        with:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i --exclude='production-config.json' --exclude='.env' --exclude='.env.*' --exclude='node_modules/'"
+          ARGS: "-rlgoDzvc -i"
+          EXCLUDE: "production-config.json, .env, .env.*, node_modules/"
           REMOTE_HOST: 8.134.18.9
           REMOTE_USER: root
           SOURCE: "server/"
@@ -40,7 +56,7 @@ jobs:
             install -d -m 700 /etc/teao-platform
             test -s /etc/teao-platform/teao-api.env
             chmod 600 /etc/teao-platform/teao-api.env
-            for key in JWT_SECRET DATA_DIR KINGDEE_CLIENT_ID KINGDEE_CLIENT_SECRET INITIAL_ADMIN_PASSWORD; do
+            for key in JWT_SECRET DATA_DIR KINGDEE_CLIENT_ID KINGDEE_CLIENT_SECRET INITIAL_ADMIN_PASSWORD ADMIN_RECOVERY_CODE; do
               grep -q "^${key}=." /etc/teao-platform/teao-api.env
             done
             cd /var/www/teao-platform/server && npm install --production

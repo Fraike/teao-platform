@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { isTokenSessionValid } from "../services/users.js";
 
 export function jwtAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -8,6 +9,9 @@ export function jwtAuth(req, res, next) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!isTokenSessionValid(payload)) {
+      return res.status(401).json({ error: "登录状态已失效，请重新登录" });
+    }
     req.user = payload;
     next();
   } catch {

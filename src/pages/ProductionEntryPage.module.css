@@ -47,31 +47,17 @@
 /* 纵向滚动 + 横向滚动的统一容器 */
 .content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 
 /* 内容包裹器 — 固定宽度，触发横向滚动条 */
 .scrollWrapper {
-  min-width: 2050px;
-  width: max-content;
+  min-width: 0;
+  width: 100%;
 }
 
-/* 隐藏各表格内部的横向滚动，让父容器统一滚动 */
-.scrollWrapper :global(.ant-table-content),
-.scrollWrapper :global(.ant-table-body) {
-  overflow-x: visible !important;
-}
-.scrollWrapper :global(.ant-table-container) {
-  overflow: visible !important;
-}
-.scrollWrapper :global(.ant-table) {
-  width: auto !important;
-}
-.scrollWrapper table {
-  min-width: 2050px !important;
-  table-layout: auto !important;
-}
 
 .dailyCard {
   margin-bottom: 8px;

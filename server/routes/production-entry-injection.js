@@ -1,5 +1,5 @@
 import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
-import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, replaceInjectionEntries, getHistory } from "../services/production-store.js";
+import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, replaceInjectionEntries, exportInjectionEntries, getHistory } from "../services/production-store.js";
 
 initDB();
 
@@ -33,6 +33,15 @@ export function registerProductionEntryInjectionRoutes(app) {
     } catch (err) {
       console.error("[production-entry] injection import error:", err);
       res.status(err.status || 500).json({ error: err.message || "导入失败" });
+    }
+  });
+
+  app.get("/api/production/injection/entries/export", jwtAuth, requirePermission("production"), (req, res) => {
+    try {
+      const { dateFrom, dateTo, machine, product, search } = req.query;
+      res.json({ ok: true, data: exportInjectionEntries({ dateFrom, dateTo, machine, product, search }) });
+    } catch (err) {
+      res.status(500).json({ error: "导出数据查询失败", detail: err.message });
     }
   });
 

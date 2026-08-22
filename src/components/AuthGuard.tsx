@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Spin, Result, Button } from "antd";
 import { useAuthStore, isSessionExpired } from "../lib/authStore";
 import { clearToken } from "../lib/api";
+import { useTabStore } from "../lib/tabStore";
 import styles from "./AuthGuard.module.css";
 
 interface AuthGuardProps {
@@ -26,6 +27,7 @@ export function AuthGuard({ children, requireAdmin = false, permission }: AuthGu
     // 检查前端会话是否过期（12 小时）
     if (sessionExpired) {
       clearToken();
+      useTabStore.getState().resetForAuthentication();
       useAuthStore.setState({ user: null, initialized: true });
       return;
     }

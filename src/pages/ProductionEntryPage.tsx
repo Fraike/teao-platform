@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Card, Table, Button, DatePicker, Select, Input, Tag,
+  Card, Button, DatePicker, Select, Input, Tag,
   Space, Spin, message, Popconfirm, Tooltip,
   Modal, Form, InputNumber, Popover,
 } from "antd";
@@ -18,11 +18,13 @@ import { PROCESS_FIELDS } from "../types/production";
 import { EntryDrawer } from "../components/production/EntryDrawer";
 import { EditableCell } from "../components/production/EditableCell";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
+import { ResponsiveTable } from "../components/ResponsiveTable";
+import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
+import { getCustomerOptions, getFinishedProductOptions } from "../lib/productionReferenceData";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
 const PAGE_SIZE = 10;
-const CATEGORY_CHENGPIN = "2314557705978701824";
 const PROCESS_COLORS = ["#1677ff", "#52c41a", "#13c2c2", "#2f54eb", "#722ed1", "#fa8c16", "#eb2f96"];
 const STAFF_COLORS = ["blue", "green", "cyan", "orange", "purple", "lime", "gold"];
 
@@ -63,38 +65,13 @@ function BatchText({ text }: { text: string }) {
   );
 }
 
-// CSV 导出
-function exportCSV(groups: DailyGroup[]) {
-  const headers = [
-    "产线", "日期", "客户名称", "规格", "品名", "原材料批号", "工作时间",
-    "生产批号", "订单数量", "计划生产数量", "当天生产数量", "计划达成率",
-    "累计生产", "不良数", "合格率", "PPM", "欠数",
-    ...PROCESS_FIELDS.map((p) => p.label),
-    "填表人", "备注", "编辑人", "创建时间",
-  ];
-  const rows: string[][] = [];
-  for (const g of groups) {
-    for (const r of g.records) {
-      rows.push([
-        r.line, r.date, r.customer, r.spec, r.productName, r.materialBatch, String(r.workHours),
-        r.productionBatch, String(r.orderQty), String(r.planQty), String(r.dailyQty),
-        r.achievementRate != null ? `${(r.achievementRate * 100).toFixed(0)}%` : "",
-        String(r.cumulativeQty), String(r.defects),
-        r.qualifiedRate != null ? `${(r.qualifiedRate * 100).toFixed(1)}%` : "",
-        r.ppm != null ? String(r.ppm) : "", String(r.backorder),
-        r.oilInjection, r.rubberRing, r.capping, r.shaftCore, r.ultrasonic, r.testing, r.gear,
-        r.filler, r.remark, r.updatedBy, r.createdAt,
-      ]);
-    }
-  }
-  const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))].join("\n");
-  const BOM = "\uFEFF";
-  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `生产日报_${dayjs().format("YYYY-MM-DD")}.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
+const ASSEMBLY_DETAIL_COLUMNS: ExportColumn[] = [
+  { key: "date", title: "日期" }, { key: "line", title: "产线" }, { key: "customer", title: "客户名称" }, { key: "spec", title: "规格" }, { key: "productName", title: "品名" }, { key: "materialBatch", title: "原材料批号" }, { key: "workHours", title: "工时" }, { key: "productionBatch", title: "生产批号" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "planQty", title: "计划生产", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "ppm", title: "PPM", format: "#,##0" }, { key: "backorder", title: "欠数", format: "#,##0" },
+  ...PROCESS_FIELDS.map((field) => ({ key: field.key, title: field.label })), { key: "filler", title: "填表人" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
+];
+const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
+  { key: "date", title: "日期" }, { key: "lines", title: "产线数" }, { key: "totalOrderQty", title: "订单数量", format: "#,##0" }, { key: "totalPlanQty", title: "计划生产", format: "#,##0" }, { key: "totalDailyQty", title: "当天生产", format: "#,##0" }, { key: "totalCumulativeQty", title: "累计生产", format: "#,##0" }, { key: "totalDefects", title: "不良数", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "totalBackorder", title: "欠数", format: "#,##0" },
+];
 
 export function ProductionEntryPage() {
   // ---- 所有筛选条件使用本地状态，点击"搜索"才提交 ----
@@ -112,6 +89,7 @@ export function ProductionEntryPage() {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ProductionRecord | null>(null);
@@ -129,20 +107,19 @@ export function ProductionEntryPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState<AuditLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyCacheRef = useRef(new Map<number, AuditLog[]>());
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   // 加载关联数据
   useEffect(() => {
     Promise.allSettled([
-      api.get<{ ok: boolean; data: Array<{ name: string; spec?: string }> }>(`/api/kingdee/materials?category=${CATEGORY_CHENGPIN}`),
-      api.get<{ ok: boolean; data: Array<{ name: string }> }>("/api/kingdee/customers"),
+      getFinishedProductOptions(),
+      getCustomerOptions(),
       api.get<{ ok: boolean; data: string[] }>("/api/production/lines"),
     ]).then(([mRes, cRes, lRes]) => {
-      if (mRes.status === "fulfilled" && mRes.value.ok)
-        setMaterials(mRes.value.data.map((m) => ({ value: m.name, label: m.name, spec: m.spec || "" })));
-      if (cRes.status === "fulfilled" && cRes.value.ok)
-        setCustomers(cRes.value.data.map((c) => ({ value: c.name, label: c.name })));
+      if (mRes.status === "fulfilled") setMaterials(mRes.value);
+      if (cRes.status === "fulfilled") setCustomers(cRes.value);
       if (lRes.status === "fulfilled" && lRes.value.ok)
         setLines(lRes.value.data.filter((l: string) => l && !l.includes("组装线")));
     });
@@ -158,6 +135,18 @@ export function ProductionEntryPage() {
     const dt = new Date().toISOString().slice(0, 10);
     setFDateFrom(df); setFDateTo(dt); setFLine(null); setFProduct(""); setFCustomer(""); setFSearch("");
     setActiveFilters({ dateFrom: df, dateTo: dt, line: null, product: "", customer: "", search: "" });
+  };
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(activeFilters).forEach(([key, value]) => { if (value) params.set(key, value); });
+      const response = await api.get<{ ok: boolean; data: { groups: DailyGroup[] } }>(`/api/production/entries/export?${params.toString()}`);
+      await exportProductionExcel(`装配部生产日报_${activeFilters.dateFrom}_${activeFilters.dateTo}.xlsx`, response.data.groups, ASSEMBLY_DETAIL_COLUMNS, ASSEMBLY_SUMMARY_COLUMNS);
+      message.success(`已导出 ${response.data.groups.length} 天生产日报`);
+    } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
+    finally { setExporting(false); }
   };
 
   const fetchData = useCallback(async (append: boolean) => {
@@ -184,35 +173,39 @@ export function ProductionEntryPage() {
   // activeFilters 变化 → 重新加载
   useEffect(() => { void Promise.resolve().then(() => { offsetRef.current = 0; return fetchData(false); }); }, [fetchData]);
 
-  const cellSave = async (rec: ProductionRecord, field: keyof ProductionRecord, val: string | number) => {
+  const cellSave = useCallback(async (rec: ProductionRecord, field: keyof ProductionRecord, val: string | number) => {
     try {
       await api.put(`/api/production/entries/${rec.id}`, { [field]: val });
+      historyCacheRef.current.delete(rec.id);
       setGroups((prev) => prev.map((g) => ({
         ...g, records: g.records.map((r) => r.id === rec.id ? { ...r, [field]: val } : r),
       })));
     } catch { message.error("更新失败"); }
-  };
+  }, []);
 
-  const add = (date?: string) => { setEditingRecord(null); setCopyFromRecord(null); setDefaultDate(date || fDateTo); setDrawerOpen(true); };
-  const edit = (rec: ProductionRecord) => { setEditingRecord(rec); setCopyFromRecord(null); setDefaultDate(""); setDrawerOpen(true); };
-  const copy = (rec: ProductionRecord) => { setEditingRecord(null); setCopyFromRecord(rec); setDefaultDate(""); setDrawerOpen(true); };
-  const del = async (id: number) => {
-    try { await api.delete(`/api/production/entries/${id}`); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
+  const add = useCallback((date?: string) => { setEditingRecord(null); setCopyFromRecord(null); setDefaultDate(date || fDateTo); setDrawerOpen(true); }, [fDateTo]);
+  const edit = useCallback((rec: ProductionRecord) => { setEditingRecord(rec); setCopyFromRecord(null); setDefaultDate(""); setDrawerOpen(true); }, []);
+  const copy = useCallback((rec: ProductionRecord) => { setEditingRecord(null); setCopyFromRecord(rec); setDefaultDate(""); setDrawerOpen(true); }, []);
+  const del = useCallback(async (id: number) => {
+    try { await api.delete(`/api/production/entries/${id}`); historyCacheRef.current.delete(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
     catch { message.error("删除失败"); }
-  };
+  }, [fetchData]);
   const onDrawerClose = (saved: boolean) => {
     setDrawerOpen(false); setEditingRecord(null); setCopyFromRecord(null);
-    if (saved) { offsetRef.current = 0; fetchData(false); }
+    if (saved) { historyCacheRef.current.clear(); offsetRef.current = 0; fetchData(false); }
   };
-  const showHistory = async (id: number) => {
+  const showHistory = useCallback(async (id: number) => {
     setHistoryOpen(true); setHistoryLoading(true); setHistoryData([]);
+    const cached = historyCacheRef.current.get(id);
+    if (cached) { setHistoryData(cached); setHistoryLoading(false); return; }
     try {
       const tk = getToken();
       const r = await fetch(`/api/production/entries/${id}/history`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
-      const d = await r.json(); if (d.ok) setHistoryData(d.data);
+      const d = await r.json();
+      if (d.ok) { historyCacheRef.current.set(id, d.data); setHistoryData(d.data); }
     } catch { message.error("加载失败"); }
     finally { setHistoryLoading(false); }
-  };
+  }, []);
   const toggleQuick = (date: string) => { setQuickDate((prev) => ({ ...prev, [date]: !prev[date] })); quickForm.resetFields(); };
   const quickSave = async (date: string) => {
     try {
@@ -243,7 +236,7 @@ export function ProductionEntryPage() {
 
   const rowCls = (_: unknown, i: number) => i % 2 === 0 ? "table-row-even" : "table-row-odd";
 
-  const columns: ColumnsType<ProductionRecord & { key: number }> = [
+  const columns = useMemo<ColumnsType<ProductionRecord & { key: number }>>(() => [
     { title: "产线", dataIndex: "line", key: "ln", width: 42, fixed: "left",
       render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "dt", width: 76, fixed: "left",
@@ -316,7 +309,7 @@ export function ProductionEntryPage() {
         </Space>
       ),
     },
-  ];
+  ], [cellSave, copy, del, edit, showHistory]);
 
   return (
     <div className={styles.page}>
@@ -343,7 +336,7 @@ export function ProductionEntryPage() {
           <Button size="middle" onClick={doReset}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
-          <Tooltip title="导出 CSV"><Button size="small" icon={<DownloadOutlined />} onClick={() => exportCSV(groups)} disabled={groups.length === 0} /></Tooltip>
+          <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => add()}>新增录入</Button>
@@ -388,10 +381,10 @@ export function ProductionEntryPage() {
                   }
                   size="small"
                 >
-                  <Table
+                  <ResponsiveTable
                     columns={columns}
                     dataSource={group.records.map((r) => ({ ...r, key: r.id }))}
-                    pagination={false} size="small" scroll={{ x: 2050 }} bordered
+                    pagination={false} size="small" minWidth={2050} bordered
                     rowClassName={rowCls} locale={{ emptyText: "暂无数据" }}
                   />
 
@@ -438,7 +431,17 @@ export function ProductionEntryPage() {
         department="assembly"
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={() => { offsetRef.current = 0; void fetchData(false); }}
+        onImported={({ dateFrom, dateTo }) => {
+          setFDateFrom(dateFrom);
+          setFDateTo(dateTo);
+          setActiveFilters({ dateFrom, dateTo, line: null, product: "", customer: "", search: "" });
+          setFLine(null);
+          setFProduct("");
+          setFCustomer("");
+          setFSearch("");
+          historyCacheRef.current.clear();
+          offsetRef.current = 0;
+        }}
       />
 
       <Modal title="修改历史" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={700}>

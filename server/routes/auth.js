@@ -1,8 +1,9 @@
-import { registerUser, loginUser, getUserById, refreshToken } from "../services/users.js";
-import { jwtAuth } from "../middleware/jwt-auth.js";
+import { registerUser, loginUser, getUserById, refreshToken, recoverAdminPassword, changeAdminPassword } from "../services/users.js";
+import { jwtAuth, adminAuth } from "../middleware/jwt-auth.js";
 import { createRateLimiter } from "../middleware/rate-limit.js";
 
 const loginLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, maxAttempts: 10, keyPrefix: "login" });
+const recoveryLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 5, keyPrefix: "admin-recovery" });
 
 export function registerAuthRoutes(app) {
   app.post("/api/auth/login", async (req, res) => {
@@ -47,6 +48,25 @@ export function registerAuthRoutes(app) {
       return res.status(400).json({ error: result.error });
     }
     res.json({ ok: true, message: "申请已提交，等待管理员审核" });
+  });
+
+  app.post("/api/auth/admin-recover-password", async (req, res) => {
+    const { username, recoveryCode, newPassword } = req.body || {};
+    const result = await recoverAdminPassword({ username, recoveryCode, newPassword });
+    if (result.error) {
+      const limited = recoveryLimiter.recordFailure(req);
+      if (limited) return res.status(429).json({ error: "尝试次数过多，请15分钟后再试" });
+      return res.status(400).json({ error: "管理员恢复信息无效" });
+    }
+    recoveryLimiter.clear(req);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/change-password", jwtAuth, adminAuth, async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    const result = await changeAdminPassword({ userId: req.user.id, currentPassword, newPassword });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
   });
 
   app.get("/api/auth/me", jwtAuth, (req, res) => {

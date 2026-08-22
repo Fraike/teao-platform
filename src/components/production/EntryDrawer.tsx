@@ -6,6 +6,7 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { api } from "../../lib/api";
+import { getCustomerOptions, getEmployeeOptions, getFinishedProductOptions } from "../../lib/productionReferenceData";
 import { useAuthStore } from "../../lib/authStore";
 import type { ProductionRecord } from "../../types/production";
 import { ASSEMBLY_LINES, PROCESS_FIELDS } from "../../types/production";
@@ -61,23 +62,20 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
   const isCopy = !record && !!copyFrom;
 
   useEffect(() => {
-    if (!open) return;
-    const resetTimer = window.setTimeout(() => setDataLoaded(false), 0);
+    let cancelled = false;
     Promise.allSettled([
-      api.get<{ ok: boolean; data: Array<{ name: string; spec?: string }> }>("/api/kingdee/materials?category=2314557705978701824"),
-      api.get<{ ok: boolean; data: Array<{ name: string }> }>("/api/kingdee/customers"),
-      api.get<Array<{ name: string }>>("/api/employees?status=active"),
+      getFinishedProductOptions(),
+      getCustomerOptions(),
+      getEmployeeOptions(),
     ]).then(([mRes, cRes, eRes]) => {
-      if (mRes.status === "fulfilled" && mRes.value.ok)
-        setMaterials(mRes.value.data.map((m) => ({ value: m.name, label: m.name, spec: m.spec || "" })));
-      if (cRes.status === "fulfilled" && cRes.value.ok)
-        setCustomers(cRes.value.data.map((c) => ({ value: c.name, label: c.name })));
-      if (eRes.status === "fulfilled" && Array.isArray(eRes.value))
-        setEmployees(eRes.value.map((e) => ({ value: e.name, label: e.name })));
+      if (cancelled) return;
+      if (mRes.status === "fulfilled") setMaterials(mRes.value);
+      if (cRes.status === "fulfilled") setCustomers(cRes.value);
+      if (eRes.status === "fulfilled") setEmployees(eRes.value);
       setDataLoaded(true);
     });
-    return () => window.clearTimeout(resetTimer);
-  }, [open]);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -190,7 +188,6 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
           <Button type="primary" size="large" onClick={handleSubmit} loading={loading}>保存</Button>
         </Space>
       }
-      destroyOnClose
     >
       <Form form={form} layout="vertical" size="middle" style={{ maxHeight: "65vh", overflowY: "auto", paddingRight: 8 }}>
         {/* 基本信息 — 2列 */}

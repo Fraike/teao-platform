@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Card, Row, Col, Typography, DatePicker, Tabs, Table, Button,
+  Card, Row, Col, Typography, DatePicker, Tabs, Button,
   Statistic, Spin, message, Tag, Space,
 } from "antd";
 import {
@@ -9,6 +9,7 @@ import {
 import dayjs from "dayjs";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title } = Typography;
 
@@ -244,7 +245,7 @@ export function ProductionReportPage() {
   const inj = report?.injection.summary;
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px" : "24px" }}>
+    <div style={{ maxWidth: "none", margin: 0, padding: isMobile ? "16px" : "24px" }}>
       {/* Header */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "flex-start",
@@ -388,12 +389,12 @@ export function ProductionReportPage() {
                     </Col>
                   </Row>
                 </Card>
-                <Table
+                <ResponsiveTable
                   columns={assemblyColumns}
                   dataSource={assemblyDataSource}
                   pagination={false}
                   size="small"
-                  scroll={{ x: 1300 }}
+                  minWidth={1300}
                   bordered
                 />
               </Tabs.TabPane>
@@ -422,12 +423,12 @@ export function ProductionReportPage() {
                     </Col>
                   </Row>
                 </Card>
-                <Table
+                <ResponsiveTable
                   columns={injectionColumns}
                   dataSource={injectionDataSource}
                   pagination={false}
                   size="small"
-                  scroll={{ x: 1200 }}
+                  minWidth={1200}
                   bordered
                 />
               </Tabs.TabPane>

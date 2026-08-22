@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types test/tier-pricing.test.ts && node --experimental-strip-types test/quotation-ui-config.test.ts && node test/production-entry.test.js && node test/kingdee-cache.test.js && node test/users-production.test.js && node test/quotation-store.test.js",
+    "test": "node --experimental-strip-types test/tier-pricing.test.ts && node --experimental-strip-types test/quotation-ui-config.test.ts && node --experimental-strip-types test/navigation.test.ts && node --experimental-strip-types test/sidebar-layout.test.ts && node --experimental-strip-types test/employee-import.test.ts && node --experimental-strip-types test/production-import.test.ts && node --experimental-strip-types test/production-excel.test.ts && node --experimental-strip-types test/responsive-table.test.ts && node test/production-entry.test.js && node test/kingdee-cache.test.js && node test/users-production.test.js && node test/admin-password-recovery.test.js && node test/quotation-store.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

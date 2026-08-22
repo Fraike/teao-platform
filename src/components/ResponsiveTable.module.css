@@ -1,0 +1,10 @@
+.tableShell {
+  width: 100%;
+  min-width: 0;
+}
+
+.tableShell :global(.ant-table-wrapper),
+.tableShell :global(.ant-spin-nested-loading),
+.tableShell :global(.ant-spin-container) {
+  width: 100%;
+}

@@ -9,10 +9,10 @@ process.env.DATA_DIR = dataDirectory;
 process.env.JWT_SECRET = "01234567890123456789012345678901";
 
 const { readKingdeeCache, writeKingdeeCache } = await import("../server/services/kingdee-cache.js");
+const { initDefaultAdmin, loginUser } = await import("../server/services/users.js");
 const { registerKingdeeRoutes } = await import("../server/routes/kingdee.js");
 const require = createRequire(import.meta.url);
 const express = require("../server/node_modules/express");
-const jwt = require("../server/node_modules/jsonwebtoken");
 
 try {
   fs.writeFileSync(
@@ -38,12 +38,15 @@ try {
 
   const app = express();
   registerKingdeeRoutes(app);
+  await initDefaultAdmin();
+  const login = await loginUser({ username: "admin", password: "admin123" });
+  assert.ok(login.token);
   const server = await new Promise((resolve) => {
     const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
   });
   try {
     const port = server.address().port;
-    const token = jwt.sign({ role: "admin", permissions: ["basic_data"] }, process.env.JWT_SECRET);
+    const token = login.token;
     const response = await fetch(`http://127.0.0.1:${port}/api/kingdee/materials?category=group-a&search=one`, {
       headers: { Authorization: `Bearer ${token}` },
     });

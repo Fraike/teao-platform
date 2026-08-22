@@ -62,6 +62,8 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_assembly_line ON assembly_records(line);
     CREATE INDEX IF NOT EXISTS idx_assembly_product ON assembly_records(product_name);
     CREATE INDEX IF NOT EXISTS idx_assembly_customer ON assembly_records(customer);
+    CREATE INDEX IF NOT EXISTS idx_assembly_date_line ON assembly_records(date, line);
+    CREATE INDEX IF NOT EXISTS idx_assembly_date_customer ON assembly_records(date, customer);
 
     CREATE TABLE IF NOT EXISTS injection_records (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +89,7 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS idx_injection_machine ON injection_records(machine);
     CREATE INDEX IF NOT EXISTS idx_injection_product ON injection_records(product_name);
     CREATE INDEX IF NOT EXISTS idx_injection_shift ON injection_records(shift);
+    CREATE INDEX IF NOT EXISTS idx_injection_date_machine ON injection_records(date, machine);
 
     CREATE TABLE IF NOT EXISTS audit_log (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -296,6 +299,10 @@ export function queryEntries({
   return { groups, total, totalGroups, hasMore: offset + limit < totalGroups };
 }
 
+export function exportAssemblyEntries(filters = {}) {
+  return queryEntries({ ...filters, limit: 100000, offset: 0 });
+}
+
 export function createEntry(data, user) {
   const d = getDB();
   const now = new Date().toISOString();
@@ -502,6 +509,10 @@ export function queryInjectionEntries({ dateFrom, dateTo, machine, product, sear
   for (const row of allRows) { const dt = row.date; if (!groupMap.has(dt)) groupMap.set(dt, []); groupMap.get(dt).push(injectionRow(row)); }
   const groups = dates.map((date) => { const records = groupMap.get(date) || []; return { date, records, summary: injectionSummary(records) }; });
   return { groups, total, totalGroups, hasMore: offset + limit < totalGroups };
+}
+
+export function exportInjectionEntries(filters = {}) {
+  return queryInjectionEntries({ ...filters, limit: 100000, offset: 0 });
 }
 
 export function createInjectionEntry(data, user) {

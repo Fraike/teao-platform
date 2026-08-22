@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Table, Input, Typography, Spin, Empty, message, Tag } from "antd";
+import { Input, Typography, Spin, Empty, message, Tag } from "antd";
 import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import { getCache, setCache } from "../lib/kingdeeCache";
 import type { KingdeeCustomer } from "../types/kingdee";
 import styles from "./DataTablePage.module.css";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title, Text } = Typography;
 
@@ -116,12 +117,13 @@ export function CustomerDataPage() {
         ) : filtered.length === 0 ? (
           <Empty description="没有匹配的客户" />
         ) : (
-          <Table
+          <ResponsiveTable
             columns={columns}
             dataSource={filtered}
             rowKey="id"
             size="small"
-            scroll={{ x: 800, y: "calc(100vh - 340px)" }}
+            minWidth={800}
+            scroll={{ y: "calc(100vh - 340px)" }}
             pagination={{
               defaultPageSize: 50,
               showSizeChanger: true,

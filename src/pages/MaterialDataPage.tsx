@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Table, Input, Typography, Spin, Empty, message } from "antd";
+import { Input, Typography, Spin, Empty, message } from "antd";
 import { SearchOutlined, ReloadOutlined, RightOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import { getCache, setCache } from "../lib/kingdeeCache";
 import type { KingdeeMaterial, KingdeeCategory } from "../types/kingdee";
 import styles from "./MaterialDataPage.module.css";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title, Text } = Typography;
 
@@ -309,13 +310,14 @@ export function MaterialDataPage() {
             </div>
           ) : (
             <div className={styles.tableWrap}>
-              <Table
+              <ResponsiveTable
                 columns={columns}
                 dataSource={filteredMaterials}
                 rowKey="id"
                 loading={loading}
                 size="small"
-                scroll={{ x: 1000, y: "calc(100vh - 280px)" }}
+                minWidth={1000}
+                scroll={{ y: "calc(100vh - 280px)" }}
                 pagination={{
                   defaultPageSize: 50,
                   showSizeChanger: true,

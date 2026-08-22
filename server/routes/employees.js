@@ -1,6 +1,6 @@
 import {
   listEmployees, getEmployee, createEmployee,
-  updateEmployee, resignEmployee, getContractReminders,
+  updateEmployee, resignEmployee, getContractReminders, replaceEmployees,
 } from "../services/employees.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 
@@ -18,6 +18,15 @@ export function registerEmployeeRoutes(app) {
     const emp = getEmployee(req.params.id);
     if (!emp) return res.status(404).json({ error: "员工不存在" });
     res.json(emp);
+  });
+
+  app.post("/api/employees/import", jwtAuth, async (req, res) => {
+    try {
+      const result = await replaceEmployees(req.body?.records);
+      res.json({ ok: true, data: result });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message || "导入失败" });
+    }
   });
 
   app.post("/api/employees", jwtAuth, async (req, res) => {

@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import {
-  Table, Button, Tag, Input, Select, Space, Typography,
+  Button, Tag, Input, Select, Space, Typography,
   Popconfirm, message, Tabs, Alert,
 } from "antd";
 import {
-  PlusOutlined, SearchOutlined, ExportOutlined,
+  PlusOutlined, SearchOutlined, ExportOutlined, UploadOutlined,
 } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import type { Employee } from "../types/employee";
 import { EmployeeFormModal } from "../components/EmployeeFormModal";
+import { EmployeeImportModal } from "../components/EmployeeImportModal";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 import styles from "./EmployeePage.module.css";
 
 const { Title } = Typography;
@@ -27,6 +29,7 @@ export function EmployeePage() {
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [reminders, setReminders] = useState<{ expired: number; expiring: number } | null>(null);
 
   useEffect(() => {
@@ -180,6 +183,7 @@ export function EmployeePage() {
         <Title level={4} style={{ margin: 0 }}>员工管理</Title>
         <Space>
           <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增员工
           </Button>
@@ -227,12 +231,12 @@ export function EmployeePage() {
         />
       </div>
 
-      <Table
+      <ResponsiveTable
         dataSource={filtered}
         columns={columns}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1400 }}
+        minWidth={1400}
         size="middle"
         pagination={{ pageSize: 50, showSizeChanger: false, showTotal: (t) => `共 ${t} 人` }}
       />
@@ -242,6 +246,14 @@ export function EmployeePage() {
         employee={editingEmployee}
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
+      />
+      <EmployeeImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => {
+          setImportOpen(false);
+          void fetchEmployees();
+        }}
       />
     </div>
   );

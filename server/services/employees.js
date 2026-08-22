@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createMutex } from "../lib/mutex.js";
+import { validateEmployeeImportRecords } from "./employee-import.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -82,7 +83,48 @@ function readEmployeesUnsafe() {
 function writeEmployeesUnsafe(employees) {
   const dir = path.dirname(EMPLOYEES_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(EMPLOYEES_FILE, JSON.stringify({ employees }, null, 2), "utf-8");
+  const temporaryFile = `${EMPLOYEES_FILE}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(temporaryFile, JSON.stringify({ employees }, null, 2), "utf-8");
+    fs.renameSync(temporaryFile, EMPLOYEES_FILE);
+  } finally {
+    if (fs.existsSync(temporaryFile)) fs.unlinkSync(temporaryFile);
+  }
+}
+
+function backupEmployeesUnsafe(employees) {
+  if (employees.length === 0) return null;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupFile = path.join(DATA_DIR, `employees-backup-${stamp}.json`);
+  fs.writeFileSync(backupFile, JSON.stringify({ employees }, null, 2), "utf-8");
+  return path.basename(backupFile);
+}
+
+function normalizeImportedEmployee(data) {
+  return normalizeEmployee({
+    id: generateId(),
+    employeeNo: String(data.employeeNo).trim().toUpperCase(),
+    name: String(data.name).trim(),
+    gender: data.gender,
+    idCard: String(data.idCard).trim().toUpperCase(),
+    birthDate: data.birthDate || "",
+    phone: String(data.phone).trim(),
+    department: String(data.department).trim(),
+    position: String(data.position).trim(),
+    education: data.education || "",
+    address: data.address || "",
+    entryDate: data.entryDate,
+    status: "active",
+    dormitory: Boolean(data.dormitory),
+    signedContract: Boolean(data.signedContract),
+    contractType: data.contractType || "",
+    contractStartDate: data.contractStartDate || "",
+    contractEndDate: data.contractEndDate || "",
+    idCardExpiry: data.idCardExpiry || "",
+    remark: data.remark || "",
+    createdAt: today(),
+    updatedAt: today(),
+  });
 }
 
 // Thread-safe wrappers
@@ -143,6 +185,22 @@ export async function createEmployee(data) {
     };
     employees.push(normalizeEmployee(emp));
     return normalizeEmployee(emp);
+  });
+}
+
+export async function replaceEmployees(records) {
+  const errors = validateEmployeeImportRecords(records);
+  if (errors.length > 0) {
+    const error = new Error(errors.join("；"));
+    error.status = 400;
+    throw error;
+  }
+
+  return withEmployees(async (employees) => {
+    const backupFile = backupEmployeesUnsafe(employees);
+    const imported = records.map(normalizeImportedEmployee);
+    employees.splice(0, employees.length, ...imported);
+    return { count: imported.length, backupFile };
   });
 }
 

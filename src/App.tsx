@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs } from "antd";
+import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip } from "antd";
 import {
   HomeOutlined,
   UserOutlined,
@@ -18,6 +18,10 @@ import { useIsMobile } from "./lib/useIsMobile";
 import { AuthGuard } from "./components/AuthGuard";
 import { useAuthStore } from "./lib/authStore";
 import { useTabStore } from "./lib/tabStore";
+import { AdminPasswordModal } from "./components/AdminPasswordModal";
+import { getNavigationItem, getVisibleMenuItems, NAVIGATION_GROUPS } from "./lib/navigation";
+import { getSidebarLayout } from "./lib/sidebarLayout";
+import styles from "./App.module.css";
 import "./components/PageLoader.css";
 
 // ---- public pages (no header) ----
@@ -45,99 +49,14 @@ const CustomerProductPage = lazy(() => import("./pages/CustomerProductPage").the
 const { Header, Sider, Content, Footer } = Layout;
 const { Text } = Typography;
 
-interface NavChild {
-  key: string;
-  label: string;
-}
-
-interface NavItem {
-  key: string;
-  icon: React.ReactNode;
-  label: string;
-  permission?: string;
-  children?: NavChild[];
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { key: "/", icon: <HomeOutlined />, label: "首页" },
-  {
-    key: "business",
-    icon: <ShopOutlined />,
-    label: "业务部",
-    permission: "business",
-    children: [
-      { key: "/quotation", label: "国内报价" },
-      { key: "/quotation-intl", label: "国际报价" },
-      { key: "/quotation-management", label: "报价管理" },
-      { key: "/cost", label: "成本计算" },
-    ],
-  },
-  {
-    key: "production",
-    icon: <ToolOutlined />,
-    label: "装配部",
-    permission: "production",
-    children: [
-      { key: "/production-report", label: "生产日报汇总" },
-      { key: "/production-entry", label: "生产日报录入" },
-    ],
-  },
-  {
-    key: "injection",
-    icon: <ToolOutlined />,
-    label: "注塑部",
-    permission: "production",
-    children: [
-      { key: "/production-entry-injection", label: "生产日报录入" },
-    ],
-  },
-  {
-    key: "hr",
-    icon: <TeamOutlined />,
-    label: "人事",
-    permission: "hr",
-    children: [
-      { key: "/employees", label: "员工管理" },
-    ],
-  },
-  {
-    key: "tools",
-    icon: <AppstoreOutlined />,
-    label: "公共工具",
-    permission: "tools",
-    children: [
-      { key: "/process", label: "流程查阅" },
-    ],
-  },
-  {
-    key: "basic-data",
-    icon: <DatabaseOutlined />,
-    label: "基础资料",
-    permission: "basic_data",
-    children: [
-      { key: "/materials", label: "商品资料" },
-      { key: "/customers", label: "客户资料" },
-      { key: "/suppliers", label: "供应商资料" },
-      { key: "/customer-products", label: "客户商品资料" },
-    ],
-  },
-];
-
-// 路由 → 显示名称映射
-const ROUTE_LABEL_MAP: Record<string, string> = {};
-for (const item of NAV_ITEMS) {
-  if (item.children) {
-    for (const child of item.children) {
-      ROUTE_LABEL_MAP[child.key] = child.label;
-    }
-  } else {
-    ROUTE_LABEL_MAP[item.key] = item.label;
-  }
-}
-
-const ALL_ROUTE_KEYS: string[] = NAV_ITEMS.flatMap((item) =>
-  item.children ? item.children.map((c) => c.key) : [item.key]
-);
+const NAV_GROUP_ICONS: Record<string, React.ReactNode> = {
+  business: <ShopOutlined />,
+  production: <ToolOutlined />,
+  injection: <ToolOutlined />,
+  hr: <TeamOutlined />,
+  tools: <AppstoreOutlined />,
+  "basic-data": <DatabaseOutlined />,
+};
 
 function PageLoader() {
   return <div className="page-loader" />;
@@ -148,6 +67,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { tabs, activeKey, openTab, closeTab, closeOthers, setActiveKey } = useTabStore();
@@ -161,8 +81,10 @@ function AppLayout() {
   // 路由变化 → 同步标签
   useEffect(() => {
     const pathname = location.pathname;
-    const label = ROUTE_LABEL_MAP[pathname] || pathname;
-    openTab({ key: pathname, label });
+    const item = getNavigationItem(pathname);
+    if (!item) return;
+    document.title = `${item.title} | 特澳科技后台`;
+    openTab({ key: pathname, label: item.title });
   }, [location.pathname, openTab]);
 
   // 标签 activeKey 变化 → 导航
@@ -186,119 +108,62 @@ function AppLayout() {
     }
   };
 
-  // 可见的导航项
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (!item.permission) return true;
-    if (user?.role === "admin") return true;
-    return user?.permissions?.includes(item.permission);
-  });
-
   // 构建 antd Menu items
   const menuItems = useMemo(() => {
-    return visibleNavItems.map((item) => {
-      if (item.children) {
-        return {
-          key: item.key,
-          icon: item.icon,
-          label: item.label,
-          children: item.children.map((child) => ({
-            key: child.key,
-            label: child.label,
-          })),
-        };
-      }
-      return {
-        key: item.key,
-        icon: item.icon,
-        label: item.label,
+    const visibleItems = getVisibleMenuItems(user);
+    const home = visibleItems.find((item) => item.key === "/");
+    const createMenuLabel = (title: string) => (
+      <Tooltip title={collapsed ? title : undefined} placement="right">
+        <span className={styles.menuLabel}>{title}</span>
+      </Tooltip>
+    );
+    const groupedItems = NAVIGATION_GROUPS.map((group) => {
+      const children = visibleItems.filter((item) => item.group === group.key);
+      return children.length === 0 ? null : {
+        key: group.key,
+        icon: NAV_GROUP_ICONS[group.key],
+        label: group.title,
+        children: children.map((item) => ({ key: item.key, label: createMenuLabel(item.title) })),
       };
-    });
-  }, [visibleNavItems]);
+    }).filter(Boolean);
+    return home ? [{ key: home.key, icon: <HomeOutlined />, label: createMenuLabel(home.title) }, ...groupedItems] : groupedItems;
+  }, [collapsed, user]);
 
   // 找到当前选中菜单的 openKey（用于展开子菜单）
   const selectedKey = (() => {
-    const pathname = location.pathname;
-    for (const key of ALL_ROUTE_KEYS) {
-      if (key === "/" && pathname === "/") return "/";
-      if (key !== "/" && (pathname === key || pathname.startsWith(key + "/"))) return key;
-    }
-    return "/";
+    const item = getNavigationItem(location.pathname);
+    if (!item || item.key === "/") return "/";
+    return item.menu ? item.key : "/materials";
   })();
 
   const defaultOpenKeys = (() => {
-    for (const item of NAV_ITEMS) {
-      if (item.children?.some((c) => c.key === selectedKey)) {
-        return [item.key];
-      }
-    }
-    return [];
+    const group = getVisibleMenuItems(user).find((item) => item.key === selectedKey)?.group;
+    return NAVIGATION_GROUPS.filter((item) => item.key === group).map((item) => item.key);
   })();
 
-  const siderWidth = 148;
+  const sidebarLayout = getSidebarLayout(isMobile);
 
   return (
     <Layout style={{ height: "100vh", overflow: "hidden" }}>
       {/* 左侧菜单 */}
       <Sider
-        width={siderWidth}
+        width={sidebarLayout.expandedWidth}
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
         trigger={null}
-        style={{
-          background: "#001529",
-          borderRight: "1px solid rgba(255,255,255,0.06)",
-        }}
+        className={styles.sider}
         breakpoint="lg"
-        collapsedWidth={isMobile ? 0 : 64}
+        collapsedWidth={sidebarLayout.collapsedWidth}
       >
         {/* Logo */}
-        <div
-          style={{
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            padding: collapsed ? 0 : "0 14px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "#1677ff",
-              borderRadius: 6,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 16,
-              flexShrink: 0,
-            }}
-          >
-            T
-          </div>
+        <div className={`${styles.logo} ${collapsed ? styles.logoCollapsed : ""}`}>
+          <div className={styles.logoMark}>T</div>
           {!collapsed && (
-            <Text strong style={{ color: "#fff", fontSize: 13, marginLeft: 10, whiteSpace: "nowrap" }}>
-              特澳科技后台
-            </Text>
+            <Text className={styles.logoTitle}>特澳科技后台</Text>
           )}
         </div>
 
-        <style>{`
-          .ant-menu-dark .ant-menu-item,
-          .ant-menu-dark .ant-menu-submenu-title {
-            font-size: 13px !important;
-            padding-left: 16px !important;
-            height: 36px !important;
-            line-height: 36px !important;
-            margin: 0 !important;
-          }
-          .ant-menu-dark .ant-menu-submenu-title { padding-left: 16px !important; }
-          .ant-menu-dark .ant-menu-sub .ant-menu-item { padding-left: 32px !important; font-size: 12px !important; height: 32px !important; line-height: 32px !important; }
-        `}</style>
         <Menu
           theme="dark"
           mode="inline"
@@ -306,13 +171,12 @@ function AppLayout() {
           defaultOpenKeys={defaultOpenKeys}
           items={menuItems}
           onClick={({ key }) => {
-            if (ALL_ROUTE_KEYS.includes(key)) {
-              const label = ROUTE_LABEL_MAP[key] || key;
-              openTab({ key, label });
-              navigate(key);
-            }
+            const item = getNavigationItem(key);
+            if (!item?.menu) return;
+            openTab({ key, label: item.title });
+            navigate(key);
           }}
-          style={{ borderRight: 0 }}
+          className={styles.menu}
         />
       </Sider>
 
@@ -382,6 +246,7 @@ function AppLayout() {
                   ...(user.role === "admin"
                     ? [{ key: "admin", icon: <SettingOutlined />, label: <Link to="/admin">用户管理</Link> }]
                     : []),
+                  ...(user.role === "admin" ? [{ key: "change-password", label: "修改我的密码", onClick: () => setPasswordModalOpen(true) }] : []),
                   { key: "divider", type: "divider" as const },
                   {
                     key: "logout",
@@ -402,6 +267,7 @@ function AppLayout() {
             </Dropdown>
           )}
         </Header>
+        <AdminPasswordModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} />
 
         {/* 内容区 */}
         <Content style={{ background: "#f5f5f5", overflow: "auto" }}>

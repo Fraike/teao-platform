@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Card, Table, Button, DatePicker, Select, Input, Tag,
+  Card, Button, DatePicker, Select, Input, Tag,
   Space, Spin, message, Popconfirm, Tooltip,
   Modal, Form, InputNumber, Row, Col, AutoComplete, Divider,
 } from "antd";
@@ -14,6 +14,9 @@ import dayjs from "dayjs";
 import { api, getToken } from "../lib/api";
 import { useAuthStore } from "../lib/authStore";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
+import { ResponsiveTable } from "../components/ResponsiveTable";
+import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
+import { getFinishedProductOptions } from "../lib/productionReferenceData";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -35,15 +38,12 @@ interface InjSummary { machines: number; totalOrderQty: number; totalDailyQty: n
 const MACHINES = ["1#", "2#", "3#", "4#", "5#", "6#", "7#", "8#", "9#", "10#", "11#", "12#"];
 const SHIFTS = ["白班", "夜班"];
 
-// ---- 门店 ----
-function exportCSV(groups: InjGroup[]) {
-  const headers = ["机台", "日期", "班次", "品名/型号", "原材料", "原材料批号", "操作人", "订单数量", "当天生产数量", "累计生产", "不良数", "合格率", "欠数", "半成品生产批号", "备注", "编辑人", "创建时间"];
-  const rows: string[][] = [];
-  for (const g of groups) for (const r of g.records) rows.push([r.machine, r.date, r.shift, r.productName, r.material, r.materialBatch, r.operator, String(r.orderQty), String(r.dailyQty), String(r.cumulativeQty), String(r.defects), r.qualifiedRate != null ? `${(r.qualifiedRate * 100).toFixed(1)}%` : "", String(r.backorder), r.batchNo, r.remark, r.updatedBy, r.createdAt]);
-  const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))].join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `注塑部生产日报_${dayjs().format("YYYY-MM-DD")}.csv`; a.click(); URL.revokeObjectURL(a.href);
-}
+const INJECTION_DETAIL_COLUMNS: ExportColumn[] = [
+  { key: "date", title: "日期" }, { key: "machine", title: "机台" }, { key: "shift", title: "班次" }, { key: "productName", title: "品名/型号" }, { key: "material", title: "原材料" }, { key: "materialBatch", title: "原材料批号" }, { key: "operator", title: "操作人" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "backorder", title: "欠数", format: "#,##0" }, { key: "batchNo", title: "半成品生产批号" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
+];
+const INJECTION_SUMMARY_COLUMNS: ExportColumn[] = [
+  { key: "date", title: "日期" }, { key: "machines", title: "机台数" }, { key: "totalOrderQty", title: "订单数量", format: "#,##0" }, { key: "totalDailyQty", title: "当天生产", format: "#,##0" }, { key: "totalCumulativeQty", title: "累计生产", format: "#,##0" }, { key: "totalDefects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "totalBackorder", title: "欠数", format: "#,##0" },
+];
 
 // ---- 录入弹窗 ----
 function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record: InjRecord | null; copyFrom: InjRecord | null; onClose: (saved: boolean) => void }) {
@@ -54,11 +54,8 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
   const isEdit = !!record; const isCopy = !record && !!copyFrom;
 
   useEffect(() => {
-    if (!open) return;
-    api.get<{ ok: boolean; data: Array<{ name: string }> }>("/api/kingdee/materials?category=2314557705978701824").then(d => {
-      if (d.ok) setMaterials(d.data.map((m: { name: string }) => ({ value: m.name, label: m.name })));
-    });
-  }, [open]);
+    getFinishedProductOptions().then((options) => setMaterials(options));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -97,7 +94,7 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
   const cq = Form.useWatch("cumulativeQty", form) || 0;
 
   return (
-    <Modal title={isEdit ? "编辑注塑记录" : isCopy ? "复制注塑记录（今日）" : "新增注塑记录"} open={open} onCancel={() => onClose(false)} width={700} destroyOnClose
+    <Modal title={isEdit ? "编辑注塑记录" : isCopy ? "复制注塑记录（今日）" : "新增注塑记录"} open={open} onCancel={() => onClose(false)} width={700}
       footer={<Space><Button onClick={() => onClose(false)}>取消</Button><Button type="primary" size="large" onClick={handleSubmit} loading={loading}>保存</Button></Space>}>
       <Form form={form} layout="vertical" size="middle">
         <Row gutter={16}>
@@ -147,6 +144,7 @@ export function ProductionEntryInjectionPage() {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editRec, setEditRec] = useState<InjRecord | null>(null);
@@ -162,11 +160,28 @@ export function ProductionEntryInjectionPage() {
   const [histOpen, setHistOpen] = useState(false);
   const [histData, setHistData] = useState<{ id: number; action: string; field_name: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string }[]>([]);
   const [histLoading, setHistLoading] = useState(false);
+  const historyCacheRef = useRef(new Map<number, typeof histData>());
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
-  useEffect(() => { api.get<{ ok: boolean; data: Array<{ name: string }> }>("/api/kingdee/materials?category=2314557705978701824").then(d => { if (d.ok) setMaterials(d.data.map((m: { name: string }) => ({ value: m.name, label: m.name }))); }); }, []);
+  useEffect(() => { getFinishedProductOptions().then((options) => setMaterials(options)); }, []);
 
   const doSearch = () => { setProduct(lProduct); setSearch(lSearch); };
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      if (machine) params.set("machine", machine);
+      if (product) params.set("product", product);
+      if (search) params.set("search", search);
+      const response = await api.get<{ ok: boolean; data: { groups: InjGroup[] } }>(`/api/production/injection/entries/export?${params.toString()}`);
+      await exportProductionExcel(`注塑部生产日报_${dateFrom}_${dateTo}.xlsx`, response.data.groups, INJECTION_DETAIL_COLUMNS, INJECTION_SUMMARY_COLUMNS);
+      message.success(`已导出 ${response.data.groups.length} 天生产日报`);
+    } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
+    finally { setExporting(false); }
+  };
 
   const fetchData = useCallback(async (append: boolean) => {
     setLoading(true); const curr = append ? offsetRef.current : 0;
@@ -184,18 +199,29 @@ export function ProductionEntryInjectionPage() {
 
   useEffect(() => { void Promise.resolve().then(() => { offsetRef.current = 0; return fetchData(false); }); }, [fetchData]);
 
-  const add = () => { setEditRec(null); setCopyRec(null); setModalOpen(true); };
-  const edit = (r: InjRecord) => { setEditRec(r); setCopyRec(null); setModalOpen(true); };
-  const copy = (r: InjRecord) => { setEditRec(null); setCopyRec(r); setModalOpen(true); };
-  const del = async (id: number) => { try { await api.delete(`/api/production/injection/entries/${id}`); message.success("已删除"); offsetRef.current = 0; fetchData(false); } catch { message.error("删除失败"); } };
-  const onModalClose = (s: boolean) => { setModalOpen(false); setEditRec(null); setCopyRec(null); if (s) { offsetRef.current = 0; fetchData(false); } };
-  const showHist = async (id: number) => { setHistOpen(true); setHistLoading(true); try { const tk = getToken(); const r = await fetch(`/api/production/injection/entries/${id}/history`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} }); const d = await r.json(); if (d.ok) setHistData(d.data); } catch { message.error("加载失败"); } finally { setHistLoading(false); } };
+  const add = useCallback(() => { setEditRec(null); setCopyRec(null); setModalOpen(true); }, []);
+  const edit = useCallback((r: InjRecord) => { setEditRec(r); setCopyRec(null); setModalOpen(true); }, []);
+  const copy = useCallback((r: InjRecord) => { setEditRec(null); setCopyRec(r); setModalOpen(true); }, []);
+  const del = useCallback(async (id: number) => { try { await api.delete(`/api/production/injection/entries/${id}`); historyCacheRef.current.delete(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); } catch { message.error("删除失败"); } }, [fetchData]);
+  const onModalClose = (s: boolean) => { setModalOpen(false); setEditRec(null); setCopyRec(null); if (s) { historyCacheRef.current.clear(); offsetRef.current = 0; fetchData(false); } };
+  const showHist = useCallback(async (id: number) => {
+    setHistOpen(true);
+    const cached = historyCacheRef.current.get(id);
+    if (cached) { setHistData(cached); return; }
+    setHistLoading(true);
+    try {
+      const tk = getToken();
+      const r = await fetch(`/api/production/injection/entries/${id}/history`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
+      const d = await r.json();
+      if (d.ok) { historyCacheRef.current.set(id, d.data); setHistData(d.data); }
+    } catch { message.error("加载失败"); } finally { setHistLoading(false); }
+  }, []);
   const toggleQuick = (date: string) => { setQuickDate(prev => ({ ...prev, [date]: !prev[date] })); quickForm.resetFields(); };
   const quickSave = async (date: string) => { try { const v = await quickForm.validateFields(); setQuickSaving(true); await api.post("/api/production/injection/entries", { date, machine: v.machine, productName: v.productName, material: v.material || "", shift: v.shift, operator: v.operator || "", dailyQty: v.dailyQty || 0, cumulativeQty: v.cumulativeQty || 0, orderQty: v.orderQty || 0, defects: v.defects || 0, batchNo: v.batchNo || "", }); message.success("已保存"); quickForm.resetFields(); setQuickDate(prev => ({ ...prev, [date]: false })); offsetRef.current = 0; fetchData(false); } catch (e: unknown) { if (e && typeof e === "object" && "errorFields" in e) return; message.error((e as Error).message || "保存失败"); } finally { setQuickSaving(false); } };
 
   const flm: Record<string, string> = { date: "日期", machine: "机台", product_name: "品名/型号", material: "原材料", material_batch: "原材料批号", shift: "班次", operator: "操作人", order_qty: "订单数量", daily_qty: "当天生产数量", cumulative_qty: "累计生产", defects: "不良数", batch_no: "半成品生产批号", remark: "备注" };
 
-  const columns: ColumnsType<InjRecord & { key: number }> = [
+  const columns = useMemo<ColumnsType<InjRecord & { key: number }>>(() => [
     { title: "机台", dataIndex: "machine", key: "m", width: 48, fixed: "left", render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "d", width: 76, fixed: "left", render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span> },
     { title: "班次", dataIndex: "shift", key: "s", width: 52, render: (v: string) => <Tag color={v === "白班" ? "blue" : "purple"} style={{ margin: 0, fontSize: 11 }}>{v}</Tag> },
@@ -221,7 +247,7 @@ export function ProductionEntryInjectionPage() {
         <Popconfirm title="删除？" onConfirm={() => del(r.id)}><Tooltip title="删除"><Button type="link" size="small" danger icon={<DeleteOutlined />} /></Tooltip></Popconfirm>
       </Space>),
     },
-  ];
+  ], [copy, del, edit, showHist]);
 
   return (
     <div className={styles.page}>
@@ -239,7 +265,7 @@ export function ProductionEntryInjectionPage() {
           <Button size="middle" onClick={() => { setMachine(null); setProduct(""); setLProduct(""); setSearch(""); setLSearch(""); }}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
-          <Tooltip title="导出 CSV"><Button size="small" icon={<DownloadOutlined />} onClick={() => exportCSV(groups)} disabled={groups.length === 0} /></Tooltip>
+          <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={add}>新增录入</Button>
@@ -258,7 +284,7 @@ export function ProductionEntryInjectionPage() {
                   extra={<Space size={4}><Button type="link" size="small" icon={<PlusOutlined />} onClick={() => toggleQuick(g.date)}>快速录入</Button><Button type="link" size="small" icon={<EditOutlined />} onClick={add}>完整新增</Button></Space>}
                   size="small"
                 >
-                  <Table columns={columns} dataSource={g.records.map(r => ({ ...r, key: r.id }))} pagination={false} size="small" scroll={{ x: 1600 }} bordered
+                  <ResponsiveTable columns={columns} dataSource={g.records.map(r => ({ ...r, key: r.id }))} pagination={false} size="small" minWidth={1600} bordered
                     rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} />
 
                   {quickDate[g.date] && (
@@ -290,7 +316,17 @@ export function ProductionEntryInjectionPage() {
         department="injection"
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={() => { offsetRef.current = 0; void fetchData(false); }}
+        onImported={({ dateFrom, dateTo }) => {
+          setDateFrom(dateFrom);
+          setDateTo(dateTo);
+          setMachine(null);
+          setProduct("");
+          setSearch("");
+          setLProduct("");
+          setLSearch("");
+          historyCacheRef.current.clear();
+          offsetRef.current = 0;
+        }}
       />
 
       <Modal title="修改历史" open={histOpen} onCancel={() => setHistOpen(false)} footer={null} width={700}>

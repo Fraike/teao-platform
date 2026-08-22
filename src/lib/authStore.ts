@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { User, LoginRequest, RegisterRequest } from "../types/auth";
 import { api, setToken, clearToken, getToken, isApiError, setLoginTimestamp, clearLoginTimestamp, getLoginTimestamp, SESSION_DURATION_MS } from "./api";
 import { clearKingdeeCache } from "./kingdeeCache";
+import { useTabStore } from "./tabStore";
 
 interface AuthState {
   user: User | null;
@@ -11,6 +12,7 @@ interface AuthState {
   register: (req: RegisterRequest) => Promise<string>;
   logout: () => void;
   fetchMe: () => Promise<void>;
+  changeAdminPassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -25,6 +27,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     );
     setToken(data.token);
     setLoginTimestamp();
+    useTabStore.getState().resetForAuthentication();
     set({ user: data.user });
   },
 
@@ -40,6 +43,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     clearToken();
     clearLoginTimestamp();
     clearKingdeeCache();
+    useTabStore.getState().resetForAuthentication();
     set({ user: null });
   },
 
@@ -57,6 +61,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Only clear token on auth errors (401/403), not network errors
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {
         clearToken();
+        clearLoginTimestamp();
+        useTabStore.getState().resetForAuthentication();
         set({ user: null, loading: false, initialized: true });
       } else {
         // Network error — keep token and retry on next page load
@@ -64,6 +70,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ loading: false, initialized: true });
       }
     }
+  },
+
+  changeAdminPassword: async (currentPassword, newPassword) => {
+    const data = await api.post<{ token: string }>("/api/auth/change-password", { currentPassword, newPassword });
+    setToken(data.token);
+    setLoginTimestamp();
   },
 }));
 

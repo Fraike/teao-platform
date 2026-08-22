@@ -7,6 +7,7 @@ import {
   updateEntry,
   deleteEntry,
   replaceAssemblyEntries,
+  exportAssemblyEntries,
   getHistory,
 } from "../services/production-store.js";
 
@@ -66,6 +67,15 @@ export function registerProductionEntryRoutes(app) {
     } catch (err) {
       console.error("[production-entry] import error:", err);
       res.status(err.status || 500).json({ error: err.message || "导入失败" });
+    }
+  });
+
+  app.get("/api/production/entries/export", jwtAuth, requirePermission("production"), (req, res) => {
+    try {
+      const { dateFrom, dateTo, line, product, customer, search } = req.query;
+      res.json({ ok: true, data: exportAssemblyEntries({ dateFrom, dateTo, line, product, customer, search }) });
+    } catch (err) {
+      res.status(500).json({ error: "导出数据查询失败", detail: err.message });
     }
   });
 

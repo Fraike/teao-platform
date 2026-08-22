@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { Table, Button, Tag, message, Popconfirm, Typography, Switch, Modal, Form, Input } from "antd";
+import { Button, Tag, message, Popconfirm, Typography, Switch, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import type { User } from "../types/auth";
 import styles from "./AdminPage.module.css";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title } = Typography;
 
@@ -178,12 +179,13 @@ export function AdminPage() {
   return (
     <div className={styles.container}>
       <Title level={4} style={{ marginBottom: 16 }}>用户管理</Title>
-      <Table
+      <ResponsiveTable
         dataSource={users}
         columns={columns}
         rowKey="id"
         loading={loading}
         pagination={false}
+        minWidth={960}
       />
       <Modal
         title={`重置密码：${resetTarget?.name || ""}`}

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Card, Form, Input, Button, Typography, App, Alert } from "antd";
+import { Card, Form, Input, Button, Typography, App, Alert, Modal } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../lib/authStore";
+import { api } from "../lib/api";
 import { LOGIN_AUTOCOMPLETE } from "../lib/loginConfig";
 import styles from "./AuthPage.module.css";
 
@@ -11,6 +12,9 @@ const { Title, Text } = Typography;
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryForm] = Form.useForm();
   const { message } = App.useApp();
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
@@ -29,6 +33,25 @@ export function LoginPage() {
       setLoginError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const recoverAdminPassword = async () => {
+    const values = await recoveryForm.validateFields();
+    if (values.newPassword !== values.confirmPassword) {
+      recoveryForm.setFields([{ name: "confirmPassword", errors: ["两次输入的密码不一致"] }]);
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      await api.post("/api/auth/admin-recover-password", values);
+      message.success("密码已重置，请使用新密码登录");
+      recoveryForm.resetFields();
+      setRecoveryOpen(false);
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -65,14 +88,22 @@ export function LoginPage() {
           </Form.Item>
         </Form>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Button type="link" size="small" onClick={() => message.info("请联系管理员重置密码")}>
-            忘记密码
+          <Button type="link" size="small" onClick={() => setRecoveryOpen(true)}>
+            管理员找回密码
           </Button>
           <Text type="secondary" style={{ fontSize: 13 }}>
             没有账号？<Link to="/register">申请注册</Link>
           </Text>
         </div>
       </Card>
+      <Modal title="管理员找回密码" open={recoveryOpen} onCancel={() => setRecoveryOpen(false)} onOk={recoverAdminPassword} confirmLoading={recoveryLoading} okText="重置密码">
+        <Form form={recoveryForm} layout="vertical">
+          <Form.Item name="username" label="管理员账号" rules={[{ required: true, message: "请输入管理员账号" }]}><Input /></Form.Item>
+          <Form.Item name="recoveryCode" label="管理员恢复码" rules={[{ required: true, message: "请输入恢复码" }]}><Input.Password autoComplete="off" /></Form.Item>
+          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 6, pattern: /^(?=.*[a-zA-Z])(?=.*\d)/, message: "至少6位，且包含字母和数字" }]}><Input.Password autoComplete="new-password" /></Form.Item>
+          <Form.Item name="confirmPassword" label="确认新密码" rules={[{ required: true, message: "请确认新密码" }]}><Input.Password autoComplete="new-password" /></Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

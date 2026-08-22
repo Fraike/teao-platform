@@ -10,8 +10,11 @@ process.env.PRODUCTION_DB_PATH = path.join(testDirectory, "production.db");
 const store = await import("../server/services/production-store.js");
 const {
   closeDB,
+  getDB,
   createEntry,
   createInjectionEntry,
+  exportAssemblyEntries,
+  exportInjectionEntries,
   getHistory,
   initDB,
   queryEntries,
@@ -61,6 +64,8 @@ try {
   assert.equal(firstPage.hasMore, true);
   assert.equal(secondPage.groups.length, 1);
   assert.equal(secondPage.hasMore, false);
+  assert.equal(exportAssemblyEntries({}).groups.length, 3);
+  assert.ok(getDB().prepare("PRAGMA index_list('assembly_records')").all().some((index) => index.name === "idx_assembly_date_line"));
 
   const importedAssembly = [
     assemblyRecord({ date: "2026-07-30", line: "2#", productName: "ASSEMBLY-NEW" }),
@@ -77,6 +82,7 @@ try {
   const injectionAfterImport = queryInjectionEntries({ limit: 10 });
   assert.equal(injectionAfterImport.total, 1);
   assert.equal(injectionAfterImport.groups[0].records[0].machine, "6#");
+  assert.equal(exportInjectionEntries({}).groups.length, 1);
 
   const report = await fetchAndStoreReport("2026-07-30");
   assert.equal(report.assembly.summary.totalActualQty, 150);

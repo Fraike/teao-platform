@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Table, Input, Typography, Spin, Empty, message } from "antd";
+import { Input, Typography, Spin, Empty, message } from "antd";
 import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import { getCache, setCache } from "../lib/kingdeeCache";
 import type { KingdeeSupplier } from "../types/kingdee";
 import styles from "./DataTablePage.module.css";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 
 const { Title, Text } = Typography;
 
@@ -122,12 +123,13 @@ export function SupplierDataPage() {
         ) : filtered.length === 0 ? (
           <Empty description="没有匹配的供应商" />
         ) : (
-          <Table
+          <ResponsiveTable
             columns={columns}
             dataSource={filtered}
             rowKey="id"
             size="small"
-            scroll={{ x: 1000, y: "calc(100vh - 340px)" }}
+            minWidth={1000}
+            scroll={{ y: "calc(100vh - 340px)" }}
             pagination={{
               defaultPageSize: 50,
               showSizeChanger: true,
