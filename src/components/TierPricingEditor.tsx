@@ -1,7 +1,9 @@
 import { Button, InputNumber, Switch } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { addTier, removeTier, setTierPricingEnabled, sortTiers, updateTier } from "../lib/tierPricing";
+import { QUOTE_PRICE_INPUT_PROPS } from "../lib/quotationInput";
 import type { Product } from "../types/quotation";
+import priceStyles from "./PriceEmphasis.module.css";
 import styles from "./TierPricingEditor.module.css";
 
 interface TierPricingEditorProps {
@@ -30,13 +32,19 @@ export function TierPricingEditor({ product, onChange, labels, pricePrecision, c
         <Switch size="small" checked={enabled} onChange={(checked) => onChange(setTierPricingEnabled(product, checked))} />
         <span className={enabled ? styles.enabledLabel : styles.muted}>{enabled ? labels.enabled : labels.toggle}</span>
         {!enabled && (
-          <InputNumber
-            size="small"
-            value={product.price}
-            onChange={(value) => onChange({ ...product, price: value ?? 0 })}
-            precision={pricePrecision}
-            min={0}
-          />
+          <div className={priceStyles.priceField}>
+            <span className={priceStyles.currencyPrefix}>{currencyLabel}</span>
+            <InputNumber
+              className={priceStyles.priceInput}
+              size="small"
+              variant="borderless"
+              value={product.price}
+              onChange={(value) => onChange({ ...product, price: value ?? 0 })}
+              precision={pricePrecision}
+              min={0}
+              {...QUOTE_PRICE_INPUT_PROPS}
+            />
+          </div>
         )}
       </div>
       {enabled && (
@@ -64,11 +72,13 @@ export function TierPricingEditor({ product, onChange, labels, pricePrecision, c
               <span className={styles.muted}>{product.unit || "PCS"}</span>
               <span className={styles.muted}>{currencyLabel}</span>
               <InputNumber
+                className={priceStyles.tierPriceInput}
                 size="small"
                 value={tier.price}
                 onChange={(value) => changeTier(tier.id, "price", value ?? 0)}
                 precision={pricePrecision}
                 min={0}
+                {...QUOTE_PRICE_INPUT_PROPS}
               />
             </div>
           ))}

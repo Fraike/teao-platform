@@ -1,6 +1,7 @@
 import { forwardRef, Fragment } from "react";
 import { useQuotationStore } from "../lib/store";
 import { COMPANY_INFO, LOGO_PATH, STAMP_PATH } from "../lib/constants";
+import { formatQuotePrice } from "../lib/quotationDisplay";
 
 const A4_WIDTH = 794;
 const A4_HEIGHT = 1122;
@@ -16,6 +17,7 @@ const S = {
 };
 
 import { useBase64Image } from "../lib/useBase64Image";
+import priceStyles from "./PriceEmphasis.module.css";
 import styles from "./PreviewPanel.module.css";
 
 const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, ref) {
@@ -190,8 +192,11 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
             </tr>
           </thead>
           <tbody>
-            {products.map((p, idx) => (
-              <Fragment key={p.id}>
+            {products.map((p, idx) => {
+              const price = formatQuotePrice(p.price ?? 0, "¥", 2, "zh-CN");
+
+              return (
+                <Fragment key={p.id}>
               <tr style={{ borderBottom: "1px solid #f1f5f9" }}>
                 <td style={td("center", "#94a3b8", 10)}>{idx + 1}</td>
                 <td style={tdName()}>
@@ -201,7 +206,11 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                 <td style={td("left", S.muted, 10)}>{p.spec || "-"}</td>
                 <td style={td("left", S.muted, 10)}>{p.unit}</td>
                 <td style={td("right", "#334155", 11, "monospace")}>
-                  {p.tierPricingEnabled ? "阶梯报价" : (p.price ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {p.tierPricingEnabled ? (
+                    <span className={styles.tierModeLabel}>阶梯报价</span>
+                  ) : (
+                    <span className={priceStyles.previewPrice}>{price.currency}{price.amount}</span>
+                  )}
                 </td>
                 <td style={td("left", S.muted, 10)}>{p.torque || ""}</td>
                 <td style={td("center", S.muted, 10)}>
@@ -224,20 +233,27 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                 </td>
                 <td style={td("left", S.light, 10)}>{p.remark || ""}</td>
               </tr>
-              {p.tierPricingEnabled && p.tiers && [...p.tiers].sort((a, b) => a.minQty - b.minQty).map((tier) => (
-                <tr key={tier.id} className={styles.tierRow}>
+              {p.tierPricingEnabled && p.tiers && [...p.tiers].sort((a, b) => a.minQty - b.minQty).map((tier) => {
+                const tierPrice = formatQuotePrice(tier.price, "¥", 2, "zh-CN");
+
+                return (
+                  <tr key={tier.id} className={styles.tierRow}>
                   <td style={td("center", S.light, 9)}></td>
                   <td colSpan={4} style={td("right", S.muted, 9)}>
                     MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {p.unit || "PCS"}
                   </td>
                   <td style={td("right", "#1677ff", 10, "monospace", 600)}>
-                    ¥{tier.price.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className={priceStyles.previewPrice}>
+                      {tierPrice.currency}{tierPrice.amount}
+                    </span>
                   </td>
                   <td colSpan={3} style={td("left", S.light, 9)}></td>
-                </tr>
-              ))}
-              </Fragment>
-            ))}
+                  </tr>
+                );
+              })}
+                </Fragment>
+              );
+            })}
             {products.length === 0 && (
               <tr>
                 <td colSpan={9} style={{ padding: 24, textAlign: "center", color: "#cbd5e1", fontSize: 11 }}>

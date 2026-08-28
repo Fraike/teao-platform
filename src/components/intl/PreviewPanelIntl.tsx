@@ -1,7 +1,8 @@
 import { forwardRef, Fragment } from "react";
 import { useIntlQuotationStore } from "../../lib/store";
 import { COMPANY_INFO_EN, LOGO_PATH, STAMP_PATH } from "../../lib/constants";
-import { formatIntlTierLabel } from "../../lib/quotationDisplay";
+import { formatIntlTierLabel, formatQuotePrice } from "../../lib/quotationDisplay";
+import priceStyles from "../PriceEmphasis.module.css";
 import styles from "./PreviewPanelIntl.module.css";
 
 const A4_WIDTH = 794;
@@ -203,6 +204,8 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           <tbody>
             {products.map((p, idx) => {
               const hasTiers = p.tierPricingEnabled === true;
+              const price = formatQuotePrice(p.price ?? 0, quoteMeta.currency, 3, "en-US");
+              const amount = formatQuotePrice((p.qty ?? 0) * (p.price ?? 0), quoteMeta.currency, 3, "en-US");
               return (
                 <Fragment key={p.id}>
                   {/* Main product row */}
@@ -216,12 +219,11 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                     <td style={td("left", C.muted)}>{p.unit}</td>
                     <td style={td("right", C.muted)}>
                       {hasTiers ? (
-                        <span style={{ fontSize: 8, fontStyle: "italic", color: C.subtle }}>Tiered →</span>
+                        <span className={styles.tierModeLabel}>Tiered →</span>
                       ) : (
-                        <>
-                          <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                          {(p.price ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
-                        </>
+                        <span className={`${priceStyles.previewPrice} ${priceStyles.previewPriceIntl}`}>
+                          {price.currency} {price.amount}
+                        </span>
                       )}
                     </td>
                     <td style={td("right", C.text)}>
@@ -235,10 +237,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
                       {hasTiers ? (
                         <span style={{ color: C.subtle }}>—</span>
                       ) : (
-                        <>
-                          <span style={{ fontSize: 7, color: C.subtle }}>{quoteMeta.currency} </span>
-                          {((p.qty ?? 0) * (p.price ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
-                        </>
+                        <span className={priceStyles.amountValue}>{amount.currency} {amount.amount}</span>
                       )}
                     </td>
                     <td style={td("right", C.text, "monospace")}>
@@ -321,7 +320,7 @@ const PreviewPanelIntl = forwardRef<HTMLDivElement>(function PreviewPanelIntl(_p
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16, borderTop: `1px solid ${C.border}`, paddingTop: 6, marginTop: 2 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, minWidth: 100, textAlign: "right" }}>Total Amount</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: C.heading, fontFamily: "monospace", minWidth: 100, textAlign: "right" }}>
+            <span className={priceStyles.totalValue}>
               {quoteMeta.currency} {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
             </span>
           </div>

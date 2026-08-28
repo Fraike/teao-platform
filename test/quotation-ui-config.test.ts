@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DEFAULT_TERMS } from "../src/lib/constants.ts";
 import { isSupportedImageFile } from "../src/lib/imageUtils.ts";
-import { formatIntlTierLabel } from "../src/lib/quotationDisplay.ts";
+import { formatIntlTierLabel, formatQuotePrice } from "../src/lib/quotationDisplay.ts";
 import {
   MAX_SPREADSHEET_COLUMNS,
   MAX_SPREADSHEET_FILE_BYTES,
@@ -10,6 +10,7 @@ import {
   validateSpreadsheetShape,
 } from "../src/lib/spreadsheetImport.ts";
 import { LOGIN_AUTOCOMPLETE } from "../src/lib/loginConfig.ts";
+import { QUOTE_PRICE_INPUT_PROPS } from "../src/lib/quotationInput.ts";
 
 assert.deepEqual(DEFAULT_TERMS, [
   "1. 以上产品价格为含13%税单价，含运费。",
@@ -29,6 +30,16 @@ assert.equal(
   "MOQ ≥ 1,000 PCS · USD 1.250",
 );
 
+assert.deepEqual(formatQuotePrice(1.35, "¥", 2, "zh-CN"), {
+  currency: "¥",
+  amount: "1.35",
+});
+
+assert.deepEqual(formatQuotePrice(1.25, "USD", 3, "en-US"), {
+  currency: "USD",
+  amount: "1.250",
+});
+
 assert.equal(MAX_SPREADSHEET_FILE_BYTES, 10 * 1024 * 1024);
 assert.equal(MAX_SPREADSHEET_ROWS, 10001);
 assert.equal(MAX_SPREADSHEET_COLUMNS, 100);
@@ -43,5 +54,7 @@ assert.deepEqual(LOGIN_AUTOCOMPLETE, {
   username: "username",
   password: "current-password",
 });
+
+assert.deepEqual(QUOTE_PRICE_INPUT_PROPS, { controls: false });
 
 console.log("Quotation UI config tests passed.");

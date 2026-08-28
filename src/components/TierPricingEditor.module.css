@@ -9,6 +9,10 @@
   gap: 8px;
 }
 
+.header > :last-child {
+  min-width: 0;
+}
+
 .enabledLabel {
   color: #1677ff;
   font-size: 12px;

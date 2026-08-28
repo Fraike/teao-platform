@@ -1,0 +1,104 @@
+.priceField {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  padding-left: 8px;
+  background: #eff6ff;
+  border: 1px solid #91caff;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+}
+
+.priceField:focus-within {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgb(22 119 255 / 14%);
+}
+
+.priceFieldIntl {
+  background: #fff8eb;
+  border-color: #f4c47b;
+}
+
+.priceFieldIntl:focus-within {
+  border-color: #d48806;
+  box-shadow: 0 0 0 2px rgb(212 136 6 / 14%);
+}
+
+.currencyPrefix {
+  flex: 0 0 auto;
+  color: #0958d9;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.currencyPrefixIntl {
+  color: #b86800;
+}
+
+.priceInput {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+}
+
+.priceInput:global(.ant-input-number) {
+  width: 100%;
+}
+
+.priceInput :global(.ant-input-number-input) {
+  height: 26px;
+  color: #0958d9;
+  font-size: 15px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.priceInputIntl :global(.ant-input-number-input) {
+  color: #b86800;
+}
+
+.tierPriceInput :global(.ant-input-number-input) {
+  color: #0958d9;
+  font-size: 13px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tierPriceInputIntl :global(.ant-input-number-input) {
+  color: #b86800;
+}
+
+.previewPrice {
+  color: #0958d9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.previewPriceIntl {
+  color: #b86800;
+}
+
+.amountValue {
+  color: #b86800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.totalValue {
+  color: #7c2d12;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  min-width: 100px;
+  text-align: right;
+}

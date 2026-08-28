@@ -12,6 +12,9 @@ import type { Product } from "../../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 import { addTier as addTierItem, removeTier as removeTierItem, setTierPricingEnabled, sortTiers as sortTierItems, updateTier as updateTierItem } from "../../lib/tierPricing";
 import { ProductImageUploader } from "../ProductImageUploader";
+import priceStyles from "../PriceEmphasis.module.css";
+import inputStyles from "../QuotationProductInput.module.css";
+import { QUOTE_PRICE_INPUT_PROPS } from "../../lib/quotationInput";
 
 type ProductRow = Product & { index: number };
 
@@ -80,7 +83,7 @@ export default function ProductCardIntl() {
       render: (_name: string, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="Product name"
           value={r.name}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "name", e.target.value)}
@@ -95,7 +98,7 @@ export default function ProductCardIntl() {
       render: (_spec: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="Spec/Type"
           value={r.spec ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "spec", e.target.value)}
@@ -110,7 +113,7 @@ export default function ProductCardIntl() {
       render: (_torque: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="Torque"
           value={r.torque ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "torque", e.target.value)}
@@ -125,7 +128,7 @@ export default function ProductCardIntl() {
       render: (_unit: string, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           value={r.unit}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "unit", e.target.value)}
           style={{ padding: "2px 4px" }}
@@ -160,14 +163,19 @@ export default function ProductCardIntl() {
               {hasTiers ? (
                 <span style={{ fontSize: 11, color: "#1677ff", fontWeight: 500, whiteSpace: "nowrap" }}>Tiered</span>
               ) : (
-                <InputNumber
-                  size="small"
-                  style={{ width: "100%" }}
-                  value={r.price}
-                  onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
-                  precision={3}
-                  min={0}
-                />
+                <div className={`${priceStyles.priceField} ${priceStyles.priceFieldIntl}`}>
+                  <span className={`${priceStyles.currencyPrefix} ${priceStyles.currencyPrefixIntl}`}>$</span>
+                  <InputNumber
+                    className={`${priceStyles.priceInput} ${priceStyles.priceInputIntl}`}
+                    size="small"
+                    variant="borderless"
+                    value={r.price}
+                    onChange={(v: number | null) => update(r.id, "price", v ?? 0)}
+                    precision={3}
+                    min={0}
+                    {...QUOTE_PRICE_INPUT_PROPS}
+                  />
+                </div>
               )}
             </div>
 
@@ -196,12 +204,14 @@ export default function ProductCardIntl() {
                     <span style={{ fontSize: 10, color: "#999", whiteSpace: "nowrap" }}>PCS</span>
                     <span style={{ fontSize: 11, color: "#999" }}>$</span>
                     <InputNumber
+                      className={`${priceStyles.tierPriceInput} ${priceStyles.tierPriceInputIntl}`}
                       size="small"
                       style={{ width: 95 }}
                       value={tier.price}
                       onChange={(v: number | null) => updateTier(r.id, tier.id, "price", v ?? 0)}
                       precision={3}
                       min={0}
+                      {...QUOTE_PRICE_INPUT_PROPS}
                     />
                   </div>
                 ))}
@@ -251,7 +261,7 @@ export default function ProductCardIntl() {
         }
         const amt = (r.qty ?? 0) * (r.price ?? 0);
         return (
-          <span style={{ color: "#1677ff", fontWeight: 500, fontFamily: "monospace" }}>
+          <span className={priceStyles.amountValue}>
             {amt.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
           </span>
         );

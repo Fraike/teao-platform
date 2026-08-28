@@ -11,6 +11,7 @@ import type { Product } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 import { TierPricingEditor } from "./TierPricingEditor";
 import { ProductImageUploader } from "./ProductImageUploader";
+import inputStyles from "./QuotationProductInput.module.css";
 
 type ProductRow = Product & { index: number };
 
@@ -42,7 +43,7 @@ export default function ProductCard() {
       render: (_name: string, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="产品名称"
           value={r.name}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "name", e.target.value)}
@@ -57,7 +58,7 @@ export default function ProductCard() {
       render: (_partNo: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="料号"
           value={r.partNo ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "partNo", e.target.value)}
@@ -72,7 +73,7 @@ export default function ProductCard() {
       render: (_spec: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="规格"
           value={r.spec ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "spec", e.target.value)}
@@ -87,7 +88,7 @@ export default function ProductCard() {
       render: (_unit: string, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           value={r.unit}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "unit", e.target.value)}
           style={{ padding: "2px 4px" }}
@@ -115,7 +116,7 @@ export default function ProductCard() {
       render: (_torque: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="参数"
           value={r.torque ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "torque", e.target.value)}
@@ -138,7 +139,7 @@ export default function ProductCard() {
       render: (_remark: string | undefined, r: ProductRow) => (
         <Input
           size="small"
-          variant="borderless"
+          className={inputStyles.textInput}
           placeholder="备注"
           value={r.remark ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(r.id, "remark", e.target.value)}
