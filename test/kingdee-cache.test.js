@@ -18,11 +18,17 @@ assert.equal(kingdeeRoutes.getMaterialsCacheKey("group-b"), "materials-category-
 assert.equal(typeof kingdeeRoutes.splitProductionMaterials, "function", "生产日报应按分类树汇总商品");
 assert.equal(typeof kingdeeRoutes.getProductionMaterialRefreshOptions, "function", "手动更新必须同时刷新商品和分类");
 assert.deepEqual(kingdeeRoutes.getProductionMaterialRefreshOptions(true), { materials: true, categories: true });
-const currentCategories = JSON.parse(fs.readFileSync(path.resolve("data/kingdee_categories.json"), "utf8")).data;
-const currentMaterials = JSON.parse(fs.readFileSync(path.resolve("data/kingdee_materials.json"), "utf8")).data;
-const currentProductionMaterials = kingdeeRoutes.splitProductionMaterials(currentMaterials, currentCategories);
-assert.equal(currentProductionMaterials.finishedProducts.length, 609, "装配部应包含成品及所有子分类商品");
-assert.equal(currentProductionMaterials.plasticParts.length, 315, "注塑部应只包含塑胶配件商品");
+const productionFixture = kingdeeRoutes.splitProductionMaterials([
+  { id: "finished-child", parent_id: "finished-child", name: "Finished child" },
+  { id: "finished-grandchild", parent_id: "finished-grandchild", name: "Finished grandchild" },
+  { id: "finished-root", parent_id: "2314557705978701824", name: "Finished root" },
+  { id: "plastic", parent_id: "2314559979366968320", name: "Plastic part" },
+], [{
+  id: "2314557705978701824",
+  children: [{ id: "finished-child", children: [{ id: "finished-grandchild", children: [] }] }],
+}]);
+assert.deepEqual(productionFixture.finishedProducts.map((item) => item.id), ["finished-child", "finished-grandchild"], "装配部应包含成品的所有子分类商品，但不包含根分类直挂商品");
+assert.deepEqual(productionFixture.plasticParts.map((item) => item.id), ["plastic"], "注塑部应只包含塑胶配件商品");
 const require = createRequire(import.meta.url);
 const express = require("../server/node_modules/express");
 
