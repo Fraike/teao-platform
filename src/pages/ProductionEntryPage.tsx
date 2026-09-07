@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card, Button, DatePicker, Select, Input, Tag,
   Space, Spin, message, Popconfirm, Tooltip,
-  Modal, Form, InputNumber, Popover,
+  Modal, Popover,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   EditOutlined, DeleteOutlined, HistoryOutlined,
-  SaveOutlined, CopyOutlined, FilterOutlined, FileTextOutlined,
+  CopyOutlined, FilterOutlined, FileTextOutlined,
   DownloadOutlined, UploadOutlined,
+  SortAscendingOutlined, SortDescendingOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api, getToken } from "../lib/api";
@@ -20,7 +21,9 @@ import { EditableCell } from "../components/production/EditableCell";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
-import { getCustomerOptions, getFinishedProductOptions } from "../lib/productionReferenceData";
+import { sortRecordsByOrderQty, splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
+import { refreshProductionMaterialOptions } from "../lib/productionReferenceData";
+import { getProductionDailyTableSticky } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -31,7 +34,7 @@ const STAFF_COLORS = ["blue", "green", "cyan", "orange", "purple", "lime", "gold
 function StaffTags({ text }: { text: string }) {
   if (!text) return <span style={{ color: "#ccc" }}>-</span>;
   if (text === "外发") return <Tag color="default" style={{ margin: 0, fontSize: 11 }}>外发</Tag>;
-  const names = text.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  const names = splitPersonnelNames(text);
   if (names.length === 0) return <span style={{ color: "#ccc" }}>-</span>;
   const shown = names.slice(0, 3);
   const hidden = names.slice(3);
@@ -90,6 +93,7 @@ export function ProductionEntryPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [refreshingMaterials, setRefreshingMaterials] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ProductionRecord | null>(null);
@@ -97,32 +101,27 @@ export function ProductionEntryPage() {
   const [defaultDate, setDefaultDate] = useState("");
   const offsetRef = useRef(0);
   const groupsRef = useRef<DailyGroup[]>([]);
+  const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
-  const [quickDate, setQuickDate] = useState<Record<string, boolean>>({});
-  const [quickForm] = Form.useForm();
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [materials, setMaterials] = useState<{ value: string; label: string; spec?: string }[]>([]);
-  const [customers, setCustomers] = useState<{ value: string; label: string }[]>([]);
   const [lines, setLines] = useState<string[]>([]);
+  const [orderQtySort, setOrderQtySort] = useState<OrderQtySort>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyData, setHistoryData] = useState<AuditLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const historyCacheRef = useRef(new Map<number, AuditLog[]>());
+  const dailyTableSticky = contentElement
+    ? getProductionDailyTableSticky(() => contentElement)
+    : undefined;
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   // 加载关联数据
   useEffect(() => {
-    Promise.allSettled([
-      getFinishedProductOptions(),
-      getCustomerOptions(),
-      api.get<{ ok: boolean; data: string[] }>("/api/production/lines"),
-    ]).then(([mRes, cRes, lRes]) => {
-      if (mRes.status === "fulfilled") setMaterials(mRes.value);
-      if (cRes.status === "fulfilled") setCustomers(cRes.value);
-      if (lRes.status === "fulfilled" && lRes.value.ok)
-        setLines(lRes.value.data.filter((l: string) => l && !l.includes("组装线")));
-    });
+    api.get<{ ok: boolean; data: string[] }>("/api/production/lines")
+      .then((result) => {
+        if (result.ok) setLines(result.data.filter((line) => line && !line.includes("组装线")));
+      })
+      .catch(() => undefined);
   }, []);
 
   // 点击搜索 → 提交所有筛选条件
@@ -147,6 +146,18 @@ export function ProductionEntryPage() {
       message.success(`已导出 ${response.data.groups.length} 天生产日报`);
     } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
     finally { setExporting(false); }
+  };
+
+  const refreshKingdeeMaterials = async () => {
+    setRefreshingMaterials(true);
+    try {
+      const { finishedProducts, plasticParts } = await refreshProductionMaterialOptions();
+      message.success(`金蝶商品已更新：成品 ${finishedProducts.length} 条，塑胶配件 ${plasticParts.length} 条`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "金蝶商品更新失败，已保留当前缓存");
+    } finally {
+      setRefreshingMaterials(false);
+    }
   };
 
   const fetchData = useCallback(async (append: boolean) => {
@@ -206,23 +217,9 @@ export function ProductionEntryPage() {
     } catch { message.error("加载失败"); }
     finally { setHistoryLoading(false); }
   }, []);
-  const toggleQuick = (date: string) => { setQuickDate((prev) => ({ ...prev, [date]: !prev[date] })); quickForm.resetFields(); };
-  const quickSave = async (date: string) => {
-    try {
-      const v = await quickForm.validateFields(); setQuickSaving(true);
-      await api.post("/api/production/entries", {
-        date, line: v.line, productName: v.productName, customer: v.customer,
-        dailyQty: v.dailyQty || 0, planQty: v.planQty || 0, orderQty: v.orderQty || 0,
-        cumulativeQty: v.cumulativeQty || 0, defects: v.defects || 0,
-        productionBatch: v.productionBatch || "", spec: v.spec || "", workHours: v.workHours || 10,
-      });
-      message.success("已保存"); quickForm.resetFields();
-      setQuickDate((prev) => ({ ...prev, [date]: false })); offsetRef.current = 0; fetchData(false);
-    } catch (err: unknown) {
-      if (err && typeof err === "object" && "errorFields" in err) return;
-      message.error((err as Error).message || "保存失败");
-    } finally { setQuickSaving(false); }
-  };
+  const toggleOrderQtySort = useCallback(() => {
+    setOrderQtySort((current) => current === null ? "desc" : current === "desc" ? "asc" : null);
+  }, []);
 
   const flm: Record<string, string> = {
     date: "日期", line: "产线", customer: "客户", spec: "规格",
@@ -241,18 +238,20 @@ export function ProductionEntryPage() {
       render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "dt", width: 76, fixed: "left",
       render: (v: string) => <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },
-    { title: "客户名称", dataIndex: "customer", key: "cs", width: 72,
-      render: (v: string) => <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>{v}</Tag> },
+    { title: "客户名称", dataIndex: "customer", key: "cs", width: 72, ellipsis: true,
+      render: (v: string) => v ? <Tooltip title={v} placement="topLeft"><Tag color="blue" className={styles.truncatedTag}>{v}</Tag></Tooltip> : "-" },
     { title: "规格", dataIndex: "spec", key: "sp", width: 66, ellipsis: true },
     { title: "品名", dataIndex: "productName", key: "pn", width: 140, ellipsis: true,
-      render: (v: string) => <Tooltip title={v} placement="topLeft"><span style={{ fontSize: 12 }}>{v}</span></Tooltip> },
+      render: (v: string) => v ? <Tooltip title={v} placement="topLeft"><span className={styles.truncatedText}>{v}</span></Tooltip> : "-" },
     { title: "原材料批号", dataIndex: "materialBatch", key: "mb", width: 50, align: "center" as const,
       render: (v: string) => <BatchText text={v} /> },
     { title: "工时", dataIndex: "workHours", key: "wh", width: 42, align: "center" as const,
       render: (v: number) => v ? <span style={{ fontSize: 12 }}>{v}h</span> : "-" },
     { title: "生产批号", dataIndex: "productionBatch", key: "pb", width: 92, ellipsis: true,
       render: (v: string) => v ? <Tooltip title={v}><span style={{ fontSize: 12 }}>{v}</span></Tooltip> : "-" },
-    { title: "订单数量", dataIndex: "orderQty", key: "oq", width: 62, align: "right" as const,
+    { title: <Tooltip title={orderQtySort === null ? "点击按订单数量排序" : orderQtySort === "desc" ? "当前：高到低；点击切换低到高" : "当前：低到高；点击恢复原顺序"}>
+        <Button type="text" size="small" className={styles.orderSortButton} onClick={toggleOrderQtySort} icon={orderQtySort === "asc" ? <SortAscendingOutlined /> : <SortDescendingOutlined />}>订单数量</Button>
+      </Tooltip>, dataIndex: "orderQty", key: "oq", width: 82, align: "right" as const,
       render: (v: number) => <span style={{ fontSize: 12 }}>{v?.toLocaleString() || "-"}</span> },
     { title: "计划生产", dataIndex: "planQty", key: "pq", width: 62, align: "right" as const,
       render: (v: number) => <span style={{ fontSize: 12 }}>{v?.toLocaleString() || "-"}</span> },
@@ -309,7 +308,7 @@ export function ProductionEntryPage() {
         </Space>
       ),
     },
-  ], [cellSave, copy, del, edit, showHistory]);
+  ], [cellSave, copy, del, edit, orderQtySort, showHistory, toggleOrderQtySort]);
 
   return (
     <div className={styles.page}>
@@ -336,6 +335,7 @@ export function ProductionEntryPage() {
           <Button size="middle" onClick={doReset}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
+          <Button size="small" icon={<ReloadOutlined />} onClick={refreshKingdeeMaterials} loading={refreshingMaterials}>更新金蝶商品</Button>
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
@@ -344,7 +344,7 @@ export function ProductionEntryPage() {
       </div>
 
       {/* ===== 内容区 ===== */}
-      <div className={styles.content}>
+      <div ref={setContentElement} className={styles.content}>
         <Spin spinning={loading}>
           {groups.length === 0 && !loading ? (
             <Card style={{ textAlign: "center", padding: 40 }}>
@@ -373,47 +373,15 @@ export function ProductionEntryPage() {
                       <span style={{ fontSize: 11, color: "#666" }}>欠数 <b style={{ color: group.summary.totalBackorder > 0 ? "#faad14" : "#333" }}>{group.summary.totalBackorder.toLocaleString()}</b></span>
                     </Space>
                   }
-                  extra={
-                    <Space size={4}>
-                      <Button type="link" size="small" style={{ fontSize: 11 }} icon={<PlusOutlined />} onClick={() => toggleQuick(group.date)}>快速录入</Button>
-                      <Button type="link" size="small" style={{ fontSize: 11 }} icon={<EditOutlined />} onClick={() => add(group.date)}>完整新增</Button>
-                    </Space>
-                  }
                   size="small"
                 >
                   <ResponsiveTable
                     columns={columns}
-                    dataSource={group.records.map((r) => ({ ...r, key: r.id }))}
+                    dataSource={sortRecordsByOrderQty(group.records, orderQtySort).map((record) => ({ ...record, key: record.id }))}
                     pagination={false} size="small" minWidth={2050} bordered
                     rowClassName={rowCls} locale={{ emptyText: "暂无数据" }}
+                    sticky={dailyTableSticky}
                   />
-
-                  {quickDate[group.date] && (
-                    <div className={styles.quickAddRow}>
-                      <Form form={quickForm} layout="inline" size="small">
-                        <Form.Item name="date" noStyle hidden><Input /></Form.Item>
-                        <Form.Item name="line" rules={[{ required: true, message: "必填" }]} style={{ marginBottom: 0 }}>
-                          <Select placeholder="产线" style={{ width: 56 }} options={lines.map((l) => ({ value: l, label: l }))} /></Form.Item>
-                        <Form.Item name="productName" rules={[{ required: true, message: "必填" }]} style={{ marginBottom: 0 }}>
-                          <Select showSearch placeholder="品名" style={{ width: 130 }}
-                            filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                            options={materials}
-                            onSelect={(val: string) => { const m = materials.find((x) => x.value === val); if (m?.spec) quickForm.setFieldValue("spec", m.spec); }} /></Form.Item>
-                        <Form.Item name="customer" rules={[{ required: true, message: "必填" }]} style={{ marginBottom: 0 }}>
-                          <Select showSearch placeholder="客户" style={{ width: 90 }}
-                            filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                            options={customers} /></Form.Item>
-                        <Form.Item name="productionBatch" style={{ marginBottom: 0 }}><Input placeholder="批号" style={{ width: 90 }} /></Form.Item>
-                        <Form.Item name="orderQty" style={{ marginBottom: 0 }}><InputNumber placeholder="订单" style={{ width: 58 }} min={0} /></Form.Item>
-                        <Form.Item name="planQty" style={{ marginBottom: 0 }}><InputNumber placeholder="计划" style={{ width: 58 }} min={0} /></Form.Item>
-                        <Form.Item name="dailyQty" rules={[{ required: true, message: "必填" }]} style={{ marginBottom: 0 }}><InputNumber placeholder="当天" style={{ width: 62 }} min={0} /></Form.Item>
-                        <Form.Item name="cumulativeQty" style={{ marginBottom: 0 }}><InputNumber placeholder="累计" style={{ width: 62 }} min={0} /></Form.Item>
-                        <Form.Item name="defects" style={{ marginBottom: 0 }}><InputNumber placeholder="不良" style={{ width: 54 }} min={0} /></Form.Item>
-                        <Button type="primary" size="small" icon={<SaveOutlined />} loading={quickSaving} onClick={() => quickSave(group.date)}>保存</Button>
-                        <Button size="small" onClick={() => setQuickDate((prev) => ({ ...prev, [group.date]: false }))}>取消</Button>
-                      </Form>
-                    </div>
-                  )}
                 </Card>
               ))}
               {hasMore && (

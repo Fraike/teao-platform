@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Card, Form, Input, DatePicker, Select } from "antd";
+import { Card, Form, Input, DatePicker, Segmented, Select } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
 import { quoteNoForDate, useQuotationStore, useIntlQuotationStore } from "../lib/store";
 import { DEFAULT_TRADE_TERMS, DEFAULT_PAYMENT_TERMS } from "../lib/constants";
@@ -7,12 +7,15 @@ import { useIsMobile } from "../lib/useIsMobile";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import type { QuoteMeta } from "../types/quotation";
+import { taxNoteFromSelection, taxSelectionFromNote } from "../lib/quotationCompatibility";
+import type { TaxSelection } from "../lib/quotationCompatibility";
+import styles from "./QuoteMetaCard.module.css";
 
 interface MetaField {
   key: keyof QuoteMeta;
   label: string;
   placeholder?: string;
-  type: "input" | "date" | "select";
+  type: "input" | "date" | "select" | "tax-segmented";
   selectOptions?: { value: string; label: string }[];
 }
 
@@ -27,7 +30,7 @@ const DOMESTIC_FIELDS: MetaField[] = [
       { value: "EUR", label: "EUR (欧元)" },
     ],
   },
-  { key: "taxNote", label: "税率说明", placeholder: "如：不含税", type: "input" },
+  { key: "taxNote", label: "是否含税", type: "tax-segmented" },
   { key: "salesName", label: "报价人", placeholder: "报价人", type: "input" },
   { key: "salesTel", label: "联系方式", placeholder: "联系电话", type: "input" },
 ];
@@ -107,6 +110,26 @@ function QuoteMetaCardInner({
                     value={(meta[f.key] as string) || f.selectOptions[0]?.value || ""}
                     onChange={(v: string) => setMeta((prev) => ({ ...prev, [f.key]: v }))}
                     options={f.selectOptions}
+                  />
+                </Form.Item>
+              );
+            }
+            if (f.type === "tax-segmented") {
+              const taxSelection = taxSelectionFromNote(meta.taxNote);
+              return (
+                <Form.Item key={f.key} label={f.label} style={{ marginBottom: 8 }}>
+                  <Segmented<TaxSelection>
+                    block
+                    className={`${styles.taxSelector} ${taxSelection === "included" ? styles.taxIncluded : styles.taxExcluded}`}
+                    value={taxSelection}
+                    options={[
+                      { label: "含税", value: "included" },
+                      { label: "不含税", value: "excluded" },
+                    ]}
+                    onChange={(selection) => setMeta((prev) => ({
+                      ...prev,
+                      taxNote: taxNoteFromSelection(selection),
+                    }))}
                   />
                 </Form.Item>
               );

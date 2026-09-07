@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Modal, Form, Select, Input, InputNumber, DatePicker, Divider,
   Button, Space, message, Descriptions, Row, Col, AutoComplete,
@@ -6,10 +6,19 @@ import {
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { api } from "../../lib/api";
-import { getCustomerOptions, getEmployeeOptions, getFinishedProductOptions } from "../../lib/productionReferenceData";
+import {
+  getCustomerOptions,
+  getEmployeeOptions,
+  getFinishedProductOptions,
+  subscribeToProductionMaterialUpdates,
+} from "../../lib/productionReferenceData";
 import { useAuthStore } from "../../lib/authStore";
 import type { ProductionRecord } from "../../types/production";
 import { ASSEMBLY_LINES, PROCESS_FIELDS } from "../../types/production";
+import { normalizePersonnel, personnelToTags } from "../../lib/productionEntry";
+import { buildAssemblyCopyValues } from "../../lib/productionCopy";
+import { ProductionProductSelect } from "./ProductionProductSelect";
+import type { ProductionProductOption } from "../../lib/productionProductSearch";
 
 interface EntryDrawerProps {
   open: boolean;
@@ -39,13 +48,13 @@ interface FormValues {
   planQty: number;
   cumulativeQty: number;
   defects: number;
-  oilInjection: string;
-  rubberRing: string;
-  capping: string;
-  shaftCore: string;
-  ultrasonic: string;
-  testing: string;
-  gear: string;
+  oilInjection: string[];
+  rubberRing: string[];
+  capping: string[];
+  shaftCore: string[];
+  ultrasonic: string[];
+  testing: string[];
+  gear: string[];
   filler: string;
   remark: string;
 }
@@ -53,9 +62,10 @@ interface FormValues {
 export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: EntryDrawerProps) {
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
-  const [materials, setMaterials] = useState<SelectOption[]>([]);
+  const [materials, setMaterials] = useState<ProductionProductOption[]>([]);
   const [customers, setCustomers] = useState<SelectOption[]>([]);
   const [employees, setEmployees] = useState<SelectOption[]>([]);
+  const pendingPersonnelRef = useRef<Record<string, string>>({});
   const [dataLoaded, setDataLoaded] = useState(false);
   const currentUser = useAuthStore((s) => s.user);
   const isEdit = !!record;
@@ -63,25 +73,31 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([
-      getFinishedProductOptions(),
-      getCustomerOptions(),
-      getEmployeeOptions(),
-    ]).then(([mRes, cRes, eRes]) => {
-      if (cancelled) return;
-      if (mRes.status === "fulfilled") setMaterials(mRes.value);
-      if (cRes.status === "fulfilled") setCustomers(cRes.value);
-      if (eRes.status === "fulfilled") setEmployees(eRes.value);
-      setDataLoaded(true);
-    });
-    return () => { cancelled = true; };
+    const loadReferenceData = () => {
+      Promise.allSettled([
+        getFinishedProductOptions(),
+        getCustomerOptions(),
+        getEmployeeOptions(),
+      ]).then(([mRes, cRes, eRes]) => {
+        if (cancelled) return;
+        if (mRes.status === "fulfilled") setMaterials(mRes.value);
+        if (cRes.status === "fulfilled") setCustomers(cRes.value);
+        if (eRes.status === "fulfilled") setEmployees(eRes.value);
+        setDataLoaded(true);
+      });
+    };
+    loadReferenceData();
+    const unsubscribe = subscribeToProductionMaterialUpdates(loadReferenceData);
+    return () => { cancelled = true; unsubscribe(); };
   }, []);
 
   useEffect(() => {
     if (!open) return;
+    pendingPersonnelRef.current = {};
     const fillRecord = record || copyFrom;
     const defaultFiller = currentUser?.name || currentUser?.username || "";
     if (fillRecord) {
+      const copiedQuantities = copyFrom ? buildAssemblyCopyValues(fillRecord) : null;
       form.setFieldsValue({
         date: copyFrom ? dayjs() : dayjs(fillRecord.date),
         line: fillRecord.line,
@@ -91,18 +107,18 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         productionBatch: fillRecord.productionBatch || "",
         materialBatch: fillRecord.materialBatch || "",
         workHours: fillRecord.workHours || 10,
-        orderQty: copyFrom ? 0 : (fillRecord.orderQty || 0),
-        planQty: copyFrom ? 0 : (fillRecord.planQty || 0),
-        dailyQty: copyFrom ? 0 : (fillRecord.dailyQty || 0),
-        cumulativeQty: copyFrom ? 0 : (fillRecord.cumulativeQty || 0),
-        defects: 0,
-        oilInjection: fillRecord.oilInjection || "",
-        rubberRing: fillRecord.rubberRing || "",
-        capping: fillRecord.capping || "",
-        shaftCore: fillRecord.shaftCore || "",
-        ultrasonic: fillRecord.ultrasonic || "",
-        testing: fillRecord.testing || "",
-        gear: fillRecord.gear || "",
+        orderQty: copiedQuantities?.orderQty ?? fillRecord.orderQty ?? 0,
+        planQty: copiedQuantities?.planQty ?? fillRecord.planQty ?? 0,
+        dailyQty: copiedQuantities?.dailyQty ?? fillRecord.dailyQty ?? 0,
+        cumulativeQty: copiedQuantities?.cumulativeQty ?? fillRecord.cumulativeQty ?? 0,
+        defects: copiedQuantities?.defects ?? fillRecord.defects ?? 0,
+        oilInjection: personnelToTags(fillRecord.oilInjection),
+        rubberRing: personnelToTags(fillRecord.rubberRing),
+        capping: personnelToTags(fillRecord.capping),
+        shaftCore: personnelToTags(fillRecord.shaftCore),
+        ultrasonic: personnelToTags(fillRecord.ultrasonic),
+        testing: personnelToTags(fillRecord.testing),
+        gear: personnelToTags(fillRecord.gear),
         filler: fillRecord.filler || defaultFiller,
         remark: fillRecord.remark || "",
       });
@@ -116,13 +132,25 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
     }
   }, [open, record, copyFrom, defaultDate, form, currentUser]);
 
-  const handleProductSelect = (value: string) => {
-    const mat = materials.find((m) => m.value === value);
-    if (mat?.spec) form.setFieldValue("spec", mat.spec);
+  const handleProductSelect = (product: ProductionProductOption) => {
+    if (product.spec) form.setFieldValue("spec", product.spec);
+  };
+
+  const commitPersonnelText = (key: keyof FormValues) => {
+    const typedValue = pendingPersonnelRef.current[key]?.trim();
+    if (!typedValue) return;
+    const current = form.getFieldValue(key) as string[] | undefined;
+    form.setFieldValue(key, [...new Set([...(current || []), ...personnelToTags(typedValue)])]);
+    delete pendingPersonnelRef.current[key];
+  };
+
+  const commitAllPersonnelText = () => {
+    PROCESS_FIELDS.forEach(({ key }) => commitPersonnelText(key as keyof FormValues));
   };
 
   const handleSubmit = async () => {
     try {
+      commitAllPersonnelText();
       const values = await form.validateFields();
       setLoading(true);
       const payload: Record<string, unknown> = {
@@ -139,13 +167,13 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         planQty: values.planQty ?? 0,
         cumulativeQty: values.cumulativeQty ?? 0,
         defects: values.defects ?? 0,
-        oilInjection: values.oilInjection || "",
-        rubberRing: values.rubberRing || "",
-        capping: values.capping || "",
-        shaftCore: values.shaftCore || "",
-        ultrasonic: values.ultrasonic || "",
-        testing: values.testing || "",
-        gear: values.gear || "",
+        oilInjection: normalizePersonnel(values.oilInjection),
+        rubberRing: normalizePersonnel(values.rubberRing),
+        capping: normalizePersonnel(values.capping),
+        shaftCore: normalizePersonnel(values.shaftCore),
+        ultrasonic: normalizePersonnel(values.ultrasonic),
+        testing: normalizePersonnel(values.testing),
+        gear: normalizePersonnel(values.gear),
         filler: values.filler || "",
         remark: values.remark || "",
       };
@@ -216,10 +244,9 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="品名" name="productName" rules={[{ required: true, message: "必填" }]}>
-              <Select showSearch placeholder="搜索并选择商品（成品）"
+              <ProductionProductSelect placeholder="搜索并选择商品（成品）"
                 loading={!dataLoaded}
-                filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                options={materials} onSelect={handleProductSelect} />
+                options={materials} onProductSelect={handleProductSelect} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -299,7 +326,9 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
                 <Select mode="tags" showSearch placeholder={`选${label}`}
                   loading={!dataLoaded}
                   filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                  options={employees} maxTagCount={3} />
+                  options={employees} maxTagCount={3} tokenSeparators={[",", "，", "、"]}
+                  onSearch={(value) => { pendingPersonnelRef.current[key] = value; }}
+                  onBlur={() => commitPersonnelText(key as keyof FormValues)} />
               </Form.Item>
             </Col>
           ))}

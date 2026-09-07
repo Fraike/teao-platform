@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { DEFAULT_TERMS } from "../src/lib/constants.ts";
 import { isSupportedImageFile } from "../src/lib/imageUtils.ts";
 import { formatIntlTierLabel, formatQuotePrice } from "../src/lib/quotationDisplay.ts";
@@ -56,5 +58,12 @@ assert.deepEqual(LOGIN_AUTOCOMPLETE, {
 });
 
 assert.deepEqual(QUOTE_PRICE_INPUT_PROPS, { controls: false });
+
+const quoteMetaSource = fs.readFileSync(path.resolve("src/components/QuoteMetaCard.tsx"), "utf8");
+assert.match(quoteMetaSource, /\{ key: "taxNote", label: "是否含税", type: "tax-segmented" \}/);
+assert.match(quoteMetaSource, /<Segmented<TaxSelection>/);
+
+const productCardSource = fs.readFileSync(path.resolve("src/components/ProductCard.tsx"), "utf8");
+assert.doesNotMatch(productCardSource, /truncatePrice=/, "国内报价输入不应截断小数");
 
 console.log("Quotation UI config tests passed.");

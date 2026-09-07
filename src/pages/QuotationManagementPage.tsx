@@ -22,6 +22,7 @@ import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
 import type { ManagedQuotation, Product, QuotationProductPreview } from "../types/quotation";
 import { ResponsiveTable } from "../components/ResponsiveTable";
+import { formatDomesticPrice } from "../lib/quotationCompatibility";
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -269,10 +270,12 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
         <Space direction="vertical" size={2}>
           <Tag color="blue">阶梯报价</Tag>
           {[...(product.tiers || [])].sort((left, right) => left.minQty - right.minQty).map((tier) => (
-            <Text key={tier.id}>MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {product.unit || "PCS"}：{record?.currency || "CNY"} {tier.price.toFixed(record?.market === "international" ? 3 : 2)}</Text>
+            <Text key={tier.id}>MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {product.unit || "PCS"}：{record?.currency || "CNY"} {record?.market === "international" ? tier.price.toFixed(3) : formatDomesticPrice(tier.price)}</Text>
           ))}
         </Space>
-      ) : (value ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2 }),
+      ) : record?.market === "international"
+        ? (value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+        : formatDomesticPrice(value ?? 0),
     },
     { title: "运费", dataIndex: "freight", width: 100, align: "left", render: (value: number) => value ? value.toLocaleString("zh-CN", { minimumFractionDigits: 2 }) : "-" },
     { title: "备注", dataIndex: "remark", align: "left", ellipsis: true, render: (value: string) => value || "-" },

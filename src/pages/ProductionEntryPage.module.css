@@ -82,28 +82,35 @@
   color: #999;
 }
 
-.quickAddRow {
-  padding: 6px 8px;
-  background: #e6f4ff;
-  border-top: 1px dashed #91caff;
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  flex-wrap: wrap;
-  overflow-x: auto;
+.orderSortButton {
+  height: 22px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.quickAddRow :global(.ant-select-selector),
-.quickAddRow :global(.ant-input) {
-  height: 28px !important;
-  line-height: 28px !important;
+.quickProductSelect {
+  width: 130px;
 }
-.quickAddRow :global(.ant-input-number-input) {
-  height: 26px !important;
-  line-height: 26px !important;
+
+.truncatedTag {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
 }
-.quickAddRow :global(.ant-form-item) {
-  margin-right: 3px;
+
+.truncatedText {
+  display: block;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :global(.editable-cell):hover {

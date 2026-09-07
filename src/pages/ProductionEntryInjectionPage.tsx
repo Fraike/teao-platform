@@ -16,7 +16,15 @@ import { useAuthStore } from "../lib/authStore";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
-import { getFinishedProductOptions } from "../lib/productionReferenceData";
+import {
+  getInjectionPlasticPartOptions,
+  refreshProductionMaterialOptions,
+  subscribeToProductionMaterialUpdates,
+} from "../lib/productionReferenceData";
+import { buildInjectionCopyValues } from "../lib/productionCopy";
+import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
+import type { ProductionProductOption } from "../lib/productionProductSearch";
+import { getProductionDailyTableSticky } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -49,27 +57,33 @@ const INJECTION_SUMMARY_COLUMNS: ExportColumn[] = [
 function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record: InjRecord | null; copyFrom: InjRecord | null; onClose: (saved: boolean) => void }) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [materials, setMaterials] = useState<{ value: string; label: string }[]>([]);
+  const [materials, setMaterials] = useState<ProductionProductOption[]>([]);
   const currentUser = useAuthStore((s) => s.user);
   const isEdit = !!record; const isCopy = !record && !!copyFrom;
 
   useEffect(() => {
-    getFinishedProductOptions().then((options) => setMaterials(options));
+    const loadMaterials = () => {
+      getInjectionPlasticPartOptions().then((options) => setMaterials(options));
+    };
+    loadMaterials();
+    return subscribeToProductionMaterialUpdates(loadMaterials);
   }, []);
 
   useEffect(() => {
     if (!open) return;
     const fillRecord = record || copyFrom;
     if (fillRecord) {
+      const copiedQuantities = copyFrom ? buildInjectionCopyValues(fillRecord) : null;
       form.setFieldsValue({
         date: copyFrom ? dayjs() : dayjs(fillRecord.date),
         machine: fillRecord.machine, productName: fillRecord.productName,
         material: fillRecord.material, materialBatch: fillRecord.materialBatch,
         shift: fillRecord.shift, operator: fillRecord.operator,
-        orderQty: copyFrom ? 0 : fillRecord.orderQty,
-        dailyQty: copyFrom ? 0 : fillRecord.dailyQty,
-        cumulativeQty: copyFrom ? 0 : fillRecord.cumulativeQty,
-        defects: 0, batchNo: fillRecord.batchNo, remark: fillRecord.remark,
+        orderQty: copiedQuantities?.orderQty ?? fillRecord.orderQty,
+        dailyQty: copiedQuantities?.dailyQty ?? fillRecord.dailyQty,
+        cumulativeQty: copiedQuantities?.cumulativeQty ?? fillRecord.cumulativeQty,
+        defects: copiedQuantities?.defects ?? fillRecord.defects,
+        batchNo: fillRecord.batchNo, remark: fillRecord.remark,
       });
     } else {
       form.resetFields();
@@ -103,7 +117,7 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
           <Col span={8}><Form.Item label="班次" name="shift" rules={[{ required: true }]}><Select options={SHIFTS.map(s => ({ value: s, label: s }))} /></Form.Item></Col>
         </Row>
         <Form.Item label="品名/型号" name="productName" rules={[{ required: true, message: "必填" }]}>
-          <Select showSearch placeholder="搜索并选择商品（成品）" filterOption={(i, o) => (o?.label as string)?.toLowerCase().includes(i.toLowerCase())} options={materials} />
+          <ProductionProductSelect placeholder="搜索并选择商品（塑胶配件）" options={materials} />
         </Form.Item>
         <Row gutter={16}>
           <Col span={12}><Form.Item label="原材料" name="material"><Input placeholder="如 POM, PC" /></Form.Item></Col>
@@ -145,25 +159,36 @@ export function ProductionEntryInjectionPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [refreshingMaterials, setRefreshingMaterials] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editRec, setEditRec] = useState<InjRecord | null>(null);
   const [copyRec, setCopyRec] = useState<InjRecord | null>(null);
   const offsetRef = useRef(0);
   const groupsRef = useRef<InjGroup[]>([]);
+  const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
   const [quickDate, setQuickDate] = useState<Record<string, boolean>>({});
   const [quickForm] = Form.useForm();
   const [quickSaving, setQuickSaving] = useState(false);
-  const [materials, setMaterials] = useState<{ value: string; label: string }[]>([]);
+  const [materials, setMaterials] = useState<ProductionProductOption[]>([]);
 
   const [histOpen, setHistOpen] = useState(false);
   const [histData, setHistData] = useState<{ id: number; action: string; field_name: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string }[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const historyCacheRef = useRef(new Map<number, typeof histData>());
+  const dailyTableSticky = contentElement
+    ? getProductionDailyTableSticky(() => contentElement)
+    : undefined;
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
-  useEffect(() => { getFinishedProductOptions().then((options) => setMaterials(options)); }, []);
+  useEffect(() => {
+    const loadMaterials = () => {
+      getInjectionPlasticPartOptions().then((options) => setMaterials(options));
+    };
+    loadMaterials();
+    return subscribeToProductionMaterialUpdates(loadMaterials);
+  }, []);
 
   const doSearch = () => { setProduct(lProduct); setSearch(lSearch); };
 
@@ -181,6 +206,15 @@ export function ProductionEntryInjectionPage() {
       message.success(`已导出 ${response.data.groups.length} 天生产日报`);
     } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
     finally { setExporting(false); }
+  };
+
+  const refreshKingdeeMaterials = async () => {
+    setRefreshingMaterials(true);
+    try {
+      const { finishedProducts, plasticParts } = await refreshProductionMaterialOptions();
+      message.success(`金蝶商品已更新：成品 ${finishedProducts.length} 条，塑胶配件 ${plasticParts.length} 条`);
+    } catch (error) { message.error(error instanceof Error ? error.message : "金蝶商品更新失败，已保留当前缓存"); }
+    finally { setRefreshingMaterials(false); }
   };
 
   const fetchData = useCallback(async (append: boolean) => {
@@ -265,6 +299,7 @@ export function ProductionEntryInjectionPage() {
           <Button size="middle" onClick={() => { setMachine(null); setProduct(""); setLProduct(""); setSearch(""); setLSearch(""); }}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
+          <Button size="small" icon={<ReloadOutlined />} onClick={refreshKingdeeMaterials} loading={refreshingMaterials}>更新金蝶商品</Button>
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
@@ -272,7 +307,7 @@ export function ProductionEntryInjectionPage() {
         </div>
       </div>
 
-      <div className={styles.content}>
+      <div ref={setContentElement} className={styles.content}>
         <Spin spinning={loading}>
           {groups.length === 0 && !loading ? (
             <Card style={{ textAlign: "center", padding: 40 }}><div style={{ color: "#999", marginBottom: 12 }}>暂无生产数据</div><Button type="primary" icon={<PlusOutlined />} onClick={add}>新增第一条</Button></Card>
@@ -285,14 +320,14 @@ export function ProductionEntryInjectionPage() {
                   size="small"
                 >
                   <ResponsiveTable columns={columns} dataSource={g.records.map(r => ({ ...r, key: r.id }))} pagination={false} size="small" minWidth={1600} bordered
-                    rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} />
+                    rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} sticky={dailyTableSticky} />
 
                   {quickDate[g.date] && (
                     <div className={styles.quickAddRow}>
                       <Form form={quickForm} layout="inline" size="small">
                         <Form.Item name="machine" rules={[{ required: true }]} style={{ marginBottom: 0 }}><Select placeholder="机台" style={{ width: 65 }} options={MACHINES.map(l => ({ value: l, label: l }))} /></Form.Item>
                         <Form.Item name="shift" rules={[{ required: true }]} style={{ marginBottom: 0 }}><Select placeholder="班次" style={{ width: 65 }} options={SHIFTS.map(s => ({ value: s, label: s }))} /></Form.Item>
-                        <Form.Item name="productName" rules={[{ required: true }]} style={{ marginBottom: 0 }}><Select showSearch placeholder="品名" style={{ width: 130 }} filterOption={(i, o) => (o?.label as string)?.toLowerCase().includes(i.toLowerCase())} options={materials} /></Form.Item>
+                        <Form.Item name="productName" rules={[{ required: true }]} style={{ marginBottom: 0 }}><ProductionProductSelect className={styles.quickProductSelect} placeholder="品名" options={materials} /></Form.Item>
                         <Form.Item name="material" style={{ marginBottom: 0 }}><Input placeholder="原材料" style={{ width: 70 }} /></Form.Item>
                         <Form.Item name="orderQty" style={{ marginBottom: 0 }}><InputNumber placeholder="订单" style={{ width: 65 }} min={0} /></Form.Item>
                         <Form.Item name="dailyQty" rules={[{ required: true }]} style={{ marginBottom: 0 }}><InputNumber placeholder="当天" style={{ width: 70 }} min={0} /></Form.Item>

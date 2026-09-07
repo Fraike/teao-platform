@@ -1,7 +1,7 @@
 import { forwardRef, Fragment } from "react";
 import { useQuotationStore } from "../lib/store";
 import { COMPANY_INFO, LOGO_PATH, STAMP_PATH } from "../lib/constants";
-import { formatQuotePrice } from "../lib/quotationDisplay";
+import { formatDomesticPrice } from "../lib/quotationCompatibility";
 
 const A4_WIDTH = 794;
 const A4_HEIGHT = 1122;
@@ -193,7 +193,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
           </thead>
           <tbody>
             {products.map((p, idx) => {
-              const price = formatQuotePrice(p.price ?? 0, "¥", 2, "zh-CN");
+              const price = { currency: "¥", amount: formatDomesticPrice(p.price ?? 0) };
 
               return (
                 <Fragment key={p.id}>
@@ -234,7 +234,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
                 <td style={td("left", S.light, 10)}>{p.remark || ""}</td>
               </tr>
               {p.tierPricingEnabled && p.tiers && [...p.tiers].sort((a, b) => a.minQty - b.minQty).map((tier) => {
-                const tierPrice = formatQuotePrice(tier.price, "¥", 2, "zh-CN");
+                const tierPrice = { currency: "¥", amount: formatDomesticPrice(tier.price) };
 
                 return (
                   <tr key={tier.id} className={styles.tierRow}>

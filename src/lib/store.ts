@@ -3,6 +3,7 @@ import type { Quotation, Product, MoldItem, CustomerInfo } from "../types/quotat
 import { sampleQuotation } from "./sample";
 import { sampleIntlQuotation } from "./sample-intl";
 import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_AMORTIZE_QTY, DEFAULT_TERMS, DEFAULT_TERMS_EN } from "./constants";
+import { ensureUniqueProductIds, removeProductById } from "./quotationCompatibility";
 
 // ---- helpers ----
 
@@ -78,7 +79,7 @@ function normalizeQuotation(data: Quotation, opts: QuotationStoreOptions): Quota
         ...(quoteMeta.tableColumnWidths || {}),
       },
     },
-    products: data.products.map((product) => ({
+    products: ensureUniqueProductIds(data.products, () => genId()).map((product) => ({
       ...d.productDefaults,
       ...product,
       tierPricingEnabled: product.tierPricingEnabled ?? (opts.enableLegacyTierPricing === true && Boolean(product.tiers?.length)),
@@ -162,7 +163,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     removeProduct: (id) =>
       set((s) => {
-        const products = s.quotation.products.filter((p) => p.id !== id);
+        const products = removeProductById(s.quotation.products, id);
         const next = { ...s.quotation, products };
         save(opts.storageKey, next);
         return { quotation: next };

@@ -104,7 +104,6 @@ export default function ProductCard() {
           product={r}
           onChange={(product) => updateProduct(r.id, () => product)}
           labels={{ toggle: "启用阶梯报价", enabled: "阶梯报价", add: "添加档位" }}
-          pricePrecision={2}
           currencyLabel="¥"
         />
       ),

@@ -14,11 +14,12 @@ interface TierPricingEditorProps {
     enabled: string;
     add: string;
   };
-  pricePrecision: number;
+  pricePrecision?: number;
   currencyLabel: string;
+  truncatePrice?: (value: number) => number;
 }
 
-export function TierPricingEditor({ product, onChange, labels, pricePrecision, currencyLabel }: TierPricingEditorProps) {
+export function TierPricingEditor({ product, onChange, labels, pricePrecision, currencyLabel, truncatePrice }: TierPricingEditorProps) {
   const enabled = product.tierPricingEnabled === true;
   const tiers = sortTiers(product.tiers || []);
 
@@ -39,8 +40,8 @@ export function TierPricingEditor({ product, onChange, labels, pricePrecision, c
               size="small"
               variant="borderless"
               value={product.price}
-              onChange={(value) => onChange({ ...product, price: value ?? 0 })}
-              precision={pricePrecision}
+              onChange={(value) => onChange({ ...product, price: truncatePrice?.(value ?? 0) ?? value ?? 0 })}
+              precision={truncatePrice ? undefined : pricePrecision}
               min={0}
               {...QUOTE_PRICE_INPUT_PROPS}
             />
@@ -75,8 +76,8 @@ export function TierPricingEditor({ product, onChange, labels, pricePrecision, c
                 className={priceStyles.tierPriceInput}
                 size="small"
                 value={tier.price}
-                onChange={(value) => changeTier(tier.id, "price", value ?? 0)}
-                precision={pricePrecision}
+                onChange={(value) => changeTier(tier.id, "price", truncatePrice?.(value ?? 0) ?? value ?? 0)}
+                precision={truncatePrice ? undefined : pricePrecision}
                 min={0}
                 {...QUOTE_PRICE_INPUT_PROPS}
               />
