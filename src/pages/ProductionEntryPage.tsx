@@ -69,7 +69,7 @@ function BatchText({ text }: { text: string }) {
 }
 
 const ASSEMBLY_DETAIL_COLUMNS: ExportColumn[] = [
-  { key: "date", title: "日期" }, { key: "line", title: "产线" }, { key: "customer", title: "客户名称" }, { key: "spec", title: "规格" }, { key: "productName", title: "品名" }, { key: "materialBatch", title: "原材料批号" }, { key: "workHours", title: "工时" }, { key: "productionBatch", title: "生产批号" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "planQty", title: "计划生产", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "ppm", title: "PPM", format: "#,##0" }, { key: "backorder", title: "欠数", format: "#,##0" },
+  { key: "date", title: "日期" }, { key: "line", title: "产线" }, { key: "customer", title: "客户名称" }, { key: "spec", title: "规格" }, { key: "productNumber", title: "商品编码" }, { key: "productId", title: "金蝶商品ID" }, { key: "productName", title: "品名" }, { key: "materialBatch", title: "原材料批号" }, { key: "workHours", title: "工时" }, { key: "productionBatch", title: "生产批号" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "planQty", title: "计划生产", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "ppm", title: "PPM", format: "#,##0" }, { key: "backorder", title: "欠数", format: "#,##0" },
   ...PROCESS_FIELDS.map((field) => ({ key: field.key, title: field.label })), { key: "filler", title: "填表人" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
 ];
 const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
@@ -223,7 +223,8 @@ export function ProductionEntryPage() {
 
   const flm: Record<string, string> = {
     date: "日期", line: "产线", customer: "客户", spec: "规格",
-    product_name: "品名", material_batch: "原材料批号", work_hours: "工作时间",
+    product_name: "品名", product_id: "金蝶商品ID", product_number: "商品编码",
+    material_batch: "原材料批号", work_hours: "工作时间",
     production_batch: "生产批号", order_qty: "订单数量", daily_qty: "当天生产数量",
     plan_qty: "计划生产数量", cumulative_qty: "实际生产数量（累计生产）", defects: "不良数",
     oil_injection: "注油", rubber_ring: "装胶圈", capping: "盖盖子",
@@ -314,7 +315,7 @@ export function ProductionEntryPage() {
     <div className={styles.page}>
       {/* ===== 合并顶部栏 ===== */}
       <div className={styles.topBar}>
-        <span className={styles.topTitle}>生产日报录入 — 装配部</span>
+        <span className={styles.topTitle}>装配部生产日报</span>
         <div className={styles.topFilters}>
           <FilterOutlined style={{ color: "#1677ff", fontSize: 14 }} />
           <RangePicker

@@ -1,131 +1,199 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card, Row, Col, Typography, DatePicker, Tabs, Button,
-  Statistic, Spin, message, Tag, Space,
+  Statistic, Spin, message, Tag, Space, Modal, Alert,
 } from "antd";
 import {
-  ReloadOutlined, SendOutlined, WarningOutlined,
+  ReloadOutlined, SendOutlined, WarningOutlined, EyeOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
+import { useAuthStore } from "../lib/authStore";
+import {
+  createProductionReportCoordinator, formatReportRate, getConfirmedSendRequest,
+  getConfirmedSourceRequest, getSourceSwitchAction, productionSourceLabel,
+  requiresRepeatConfirmation,
+} from "../lib/productionReportUi";
+import type {
+  ProductionReportConfig, ProductionReportData, ProductionReportPreview,
+  ProductionReportTicket, ProductionPreviewView,
+} from "../types/productionReport";
 import { ResponsiveTable } from "../components/ResponsiveTable";
+import styles from "./ProductionReportPage.module.css";
 
 const { Title } = Typography;
 
-interface LineSummary {
-  line: string;
-  products: ProductRecord[];
-  totalPlan: number;
-  totalActual: number;
-  totalDefects: number;
-  totalBackorder: number;
-  recordCount: number;
-}
-
-interface ProductRecord {
-  date?: string;
-  name: string;
-  spec?: string;
-  customer?: string;
-  material?: string;
-  planQty: number;
-  actualQty: number;
-  achievementRate: number | null;
-  defects: number;
-  qualifiedRate: number | null;
-  backorder: number;
-  batchNo: string;
-  operator?: string;
-  remark?: string;
-}
-
-interface MachineSummary {
-  machine: string;
-  shift: string;
-  products: ProductRecord[];
-  totalQty: number;
-  totalDefects: number;
-  totalBackorder: number;
-  recordCount: number;
-}
-
-interface ReportData {
-  date: string;
-  assembly: {
-    records: LineSummary[];
-    summary: {
-      lines: number;
-      totalPlanQty: number;
-      totalActualQty: number;
-      totalDefects: number;
-      totalBackorder: number;
-      avgAchievementRate: number;
-      avgQualifiedRate: number;
-    };
-  };
-  injection: {
-    records: MachineSummary[];
-    summary: {
-      machines: number;
-      totalQty: number;
-      totalDefects: number;
-      totalBackorder: number;
-      avgQualifiedRate: number;
-    };
-  };
-}
-
 export function ProductionReportPage() {
   const isMobile = useIsMobile();
+  const role = useAuthStore((state) => state.user?.role);
   const [date, setDate] = useState(() => dayjs().subtract(1, "day"));
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [report, setReport] = useState<ProductionReportData | null>(null);
+  const [config, setConfig] = useState<ProductionReportConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [configRevision, setConfigRevision] = useState(0);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [operation, setOperation] = useState<"send" | "source" | null>(null);
+  const operationRef = useRef<ProductionReportTicket | null>(null);
+  const [preview, setPreview] = useState<ProductionPreviewView | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewRequestRef = useRef<ProductionReportTicket | null>(null);
+  const [repeatConfirmation, setRepeatConfirmation] = useState<ProductionReportTicket | null>(null);
+  const [sourceConfirmation, setSourceConfirmation] = useState<ProductionReportTicket | null>(null);
   const [activeTab, setActiveTab] = useState("assembly");
-
   const dateStr = date.format("YYYY-MM-DD");
+  const [coordinator] = useState(() => createProductionReportCoordinator(dateStr, null));
+  const source = config?.dataSource ?? null;
+  const sourceAction = getSourceSwitchAction(role, source);
+  const busy = configLoading || loading || previewLoading || operation !== null;
 
-  const fetchReport = useCallback(async (d: string, force = false) => {
+  const fetchReport = useCallback(async () => {
+    const ticket = coordinator.begin("report");
     setLoading(true);
+    setReportError(null);
     try {
-      if (force) {
-        await api.post<{
-          ok: boolean;
-          date: string;
-          assembly: { summary: unknown; rawCount: number };
-          injection: { summary: unknown; rawCount: number };
-        }>(`/api/production/fetch?date=${d}`);
+      const data = await api.get<ProductionReportData>(`/api/production/report?date=${ticket.date}`);
+      if (!coordinator.isCurrent(ticket)) return;
+      if (ticket.source !== null && data.dataSource !== ticket.source) {
+        setReportError("数据来源已在其它页面变更，请刷新配置后重试");
+        return;
       }
-      const data = await api.get<ReportData & { exists: boolean }>(`/api/production/report?date=${d}`);
-      if (data.exists) {
-        setReport(data as ReportData);
-      } else {
-        setReport(null);
-      }
+      setReport(data.exists ? data : null);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载失败");
+      if (coordinator.isCurrent(ticket)) setReportError(e instanceof Error ? e.message : "加载失败");
     } finally {
-      setLoading(false);
+      if (coordinator.isCurrent(ticket)) setLoading(false);
     }
-  }, []);
+  }, [coordinator]);
+
+  const fetchConfig = useCallback(async () => {
+    const ticket = coordinator.begin("config");
+    let accepted = false;
+    setConfigLoading(true);
+    setConfigError(null);
+    try {
+      const data = await api.get<ProductionReportConfig>("/api/production/config");
+      if (!coordinator.isCurrent(ticket)) return;
+      if (data.dataSource !== "vika" && data.dataSource !== "internal") throw new Error("配置返回了无效的数据来源");
+      accepted = true;
+      coordinator.setContext(ticket.date, data.dataSource);
+      if (ticket.source !== data.dataSource) setReport(null);
+      setConfig(data);
+      setConfigRevision((revision) => revision + 1);
+      setPreview(null);
+      setRepeatConfirmation(null);
+      setSourceConfirmation(null);
+    } catch (e) {
+      if (!coordinator.isCurrent(ticket)) return;
+      accepted = true;
+      coordinator.setContext(ticket.date, null);
+      setConfig(null);
+      setConfigError(e instanceof Error ? e.message : "获取配置失败");
+    } finally {
+      // A successful config changes the context, invalidating its own ticket.
+      if (accepted || coordinator.isCurrent(ticket)) {
+        setConfigLoading(false);
+        setConfigLoaded(true);
+      }
+    }
+  }, [coordinator]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchReport(dateStr, true);
-  }, [dateStr, fetchReport]);
+    void fetchConfig();
+    return () => coordinator.invalidateAll();
+  }, [coordinator, fetchConfig]);
 
-  const handleRefresh = () => fetchReport(dateStr, true);
+  useEffect(() => {
+    if (!configLoaded || source === null) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchReport();
+  }, [dateStr, source, configLoaded, configRevision, fetchReport]);
 
-  const handleSend = async () => {
-    setSending(true);
+  const changeDate = (nextDate: dayjs.Dayjs | null) => {
+    const next = nextDate || dayjs();
+    if (next.format("YYYY-MM-DD") === dateStr) return;
+    coordinator.setContext(next.format("YYYY-MM-DD"), source);
+    setDate(next);
+    setReport(null);
+    setReportError(null);
+    setPreview(null);
+    setRepeatConfirmation(null);
+    setSourceConfirmation(null);
+  };
+
+  const closePreview = () => {
+    coordinator.invalidate("preview");
+    setPreview(null);
+  };
+
+  const handlePreview = async () => {
+    if (busy || previewRequestRef.current || operationRef.current || source === null) return;
+    const ticket = coordinator.begin("preview");
+    previewRequestRef.current = ticket;
+    setPreview({ ticket, data: null, error: null });
+    setPreviewLoading(true);
     try {
-      await api.post<{ ok: boolean; date: string; message: string }>(`/api/production/send?date=${dateStr}`);
-      message.success("已推送到企业微信群");
+      const data = await api.post<ProductionReportPreview>(`/api/production/preview?date=${ticket.date}`, {});
+      if (!coordinator.isCurrent(ticket)) return;
+      if (data.dataSource !== ticket.source) throw new Error("数据来源已变更，请刷新配置后重试");
+      setPreview({ ticket, data, error: null });
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "推送失败");
+      if (coordinator.isCurrent(ticket)) setPreview({ ticket, data: null, error: e instanceof Error ? e.message : "预览失败" });
     } finally {
-      setSending(false);
+      if (previewRequestRef.current === ticket) { previewRequestRef.current = null; setPreviewLoading(false); }
+    }
+  };
+
+  const handleRefresh = () => { if (!busy) void fetchReport(); };
+
+  const handleSend = async (confirmation?: ProductionReportTicket) => {
+    if (operationRef.current || loading || configLoading || previewLoading || source === null) return;
+    const confirmed = confirmation ? getConfirmedSendRequest(coordinator, confirmation) : null;
+    if (confirmation && !confirmed) { setRepeatConfirmation(null); return; }
+    const ticket = coordinator.begin("send");
+    operationRef.current = ticket;
+    setOperation("send");
+    setRepeatConfirmation(null);
+    try {
+      const data = await api.post<{ status: "sent"; message: string }>(
+        confirmed?.url ?? `/api/production/send?date=${ticket.date}`, confirmed?.body ?? {},
+      );
+      if (coordinator.isCurrent(ticket)) message.success(data.message || "已推送到企业微信群");
+    } catch (e) {
+      if (!coordinator.isCurrent(ticket)) return;
+      if (requiresRepeatConfirmation(e)) setRepeatConfirmation(ticket);
+      else message.error(e instanceof Error ? e.message : "推送失败");
+    } finally {
+      if (operationRef.current === ticket) { operationRef.current = null; setOperation(null); }
+    }
+  };
+
+  const handleSourceSwitch = async () => {
+    if (!sourceConfirmation || busy || operationRef.current) return;
+    const request = getConfirmedSourceRequest(coordinator, sourceConfirmation, role);
+    if (!request) { setSourceConfirmation(null); return; }
+    const ticket = coordinator.begin("source");
+    operationRef.current = ticket;
+    setOperation("source");
+    try {
+      const data = await api.post<{ ok: true; dataSource: ProductionReportConfig["dataSource"] }>(request.url, request.body);
+      if (!coordinator.isCurrent(ticket)) return;
+      coordinator.setContext(ticket.date, data.dataSource);
+      setConfig((previous) => previous ? { ...previous, dataSource: data.dataSource } : previous);
+      setReport(null);
+      setPreview(null);
+      setPreviewLoading(false);
+      setRepeatConfirmation(null);
+      setSourceConfirmation(null);
+      message.success(`已切换到${productionSourceLabel(data.dataSource)}`);
+    } catch (e) {
+      if (coordinator.isCurrent(ticket)) message.error(e instanceof Error ? e.message : "切换失败");
+    } finally {
+      if (operationRef.current === ticket) { operationRef.current = null; setOperation(null); }
     }
   };
 
@@ -133,6 +201,9 @@ export function ProductionReportPage() {
     if (rate === null) return "default";
     return rate >= threshold ? "success" : "error";
   };
+
+  const rateClass = (rate: number | null | undefined) =>
+    rate == null ? styles.rateUnknown : rate >= 0.95 ? styles.rateGood : styles.rateBad;
 
   // ===================== Assembly table =====================
   const assemblyColumns = [
@@ -154,8 +225,8 @@ export function ProductionReportPage() {
       title: "达成率", dataIndex: "achievementRate", key: "achievementRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
-          <Tag color={rateColor(v)}>{(v * 100).toFixed(0)}%</Tag>
-        ) : "-",
+          <Tag color={rateColor(v)}>{formatReportRate(v, 0)}</Tag>
+        ) : "—",
     },
     {
       title: "不良数", dataIndex: "defects", key: "defects", width: 65,
@@ -165,8 +236,8 @@ export function ProductionReportPage() {
       title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
-          <Tag color={rateColor(v)}>{(v * 100).toFixed(1)}%</Tag>
-        ) : "-",
+          <Tag color={rateColor(v)}>{formatReportRate(v)}</Tag>
+        ) : "—",
     },
     {
       title: "欠数", dataIndex: "backorder", key: "backorder", width: 75,
@@ -217,8 +288,8 @@ export function ProductionReportPage() {
       title: "合格率", dataIndex: "qualifiedRate", key: "qualifiedRate", width: 75,
       render: (v: number | null) =>
         v != null ? (
-          <Tag color={rateColor(v)}>{(v * 100).toFixed(1)}%</Tag>
-        ) : "-",
+          <Tag color={rateColor(v)}>{formatReportRate(v)}</Tag>
+        ) : "—",
     },
     {
       title: "欠数", dataIndex: "backorder", key: "backorder", width: 75,
@@ -245,51 +316,95 @@ export function ProductionReportPage() {
   const inj = report?.injection.summary;
 
   return (
-    <div style={{ maxWidth: "none", margin: 0, padding: isMobile ? "16px" : "24px" }}>
+    <div className={styles.page}>
       {/* Header */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-        marginBottom: 20, flexWrap: "wrap", gap: 12,
-      }}>
+      <div className={styles.header}>
         <div>
-          <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
-            生产日报
+          <Title level={isMobile ? 4 : 3} className={styles.title}>
+            生产日报汇总
           </Title>
+          <Tag className={styles.sourceTag} color={source === "internal" ? "blue" : undefined}>
+            当前数据来源：{configLoading ? "获取中" : productionSourceLabel(source)}
+          </Tag>
           <DatePicker
             value={date}
-            onChange={(d) => setDate(d || dayjs())}
+            onChange={changeDate}
             allowClear={false}
             size="large"
-            className="production-date-picker"
-            style={{ marginTop: 8, minWidth: 260 }}
+            className={styles.datePicker}
+            disabled={configLoading || operation === "source"}
             format="YYYY年M月D日"
             inputReadOnly
           />
-          <style>{`
-            .production-date-picker.ant-picker-large input {
-              font-size: 22px !important;
-              font-weight: 600 !important;
-            }
-            .production-date-picker.ant-picker-large {
-              height: 48px !important;
-            }
-          `}</style>
         </div>
-        <Space style={{ marginTop: isMobile ? 0 : 8 }}>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
+        <Space className={styles.actions} wrap>
+          {sourceAction && (
+            <Button onClick={() => { if (!busy) setSourceConfirmation(coordinator.begin("sourceConfirmation")); }} disabled={busy}>
+              {sourceAction.label}
+            </Button>
+          )}
+          {role === "admin" && source === null && (
+            <Button disabled>切换数据来源</Button>
+          )}
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading} disabled={busy}>
             刷新数据
+          </Button>
+          <Button icon={<EyeOutlined />} onClick={() => void handlePreview()} loading={previewLoading} disabled={busy || source === null}>
+            消息预览
           </Button>
           <Button
             type="primary"
             icon={<SendOutlined />}
-            onClick={handleSend}
-            loading={sending}
-            disabled={!report}
+            onClick={() => void handleSend()}
+            loading={operation === "send"}
+            disabled={busy || !report || source === null || !config?.hasWebhook}
           >
             推送到企微
           </Button>
         </Space>
       </div>
+
+      {configError && (
+        <Alert className={styles.notice} type="error" showIcon message={`获取数据来源失败：${configError}`}
+          action={<Button size="small" onClick={() => void fetchConfig()} loading={configLoading} disabled={busy}>刷新配置重试</Button>} />
+      )}
+      {reportError && <Alert className={styles.notice} type="error" showIcon message={reportError}
+        action={<Button size="small" onClick={() => void fetchConfig()} disabled={busy}>刷新配置重试</Button>} />}
+      {report && report.assembly.rawCount === 0 && report.injection.rawCount === 0 && (
+        <Alert className={styles.notice} type="info" showIcon message={`${dateStr} 暂无生产记录`} />
+      )}
+      {report && report.missingDepartments.length > 0 && (
+        <Alert className={styles.notice} type="warning" showIcon
+          message={`暂无记录：${report.missingDepartments.map((department) => department === "assembly" ? "装配部" : "注塑部").join("、")}`} />
+      )}
+
+      <Modal open={sourceConfirmation !== null} title="切换生产日报数据来源" okText="确认切换" cancelText="取消"
+        onOk={() => void handleSourceSwitch()} onCancel={() => { if (operation !== "source") setSourceConfirmation(null); }}
+        confirmLoading={operation === "source"} okButtonProps={{ disabled: busy && operation !== "source" }}
+        cancelButtonProps={{ disabled: operation === "source" }} closable={operation !== "source"} maskClosable={false}>
+        <p>确认从{productionSourceLabel(sourceConfirmation?.source ?? null)}切换到{productionSourceLabel(getSourceSwitchAction(role, sourceConfirmation?.source ?? null)?.target ?? null)}？</p>
+        <p>统一影响页面汇总、消息预览、手动及定时推送。</p>
+        <p>不迁移、删除或覆盖任何记录，不会自动发送消息。</p>
+      </Modal>
+
+      <Modal open={preview !== null} title="生产日报消息预览" onCancel={closePreview}
+        footer={<Button onClick={closePreview}>关闭</Button>} width={760}>
+        {preview && (
+          <>
+            <p>日期：{preview.ticket.date} · 数据来源：{productionSourceLabel(preview.data?.dataSource ?? preview.ticket.source)}</p>
+            {preview.error && <Alert type="error" showIcon message={preview.error} />}
+            {previewLoading && <Spin />}
+            {preview.data && !preview.data.hasData && <Alert type="info" showIcon message="该日期暂无生产记录" />}
+            {preview.data && <pre className={styles.previewContent}>{preview.data.content}</pre>}
+          </>
+        )}
+      </Modal>
+
+      <Modal open={repeatConfirmation !== null} title="确认重复推送" okText="确认重发" cancelText="取消"
+        onOk={() => { if (repeatConfirmation) void handleSend(repeatConfirmation); }} onCancel={() => setRepeatConfirmation(null)}
+        okButtonProps={{ disabled: busy }} maskClosable={false}>
+        <p>{repeatConfirmation?.date} · {productionSourceLabel(repeatConfirmation?.source ?? null)}的日报可能已经发送，请先核查企业微信群，再确认是否重发。</p>
+      </Modal>
 
       <Spin spinning={loading}>
         {report ? (
@@ -364,21 +479,15 @@ export function ProductionReportPage() {
                     <Col xs={12} sm={4}>
                       <Statistic
                         title="达成率"
-                        value={asm ? (asm.avgAchievementRate * 100).toFixed(0) : 0}
-                        suffix="%"
-                        valueStyle={{
-                          color: asm && asm.avgAchievementRate >= 0.95 ? "#52c41a" : "#ff4d4f",
-                        }}
+                        value={formatReportRate(asm?.avgAchievementRate, 0)}
+                        className={rateClass(asm?.avgAchievementRate)}
                       />
                     </Col>
                     <Col xs={12} sm={4}>
                       <Statistic
                         title="合格率"
-                        value={asm ? (asm.avgQualifiedRate * 100).toFixed(1) : 0}
-                        suffix="%"
-                        valueStyle={{
-                          color: asm && asm.avgQualifiedRate >= 0.95 ? "#52c41a" : "#ff4d4f",
-                        }}
+                        value={formatReportRate(asm?.avgQualifiedRate)}
+                        className={rateClass(asm?.avgQualifiedRate)}
                       />
                     </Col>
                     <Col xs={12} sm={4}>
@@ -411,11 +520,8 @@ export function ProductionReportPage() {
                     <Col xs={12} sm={6}>
                       <Statistic
                         title="合格率"
-                        value={inj ? (inj.avgQualifiedRate * 100).toFixed(1) : 0}
-                        suffix="%"
-                        valueStyle={{
-                          color: inj && inj.avgQualifiedRate >= 0.95 ? "#52c41a" : "#ff4d4f",
-                        }}
+                        value={formatReportRate(inj?.avgQualifiedRate)}
+                        className={rateClass(inj?.avgQualifiedRate)}
                       />
                     </Col>
                     <Col xs={12} sm={6}>
@@ -437,11 +543,11 @@ export function ProductionReportPage() {
         ) : (
           <Card style={{ textAlign: "center", padding: 60 }}>
             <div style={{ color: "#999", marginBottom: 16, fontSize: 16 }}>
-              {loading ? "正在从维格表获取数据..." : `${dateStr} 暂无生产数据`}
+              {loading ? "正在获取生产汇总数据..." : `${dateStr} 暂无生产数据`}
             </div>
             {!loading && (
-              <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh}>
-                从维格表获取数据
+              <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh} disabled={busy}>
+                刷新数据
               </Button>
             )}
           </Card>

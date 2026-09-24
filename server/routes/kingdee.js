@@ -8,11 +8,10 @@ import {
 } from "../services/kingdee.js";
 import { readKingdeeCache, writeKingdeeCache } from "../services/kingdee-cache.js";
 import { jwtAuth, requireAnyPermission } from "../middleware/jwt-auth.js";
+import { splitProductionMaterials } from "../services/production-product.js";
 
 const TECHNICAL_DATA_PERMISSIONS = ["basic_data", "business", "production"];
 const pendingKingdeeRequests = new Map();
-const FINISHED_PRODUCT_CATEGORY = "2314557705978701824";
-const INJECTION_PLASTIC_PARTS_CATEGORY = "2314559979366968320";
 
 export function getMaterialsCacheKey(category) {
   if (!category) return "materials";
@@ -32,40 +31,7 @@ function filterMaterials(materials, search) {
     .some((value) => String(value || "").toLowerCase().includes(keyword)));
 }
 
-function findCategory(categories, categoryId) {
-  for (const category of categories) {
-    if (String(category.id) === categoryId) return category;
-    const child = findCategory(category.children || [], categoryId);
-    if (child) return child;
-  }
-  return null;
-}
-
-function collectCategoryIds(category, ids) {
-  ids.add(String(category.id));
-  for (const child of category.children || []) collectCategoryIds(child, ids);
-}
-
-function getCategoryDescendantIds(categories, categoryId, includeRoot = true) {
-  const ids = new Set();
-  const category = findCategory(categories, categoryId);
-  if (!category) {
-    ids.add(categoryId);
-  } else if (includeRoot) {
-    collectCategoryIds(category, ids);
-  } else {
-    for (const child of category.children || []) collectCategoryIds(child, ids);
-  }
-  return ids;
-}
-
-export function splitProductionMaterials(materials, categories) {
-  const finishedCategoryIds = getCategoryDescendantIds(categories, FINISHED_PRODUCT_CATEGORY, false);
-  return {
-    finishedProducts: materials.filter((material) => finishedCategoryIds.has(String(material.parent_id))),
-    plasticParts: materials.filter((material) => String(material.parent_id) === INJECTION_PLASTIC_PARTS_CATEGORY),
-  };
-}
+export { splitProductionMaterials } from "../services/production-product.js";
 
 export function getProductionMaterialRefreshOptions(forceRefresh) {
   return {

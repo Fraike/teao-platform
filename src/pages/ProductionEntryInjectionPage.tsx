@@ -8,7 +8,8 @@ import type { ColumnsType } from "antd/es/table";
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   EditOutlined, DeleteOutlined, HistoryOutlined,
-  SaveOutlined, CopyOutlined, FilterOutlined, DownloadOutlined, UploadOutlined,
+  CopyOutlined, FilterOutlined, DownloadOutlined, UploadOutlined,
+  SortAscendingOutlined, SortDescendingOutlined, SunOutlined, MoonOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api, getToken } from "../lib/api";
@@ -24,7 +25,10 @@ import {
 import { buildInjectionCopyValues } from "../lib/productionCopy";
 import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
 import type { ProductionProductOption } from "../lib/productionProductSearch";
+import { resolveProductionProductOption, validateProductionProductSelection } from "../lib/productionProductSearch";
 import { getProductionDailyTableSticky } from "../lib/productionTable";
+import { EditableCell } from "../components/production/EditableCell";
+import { buildInjectionSummary, getInjectionShiftVisual, sortRecordsByOrderQty, type OrderQtySort } from "../lib/productionEntry";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -33,6 +37,7 @@ const PAGE_SIZE = 10;
 // ---- 类型 ----
 interface InjRecord {
   id: number; date: string; machine: string; productName: string;
+  productId?: string; productNumber?: string;
   material: string; materialBatch: string; shift: string;
   operator: string; orderQty: number; dailyQty: number;
   cumulativeQty: number; defects: number; batchNo: string;
@@ -46,8 +51,18 @@ interface InjSummary { machines: number; totalOrderQty: number; totalDailyQty: n
 const MACHINES = ["1#", "2#", "3#", "4#", "5#", "6#", "7#", "8#", "9#", "10#", "11#", "12#"];
 const SHIFTS = ["白班", "夜班"];
 
+function ShiftBadge({ shift }: { shift: string }) {
+  const visual = getInjectionShiftVisual(shift);
+  const isDay = visual.tone === "day";
+  return (
+    <span className={isDay ? styles.dayShiftBadge : styles.nightShiftBadge}>
+      {isDay ? <SunOutlined /> : <MoonOutlined />}{shift}
+    </span>
+  );
+}
+
 const INJECTION_DETAIL_COLUMNS: ExportColumn[] = [
-  { key: "date", title: "日期" }, { key: "machine", title: "机台" }, { key: "shift", title: "班次" }, { key: "productName", title: "品名/型号" }, { key: "material", title: "原材料" }, { key: "materialBatch", title: "原材料批号" }, { key: "operator", title: "操作人" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "backorder", title: "欠数", format: "#,##0" }, { key: "batchNo", title: "半成品生产批号" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
+  { key: "date", title: "日期" }, { key: "machine", title: "机台" }, { key: "shift", title: "班次" }, { key: "productNumber", title: "商品编码" }, { key: "productId", title: "金蝶商品ID" }, { key: "productName", title: "品名/型号" }, { key: "material", title: "原材料" }, { key: "materialBatch", title: "原材料批号" }, { key: "operator", title: "操作人" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "backorder", title: "欠数", format: "#,##0" }, { key: "batchNo", title: "半成品生产批号" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
 ];
 const INJECTION_SUMMARY_COLUMNS: ExportColumn[] = [
   { key: "date", title: "日期" }, { key: "machines", title: "机台数" }, { key: "totalOrderQty", title: "订单数量", format: "#,##0" }, { key: "totalDailyQty", title: "当天生产", format: "#,##0" }, { key: "totalCumulativeQty", title: "累计生产", format: "#,##0" }, { key: "totalDefects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "totalBackorder", title: "欠数", format: "#,##0" },
@@ -63,7 +78,7 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
 
   useEffect(() => {
     const loadMaterials = () => {
-      getInjectionPlasticPartOptions().then((options) => setMaterials(options));
+      getInjectionPlasticPartOptions().then(setMaterials).catch(() => setMaterials([]));
     };
     loadMaterials();
     return subscribeToProductionMaterialUpdates(loadMaterials);
@@ -71,12 +86,14 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
 
   useEffect(() => {
     if (!open) return;
+    form.setFields([{ name: "productName", errors: [] }]);
     const fillRecord = record || copyFrom;
     if (fillRecord) {
       const copiedQuantities = copyFrom ? buildInjectionCopyValues(fillRecord) : null;
       form.setFieldsValue({
         date: copyFrom ? dayjs() : dayjs(fillRecord.date),
         machine: fillRecord.machine, productName: fillRecord.productName,
+        productId: fillRecord.productId || "", productNumber: fillRecord.productNumber || "",
         material: fillRecord.material, materialBatch: fillRecord.materialBatch,
         shift: fillRecord.shift, operator: fillRecord.operator,
         orderQty: copiedQuantities?.orderQty ?? fillRecord.orderQty,
@@ -91,10 +108,34 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
     }
   }, [open, record, copyFrom, form]);
 
+  const handleProductSelect = useCallback((product: ProductionProductOption) => {
+    form.setFieldValue("productId", product.value);
+    form.setFieldValue("productNumber", product.productNumber);
+    form.setFields([{ name: "productName", errors: [] }]);
+  }, [form]);
+
+  const handleProductClear = useCallback(() => {
+    form.setFieldValue("productId", "");
+    form.setFieldValue("productNumber", "");
+  }, [form]);
+
   const handleSubmit = async () => {
     try {
-      const v = await form.validateFields(); setLoading(true);
-      const p = { ...v, date: v.date.format("YYYY-MM-DD") };
+      const v = await form.validateFields();
+      const selectedProduct = resolveProductionProductOption(materials, v);
+      const mode = isEdit ? "edit" : isCopy ? "copy" : "create";
+      const productError = validateProductionProductSelection(mode, v.productName, selectedProduct);
+      if (productError) {
+        form.setFields([{ name: "productName", errors: [productError] }]);
+        return;
+      }
+      setLoading(true);
+      const p = {
+        ...v,
+        date: v.date.format("YYYY-MM-DD"),
+        productId: selectedProduct?.value || v.productId || "",
+        productNumber: selectedProduct?.productNumber || v.productNumber || "",
+      };
       if (isEdit) { await api.put(`/api/production/injection/entries/${record!.id}`, p); message.success("更新成功"); }
       else { await api.post("/api/production/injection/entries", p); message.success("新增成功"); }
       onClose(true);
@@ -106,6 +147,8 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
   const df = Form.useWatch("defects", form) || 0;
   const oq = Form.useWatch("orderQty", form) || 0;
   const cq = Form.useWatch("cumulativeQty", form) || 0;
+  const productId = Form.useWatch("productId", form) || "";
+  const productNumber = Form.useWatch("productNumber", form) || "";
 
   return (
     <Modal title={isEdit ? "编辑注塑记录" : isCopy ? "复制注塑记录（今日）" : "新增注塑记录"} open={open} onCancel={() => onClose(false)} width={700}
@@ -114,10 +157,12 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
         <Row gutter={16}>
           <Col span={8}><Form.Item label="日期" name="date" rules={[{ required: true }]}><DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" /></Form.Item></Col>
           <Col span={8}><Form.Item label="机台" name="machine" rules={[{ required: true, message: "必填" }]}><AutoComplete placeholder="选择或输入机台" options={MACHINES.map(l => ({ value: l, label: l }))} filterOption={(i, o) => (o?.label as string)?.includes(i ?? "")} /></Form.Item></Col>
-          <Col span={8}><Form.Item label="班次" name="shift" rules={[{ required: true }]}><Select options={SHIFTS.map(s => ({ value: s, label: s }))} /></Form.Item></Col>
+          <Col span={8}><Form.Item label="班次" name="shift" rules={[{ required: true }]}><Select options={SHIFTS.map(s => ({ value: s, label: <ShiftBadge shift={s} /> }))} /></Form.Item></Col>
         </Row>
         <Form.Item label="品名/型号" name="productName" rules={[{ required: true, message: "必填" }]}>
-          <ProductionProductSelect placeholder="搜索并选择商品（塑胶配件）" options={materials} />
+          <ProductionProductSelect placeholder="搜索并选择商品（塑胶配件）" options={materials}
+            productId={productId} productNumber={productNumber}
+            onProductClear={handleProductClear} onProductSelect={handleProductSelect} />
         </Form.Item>
         <Row gutter={16}>
           <Col span={12}><Form.Item label="原材料" name="material"><Input placeholder="如 POM, PC" /></Form.Item></Col>
@@ -168,28 +213,16 @@ export function ProductionEntryInjectionPage() {
   const groupsRef = useRef<InjGroup[]>([]);
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
-  const [quickDate, setQuickDate] = useState<Record<string, boolean>>({});
-  const [quickForm] = Form.useForm();
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [materials, setMaterials] = useState<ProductionProductOption[]>([]);
-
   const [histOpen, setHistOpen] = useState(false);
   const [histData, setHistData] = useState<{ id: number; action: string; field_name: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string }[]>([]);
   const [histLoading, setHistLoading] = useState(false);
+  const [orderQtySort, setOrderQtySort] = useState<OrderQtySort>(null);
   const historyCacheRef = useRef(new Map<number, typeof histData>());
   const dailyTableSticky = contentElement
     ? getProductionDailyTableSticky(() => contentElement)
     : undefined;
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
-  useEffect(() => {
-    const loadMaterials = () => {
-      getInjectionPlasticPartOptions().then((options) => setMaterials(options));
-    };
-    loadMaterials();
-    return subscribeToProductionMaterialUpdates(loadMaterials);
-  }, []);
-
   const doSearch = () => { setProduct(lProduct); setSearch(lSearch); };
 
   const exportExcel = async () => {
@@ -236,6 +269,20 @@ export function ProductionEntryInjectionPage() {
   const add = useCallback(() => { setEditRec(null); setCopyRec(null); setModalOpen(true); }, []);
   const edit = useCallback((r: InjRecord) => { setEditRec(r); setCopyRec(null); setModalOpen(true); }, []);
   const copy = useCallback((r: InjRecord) => { setEditRec(null); setCopyRec(r); setModalOpen(true); }, []);
+  const cellSave = useCallback(async (record: InjRecord, field: keyof InjRecord, value: string | number) => {
+    try {
+      const response = await api.put<{ ok: boolean; data: InjRecord }>(`/api/production/injection/entries/${record.id}`, { [field]: value });
+      historyCacheRef.current.delete(record.id);
+      setGroups((current) => current.map((group) => {
+        const records = group.records.map((item) => item.id === record.id ? response.data : item);
+        return group.records.some((item) => item.id === record.id)
+          ? { ...group, records, summary: buildInjectionSummary(records) }
+          : group;
+      }));
+    } catch {
+      message.error("更新失败");
+    }
+  }, []);
   const del = useCallback(async (id: number) => { try { await api.delete(`/api/production/injection/entries/${id}`); historyCacheRef.current.delete(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); } catch { message.error("删除失败"); } }, [fetchData]);
   const onModalClose = (s: boolean) => { setModalOpen(false); setEditRec(null); setCopyRec(null); if (s) { historyCacheRef.current.clear(); offsetRef.current = 0; fetchData(false); } };
   const showHist = useCallback(async (id: number) => {
@@ -250,23 +297,32 @@ export function ProductionEntryInjectionPage() {
       if (d.ok) { historyCacheRef.current.set(id, d.data); setHistData(d.data); }
     } catch { message.error("加载失败"); } finally { setHistLoading(false); }
   }, []);
-  const toggleQuick = (date: string) => { setQuickDate(prev => ({ ...prev, [date]: !prev[date] })); quickForm.resetFields(); };
-  const quickSave = async (date: string) => { try { const v = await quickForm.validateFields(); setQuickSaving(true); await api.post("/api/production/injection/entries", { date, machine: v.machine, productName: v.productName, material: v.material || "", shift: v.shift, operator: v.operator || "", dailyQty: v.dailyQty || 0, cumulativeQty: v.cumulativeQty || 0, orderQty: v.orderQty || 0, defects: v.defects || 0, batchNo: v.batchNo || "", }); message.success("已保存"); quickForm.resetFields(); setQuickDate(prev => ({ ...prev, [date]: false })); offsetRef.current = 0; fetchData(false); } catch (e: unknown) { if (e && typeof e === "object" && "errorFields" in e) return; message.error((e as Error).message || "保存失败"); } finally { setQuickSaving(false); } };
+  const toggleOrderQtySort = useCallback(() => {
+    setOrderQtySort((current) => current === null ? "desc" : current === "desc" ? "asc" : null);
+  }, []);
 
-  const flm: Record<string, string> = { date: "日期", machine: "机台", product_name: "品名/型号", material: "原材料", material_batch: "原材料批号", shift: "班次", operator: "操作人", order_qty: "订单数量", daily_qty: "当天生产数量", cumulative_qty: "累计生产", defects: "不良数", batch_no: "半成品生产批号", remark: "备注" };
+  const flm: Record<string, string> = { date: "日期", machine: "机台", product_name: "品名/型号", product_id: "金蝶商品ID", product_number: "商品编码", material: "原材料", material_batch: "原材料批号", shift: "班次", operator: "操作人", order_qty: "订单数量", daily_qty: "当天生产数量", cumulative_qty: "累计生产", defects: "不良数", batch_no: "半成品生产批号", remark: "备注" };
 
   const columns = useMemo<ColumnsType<InjRecord & { key: number }>>(() => [
     { title: "机台", dataIndex: "machine", key: "m", width: 48, fixed: "left", render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "d", width: 76, fixed: "left", render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span> },
-    { title: "班次", dataIndex: "shift", key: "s", width: 52, render: (v: string) => <Tag color={v === "白班" ? "blue" : "purple"} style={{ margin: 0, fontSize: 11 }}>{v}</Tag> },
+    { title: "班次", dataIndex: "shift", key: "s", width: 68, render: (v: string) => <ShiftBadge shift={v} /> },
     { title: "品名/型号", dataIndex: "productName", key: "pn", width: 150, ellipsis: true, render: (v: string) => <Tooltip title={v}><span style={{ fontSize: 12 }}>{v}</span></Tooltip> },
     { title: "原材料", dataIndex: "material", key: "mat", width: 60, render: (v: string) => v || "-" },
     { title: "原材料批号", dataIndex: "materialBatch", key: "mb", width: 100, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span style={{ fontSize: 12 }}>{v}</span></Tooltip> : "-" },
     { title: "操作人", dataIndex: "operator", key: "op", width: 62, render: (v: string) => <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>{v || "-"}</span> },
-    { title: "订单数量", dataIndex: "orderQty", key: "oq", width: 68, align: "right" as const, render: (v: number) => <span style={{ fontSize: 12 }}>{v?.toLocaleString()}</span> },
-    { title: "当天生产", dataIndex: "dailyQty", key: "dq", width: 72, align: "right" as const, render: (v: number) => <span style={{ fontWeight: 700, color: "#1677ff", fontSize: 12 }}>{v?.toLocaleString()}</span> },
+    { title: <Tooltip title={orderQtySort === null ? "点击按订单数量排序" : orderQtySort === "desc" ? "当前：高到低；点击切换低到高" : "当前：低到高；点击恢复原顺序"}>
+        <Button type="text" size="small" className={styles.orderSortButton} onClick={toggleOrderQtySort} icon={orderQtySort === "asc" ? <SortAscendingOutlined /> : <SortDescendingOutlined />}>订单数量</Button>
+      </Tooltip>, dataIndex: "orderQty", key: "oq", width: 82, align: "right" as const, render: (v: number) => <span style={{ fontSize: 12 }}>{v?.toLocaleString()}</span> },
+    { title: "当天生产", dataIndex: "dailyQty", key: "dq", width: 72, align: "right" as const, render: (_v: number, record: InjRecord) => (
+      <EditableCell value={record.dailyQty} fieldType="number" onSave={(value) => cellSave(record, "dailyQty", value)}
+        format={(value) => <span className={styles.dailyQuantity}>{Number(value).toLocaleString()}</span>} />
+    ) },
     { title: "累计生产", dataIndex: "cumulativeQty", key: "cq", width: 68, align: "right" as const, render: (v: number) => <span style={{ fontSize: 12 }}>{v?.toLocaleString()}</span> },
-    { title: "不良", dataIndex: "defects", key: "df", width: 44, align: "right" as const, render: (v: number) => v > 0 ? <span style={{ color: "#ff4d4f", fontWeight: 600, fontSize: 12 }}>{v}</span> : <span style={{ color: "#ccc" }}>0</span> },
+    { title: "不良", dataIndex: "defects", key: "df", width: 44, align: "right" as const, render: (_v: number, record: InjRecord) => (
+      <EditableCell value={record.defects} fieldType="number" onSave={(value) => cellSave(record, "defects", value)}
+        format={(value) => Number(value) > 0 ? <span className={styles.defectQuantity}>{value}</span> : <span className={styles.zeroQuantity}>0</span>} />
+    ) },
     { title: "合格率", dataIndex: "qualifiedRate", key: "qr", width: 58, align: "center" as const, render: (v: number | null) => v != null ? <Tag color={v >= 0.95 ? "success" : v >= 0.9 ? "warning" : "error"} style={{ margin: 0, fontSize: 11 }}>{(v * 100).toFixed(1)}%</Tag> : "-" },
     { title: "欠数", dataIndex: "backorder", key: "bo", width: 52, align: "right" as const, render: (v: number) => v > 0 ? <span style={{ color: "#faad14", fontWeight: 600, fontSize: 12 }}>{v.toLocaleString()}</span> : <span style={{ color: "#52c41a" }}>0</span> },
     { title: "批号", dataIndex: "batchNo", key: "bn", width: 110, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span style={{ fontSize: 12 }}>{v}</span></Tooltip> : "-" },
@@ -281,12 +337,12 @@ export function ProductionEntryInjectionPage() {
         <Popconfirm title="删除？" onConfirm={() => del(r.id)}><Tooltip title="删除"><Button type="link" size="small" danger icon={<DeleteOutlined />} /></Tooltip></Popconfirm>
       </Space>),
     },
-  ], [copy, del, edit, showHist]);
+  ], [cellSave, copy, del, edit, orderQtySort, showHist, toggleOrderQtySort]);
 
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <span className={styles.topTitle}>生产日报录入 — 注塑部</span>
+        <span className={styles.topTitle}>注塑部生产日报</span>
         <div className={styles.topFilters}>
           <FilterOutlined style={{ color: "#722ed1", fontSize: 14 }} />
           <RangePicker value={dateFrom && dateTo ? [dayjs(dateFrom), dayjs(dateTo)] : null}
@@ -316,28 +372,10 @@ export function ProductionEntryInjectionPage() {
               {groups.map(g => (
                 <Card key={g.date} className={styles.dailyCard}
                   title={<Space size={6} wrap><span style={{ fontSize: 14, fontWeight: 600 }}>{g.date}</span><Tag color="purple" style={{ fontSize: 11 }}>{g.summary.machines}台机</Tag><Tag style={{ fontSize: 11 }}>{g.records.length}条</Tag><span style={{ color: "#999", fontSize: 11 }}>|</span><span style={{ fontSize: 11 }}>订单 <b>{g.summary.totalOrderQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>当天 <b style={{ color: "#722ed1" }}>{g.summary.totalDailyQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>累计 <b>{g.summary.totalCumulativeQty.toLocaleString()}</b></span><Tag color={g.summary.totalDefects > 0 ? "red" : "green"} style={{ fontSize: 10 }}>不良 {g.summary.totalDefects}</Tag><span style={{ fontSize: 11 }}>合格率 <b style={{ color: (g.summary.qualifiedRate ?? 1) >= 0.95 ? "#52c41a" : "#ff4d4f" }}>{g.summary.qualifiedRate != null ? `${(g.summary.qualifiedRate * 100).toFixed(1)}%` : "-"}</b></span><span style={{ fontSize: 11 }}>欠数 <b style={{ color: g.summary.totalBackorder > 0 ? "#faad14" : "#333" }}>{g.summary.totalBackorder.toLocaleString()}</b></span></Space>}
-                  extra={<Space size={4}><Button type="link" size="small" icon={<PlusOutlined />} onClick={() => toggleQuick(g.date)}>快速录入</Button><Button type="link" size="small" icon={<EditOutlined />} onClick={add}>完整新增</Button></Space>}
                   size="small"
                 >
-                  <ResponsiveTable columns={columns} dataSource={g.records.map(r => ({ ...r, key: r.id }))} pagination={false} size="small" minWidth={1600} bordered
+                  <ResponsiveTable columns={columns} dataSource={sortRecordsByOrderQty(g.records, orderQtySort).map(r => ({ ...r, key: r.id }))} pagination={false} size="small" minWidth={1600} bordered
                     rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} sticky={dailyTableSticky} />
-
-                  {quickDate[g.date] && (
-                    <div className={styles.quickAddRow}>
-                      <Form form={quickForm} layout="inline" size="small">
-                        <Form.Item name="machine" rules={[{ required: true }]} style={{ marginBottom: 0 }}><Select placeholder="机台" style={{ width: 65 }} options={MACHINES.map(l => ({ value: l, label: l }))} /></Form.Item>
-                        <Form.Item name="shift" rules={[{ required: true }]} style={{ marginBottom: 0 }}><Select placeholder="班次" style={{ width: 65 }} options={SHIFTS.map(s => ({ value: s, label: s }))} /></Form.Item>
-                        <Form.Item name="productName" rules={[{ required: true }]} style={{ marginBottom: 0 }}><ProductionProductSelect className={styles.quickProductSelect} placeholder="品名" options={materials} /></Form.Item>
-                        <Form.Item name="material" style={{ marginBottom: 0 }}><Input placeholder="原材料" style={{ width: 70 }} /></Form.Item>
-                        <Form.Item name="orderQty" style={{ marginBottom: 0 }}><InputNumber placeholder="订单" style={{ width: 65 }} min={0} /></Form.Item>
-                        <Form.Item name="dailyQty" rules={[{ required: true }]} style={{ marginBottom: 0 }}><InputNumber placeholder="当天" style={{ width: 70 }} min={0} /></Form.Item>
-                        <Form.Item name="cumulativeQty" style={{ marginBottom: 0 }}><InputNumber placeholder="累计" style={{ width: 70 }} min={0} /></Form.Item>
-                        <Form.Item name="defects" style={{ marginBottom: 0 }}><InputNumber placeholder="不良" style={{ width: 55 }} min={0} /></Form.Item>
-                        <Button type="primary" size="small" icon={<SaveOutlined />} loading={quickSaving} onClick={() => quickSave(g.date)}>保存</Button>
-                        <Button size="small" onClick={() => setQuickDate(prev => ({ ...prev, [g.date]: false }))}>取消</Button>
-                      </Form>
-                    </div>
-                  )}
                 </Card>
               ))}
               {hasMore && <div className={styles.loadMore}><Button onClick={() => fetchData(true)} loading={loading}>加载更多（共 {total} 条）</Button></div>}

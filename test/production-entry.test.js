@@ -6,6 +6,8 @@ import path from "node:path";
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "teao-production-test-"));
 process.env.DATA_DIR = testDirectory;
 process.env.PRODUCTION_DB_PATH = path.join(testDirectory, "production.db");
+process.env.PRODUCTION_CONFIG_PATH = path.join(testDirectory, "production-config.json");
+fs.writeFileSync(process.env.PRODUCTION_CONFIG_PATH, JSON.stringify({ dataSource: "internal", enabled: true }));
 
 const store = await import("../server/services/production-store.js");
 const {
@@ -23,6 +25,7 @@ const {
   replaceInjectionEntries,
 } = store;
 const { fetchAndStoreReport } = await import("../server/services/report.js");
+const productIdentity = await import("../server/services/production-product.js").catch(() => null);
 
 const assemblyRecord = (overrides = {}) => ({
   date: "2026-07-27",
@@ -47,10 +50,47 @@ const injectionRecord = (overrides = {}) => ({
 try {
   initDB();
 
+  assert.ok(productIdentity, "服务端生产商品校验模块应存在");
+  fs.writeFileSync(path.join(testDirectory, "kingdee_materials.json"), JSON.stringify({ data: [
+    { id: "finished-1", number: "SP0001", name: "可信成品", parent_id: "finished-child" },
+    { id: "plastic-1", number: "B0001", name: "可信塑胶件", parent_id: "2314559979366968320" },
+  ] }));
+  fs.writeFileSync(path.join(testDirectory, "kingdee_categories.json"), JSON.stringify({ data: [
+    { id: "2314557705978701824", name: "成品", children: [{ id: "finished-child", name: "成品子类", children: [] }] },
+    { id: "2314559979366968320", name: "塑胶配件", children: [] },
+  ] }));
+  assert.deepEqual(productIdentity.getTrustedProductionProduct("assembly", "finished-1"), {
+    productId: "finished-1", productNumber: "SP0001", productName: "可信成品",
+  });
+  assert.deepEqual(productIdentity.getTrustedProductionProduct("injection", "plastic-1"), {
+    productId: "plastic-1", productNumber: "B0001", productName: "可信塑胶件",
+  });
+  assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "plastic-1"), /不属于装配部/);
+  assert.throws(() => productIdentity.getTrustedProductionProduct("injection", "fake-id"), /不存在/);
+
   const assembly = createEntry(assemblyRecord(), "test-user");
   const injection = createInjectionEntry(injectionRecord(), "test-user");
   assert.equal(assembly.qualifiedRate, 0.98);
   assert.equal(injection.qualifiedRate, 0.99);
+  const linkedAssembly = createEntry(assemblyRecord({
+    productId: "kingdee-finished-1",
+    productNumber: "SP0001-D",
+    productName: "RD-01",
+  }), "test-user");
+  assert.equal(linkedAssembly.productId, "kingdee-finished-1");
+  assert.equal(linkedAssembly.productNumber, "SP0001-D");
+  const linkedInjection = createInjectionEntry(injectionRecord({
+    productId: "kingdee-plastic-1",
+    productNumber: "B0001",
+    productName: "RD-01 锁芯",
+  }), "test-user");
+  assert.equal(linkedInjection.productId, "kingdee-plastic-1");
+  assert.equal(linkedInjection.productNumber, "B0001");
+  for (const table of ["assembly_records", "injection_records"]) {
+    const columns = getDB().prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+    assert.ok(columns.includes("product_id"), `${table} 应增量增加 product_id`);
+    assert.ok(columns.includes("product_number"), `${table} 应增量增加 product_number`);
+  }
 
   assert.ok(getHistory("assembly", assembly.id).every((entry) => entry.record_type === "assembly"));
   assert.ok(getHistory("injection", injection.id).every((entry) => entry.record_type === "injection"));

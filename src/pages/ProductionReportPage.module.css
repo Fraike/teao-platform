@@ -1,0 +1,69 @@
+.page {
+  margin: 0;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title:global(.ant-typography) {
+  margin: 0;
+}
+
+.sourceTag {
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+}
+
+.datePicker {
+  margin-top: 8px;
+  min-width: 260px;
+}
+
+.datePicker:global(.ant-picker-large) {
+  height: 48px;
+}
+
+.datePicker:global(.ant-picker-large) input {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.actions {
+  margin-top: 8px;
+}
+
+.notice {
+  margin-bottom: 16px;
+}
+
+.previewContent {
+  max-height: 55vh;
+  overflow: auto;
+  padding: 16px;
+  margin-top: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fafafa;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.rateGood :global(.ant-statistic-content) { color: #52c41a; }
+.rateBad :global(.ant-statistic-content) { color: #ff4d4f; }
+.rateUnknown :global(.ant-statistic-content) { color: #8c8c8c; }
+
+@media (max-width: 767px) {
+  .page { padding: 16px; }
+  .actions { margin-top: 0; }
+  .datePicker { min-width: 0; width: 100%; }
+}

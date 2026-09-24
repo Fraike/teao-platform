@@ -4,9 +4,9 @@ const productSearch = await import("../src/lib/productionProductSearch.ts").catc
 assert.ok(productSearch, "生产商品搜索工具应存在");
 
 const products = [
-  { value: "material-1", label: "SP0001 · RD-01 齿轮阻尼器", productName: "RD-01 齿轮阻尼器" },
-  { value: "material-2", label: "SP0002 · P71 把手", productName: "P71 把手" },
-  { value: "material-3", label: "SP0003 · RD-02 圆筒阻尼器", productName: "RD-02 圆筒阻尼器" },
+  { value: "material-1", productNumber: "SP0001", label: "SP0001 · RD-01 齿轮阻尼器", productName: "RD-01 齿轮阻尼器" },
+  { value: "material-2", productNumber: "SP0002", label: "SP0002 · P71 把手", productName: "P71 把手" },
+  { value: "material-3", productNumber: "SP0003", label: "SP0003 · RD-02 圆筒阻尼器", productName: "RD-02 圆筒阻尼器" },
 ];
 
 assert.deepEqual(productSearch.filterProductionProductOptions(products, "rd-"), [products[0], products[2]]);
@@ -23,6 +23,39 @@ const duplicateProducts = productSearch.toProductionProductOptions([
 assert.deepEqual(duplicateProducts.map((product) => product.value), ["first", "second"]);
 assert.deepEqual(duplicateProducts.map((product) => product.label), ["SP0009-D · RD-02", "SP0021-D · RD-02"]);
 assert.deepEqual(duplicateProducts.map((product) => product.productName), ["RD-02", "RD-02"]);
+assert.deepEqual(duplicateProducts.map((product) => product.productNumber), ["SP0009-D", "SP0021-D"]);
+
+assert.equal(
+  productSearch.resolveProductionProductOption(duplicateProducts, { productId: "second", productNumber: "SP0009-D", productName: "RD-02" })?.value,
+  "second",
+  "应优先按金蝶商品 ID 精确回选"
+);
+assert.equal(
+  productSearch.resolveProductionProductOption(duplicateProducts, { productNumber: "SP0021-D", productName: "RD-02" })?.value,
+  "second",
+  "没有 ID 时应按商品编码回选"
+);
+assert.equal(
+  productSearch.resolveProductionProductOption(duplicateProducts, { productName: "RD-02" }),
+  undefined,
+  "同名商品不应靠品名猜测"
+);
+assert.equal(
+  productSearch.resolveProductionProductOption(products, { productName: "P71 把手" })?.value,
+  "material-2",
+  "旧记录品名唯一时允许自动匹配"
+);
+assert.equal(productSearch.validateProductionProductSelection("edit", "历史品名", undefined), undefined);
+assert.match(productSearch.validateProductionProductSelection("copy", "历史品名", undefined) || "", /重新选择/);
+assert.match(productSearch.validateProductionProductSelection("create", "", undefined) || "", /选择/);
+assert.equal(
+  productSearch.getProductionProductSelectedValue(duplicateProducts, {
+    productId: "second",
+    productName: "RD-02",
+  }, "first"),
+  "second",
+  "连续编辑同名商品时必须优先当前记录的精确 ID"
+);
 
 const unorderedProducts = productSearch.toProductionProductOptions([
   { id: "ten", number: "SP0010-D", name: "十号商品" },

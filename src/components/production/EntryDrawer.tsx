@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Modal, Form, Select, Input, InputNumber, DatePicker, Divider,
   Button, Space, message, Descriptions, Row, Col, AutoComplete,
@@ -19,6 +19,7 @@ import { normalizePersonnel, personnelToTags } from "../../lib/productionEntry";
 import { buildAssemblyCopyValues } from "../../lib/productionCopy";
 import { ProductionProductSelect } from "./ProductionProductSelect";
 import type { ProductionProductOption } from "../../lib/productionProductSearch";
+import { resolveProductionProductOption, validateProductionProductSelection } from "../../lib/productionProductSearch";
 
 interface EntryDrawerProps {
   open: boolean;
@@ -40,6 +41,8 @@ interface FormValues {
   customer: string;
   spec: string;
   productName: string;
+  productId: string;
+  productNumber: string;
   materialBatch: string;
   workHours: number;
   productionBatch: string;
@@ -93,6 +96,7 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
 
   useEffect(() => {
     if (!open) return;
+    form.setFields([{ name: "productName", errors: [] }]);
     pendingPersonnelRef.current = {};
     const fillRecord = record || copyFrom;
     const defaultFiller = currentUser?.name || currentUser?.username || "";
@@ -102,6 +106,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         date: copyFrom ? dayjs() : dayjs(fillRecord.date),
         line: fillRecord.line,
         productName: fillRecord.productName,
+        productId: fillRecord.productId || "",
+        productNumber: fillRecord.productNumber || "",
         customer: fillRecord.customer,
         spec: fillRecord.spec || "",
         productionBatch: fillRecord.productionBatch || "",
@@ -132,9 +138,17 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
     }
   }, [open, record, copyFrom, defaultDate, form, currentUser]);
 
-  const handleProductSelect = (product: ProductionProductOption) => {
+  const handleProductSelect = useCallback((product: ProductionProductOption) => {
+    form.setFieldValue("productId", product.value);
+    form.setFieldValue("productNumber", product.productNumber);
     if (product.spec) form.setFieldValue("spec", product.spec);
-  };
+    form.setFields([{ name: "productName", errors: [] }]);
+  }, [form]);
+
+  const handleProductClear = useCallback(() => {
+    form.setFieldValue("productId", "");
+    form.setFieldValue("productNumber", "");
+  }, [form]);
 
   const commitPersonnelText = (key: keyof FormValues) => {
     const typedValue = pendingPersonnelRef.current[key]?.trim();
@@ -152,6 +166,13 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
     try {
       commitAllPersonnelText();
       const values = await form.validateFields();
+      const selectedProduct = resolveProductionProductOption(materials, values);
+      const mode = isEdit ? "edit" : isCopy ? "copy" : "create";
+      const productError = validateProductionProductSelection(mode, values.productName, selectedProduct);
+      if (productError) {
+        form.setFields([{ name: "productName", errors: [productError] }]);
+        return;
+      }
       setLoading(true);
       const payload: Record<string, unknown> = {
         date: values.date.format("YYYY-MM-DD"),
@@ -159,6 +180,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         customer: values.customer,
         spec: values.spec || "",
         productName: values.productName,
+        productId: selectedProduct?.value || values.productId || "",
+        productNumber: selectedProduct?.productNumber || values.productNumber || "",
         materialBatch: values.materialBatch || "",
         workHours: values.workHours ?? 0,
         productionBatch: values.productionBatch || "",
@@ -199,6 +222,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
   const defects = Form.useWatch("defects", form) || 0;
   const cumulativeQty = Form.useWatch("cumulativeQty", form) || 0;
   const orderQty = Form.useWatch("orderQty", form) || 0;
+  const productId = Form.useWatch("productId", form) || "";
+  const productNumber = Form.useWatch("productNumber", form) || "";
   const achievementRate = planQty > 0 ? dailyQty / planQty : null;
   const qualifiedRate = dailyQty > 0 ? (dailyQty - defects) / dailyQty : null;
   const ppm = cumulativeQty > 0 ? Math.round((defects / cumulativeQty) * 1000000) : null;
@@ -246,7 +271,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
             <Form.Item label="品名" name="productName" rules={[{ required: true, message: "必填" }]}>
               <ProductionProductSelect placeholder="搜索并选择商品（成品）"
                 loading={!dataLoaded}
-                options={materials} onProductSelect={handleProductSelect} />
+                options={materials} productId={productId} productNumber={productNumber}
+                onProductClear={handleProductClear} onProductSelect={handleProductSelect} />
             </Form.Item>
           </Col>
           <Col span={12}>

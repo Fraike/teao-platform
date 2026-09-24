@@ -1,5 +1,6 @@
 import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
 import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, replaceInjectionEntries, exportInjectionEntries, getHistory } from "../services/production-store.js";
+import { getTrustedProductionProduct } from "../services/production-product.js";
 
 initDB();
 
@@ -20,9 +21,10 @@ export function registerProductionEntryInjectionRoutes(app) {
   app.post("/api/production/injection/entries", jwtAuth, requirePermission("production"), (req, res) => {
     try {
       const user = req.user?.username || "unknown";
-      const entry = createInjectionEntry(req.body, user);
+      const product = getTrustedProductionProduct("injection", req.body?.productId);
+      const entry = createInjectionEntry({ ...req.body, ...product }, user);
       res.status(201).json({ ok: true, data: entry });
-    } catch (err) { res.status(500).json({ error: "新增失败", detail: err.message }); }
+    } catch (err) { res.status(err.status || 500).json({ error: err.message || "新增失败" }); }
   });
 
   app.post("/api/production/injection/entries/import", jwtAuth, requirePermission("production"), (req, res) => {

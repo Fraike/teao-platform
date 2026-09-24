@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { normalizePersonnel, personnelToTags, splitPersonnelNames, sortRecordsByOrderQty } from "../src/lib/productionEntry.ts";
+import { buildInjectionSummary, getInjectionShiftVisual, normalizePersonnel, personnelToTags, splitPersonnelNames, sortRecordsByOrderQty } from "../src/lib/productionEntry.ts";
 
 const copyModule = await import("../src/lib/productionCopy.ts").catch(() => null);
 assert.ok(copyModule, "生产日报复制值构建器应存在");
@@ -29,6 +29,20 @@ assert.equal(normalizePersonnel("外发"), "外发");
 assert.equal(normalizePersonnel(undefined), "");
 assert.deepEqual(splitPersonnelNames("张三、李四，王五,赵六"), ["张三", "李四", "王五", "赵六"]);
 assert.deepEqual(personnelToTags("张三、李四"), ["张三", "李四"]);
+assert.deepEqual(getInjectionShiftVisual("白班"), { tone: "day", icon: "sun" });
+assert.deepEqual(getInjectionShiftVisual("夜班"), { tone: "night", icon: "moon" });
+assert.deepEqual(buildInjectionSummary([
+  { machine: "1#", orderQty: 200, dailyQty: 100, cumulativeQty: 150, defects: 2 },
+  { machine: "2#", orderQty: 300, dailyQty: 200, cumulativeQty: 250, defects: 3 },
+]), {
+  machines: 2,
+  totalOrderQty: 500,
+  totalDailyQty: 300,
+  totalCumulativeQty: 400,
+  totalDefects: 5,
+  qualifiedRate: 295 / 300,
+  totalBackorder: 100,
+});
 
 const assemblyCopy = copyModule.buildAssemblyCopyValues({
   orderQty: 1200,

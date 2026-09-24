@@ -1,98 +1,89 @@
 import { adminAuth, jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
-import { readConfig, writeConfig, formatShanghaiDate, readReport } from "../config.js";
-import { fetchAndStoreReport, hasProductionData, buildWecomContent, buildEmptyContent } from "../services/report.js";
-import { sendWecomMessage } from "../services/wecom.js";
+import { readConfig, formatShanghaiDate } from "../config.js";
+import { getProductionReport, previewProductionReport, sendProductionReport, switchProductionSource, updateProductionConfig, isProductionSourceReady } from "../services/production-report-control.js";
+
+function respondError(res, error) {
+  res.status(error.status || 500).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+}
+
+const requestDate = (req) => req.query.date ?? formatShanghaiDate();
+const requestActor = (req) => req.user?.id || "user";
 
 export function registerProductionRoutes(app) {
   // Get config (masks sensitive fields)
   app.get("/api/production/config", jwtAuth, requirePermission("production"), (_req, res) => {
-    const config = readConfig();
-    res.json({
-      enabled: config.enabled,
-      cronExpression: config.cronExpression,
-      hasToken: !!config.vikaToken,
-      hasAssemblyId: !!config.assemblyDatasheetId,
-      hasInjectionId: !!config.injectionDatasheetId,
-      hasWebhook: !!config.wecomWebhook,
-      configured: !!(config.vikaToken && config.assemblyDatasheetId && config.injectionDatasheetId && config.wecomWebhook),
-    });
+    try {
+      const config = readConfig();
+      res.json({
+        enabled: config.enabled,
+        dataSource: config.dataSource,
+        cronExpression: config.cronExpression,
+        hasToken: !!config.vikaToken,
+        hasAssemblyId: !!config.assemblyDatasheetId,
+        hasInjectionId: !!config.injectionDatasheetId,
+        hasWebhook: !!config.wecomWebhook,
+        configured: !!config.wecomWebhook && isProductionSourceReady(config),
+      });
+    } catch (error) { respondError(res, error); }
   });
 
   // Save config
-  app.post("/api/production/config", jwtAuth, adminAuth, (req, res) => {
-    const config = readConfig();
-    const updates = req.body;
-    const fields = [
-      "vikaToken", "assemblyDatasheetId", "assemblyViewId",
-      "injectionDatasheetId", "injectionViewId",
-      "wecomWebhook", "cronExpression", "enabled",
-      "restDays", "makeupWorkdays",
-    ];
-    for (const f of fields) {
-      if (updates[f] !== undefined) config[f] = updates[f];
-    }
-    writeConfig(config);
-    res.json({ ok: true });
+  app.post("/api/production/config", jwtAuth, adminAuth, async (req, res) => {
+    try {
+      res.json(await updateProductionConfig(req.body, requestActor(req)));
+    } catch (error) { respondError(res, error); }
+  });
+
+  app.post("/api/production/source", jwtAuth, adminAuth, async (req, res) => {
+    try {
+      res.json(await switchProductionSource(req.body?.dataSource, requestActor(req)));
+    } catch (error) { respondError(res, error); }
   });
 
   // Fetch & store report for a date
   app.post("/api/production/fetch", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
-      const date = req.query.date || formatShanghaiDate();
-      const report = await fetchAndStoreReport(date);
+      const date = requestDate(req);
+      const report = await getProductionReport(date, requestActor(req));
       res.json({
         ok: true,
         date,
+        dataSource: report.dataSource,
+        generatedAt: report.generatedAt,
+        missingDepartments: report.missingDepartments,
         assembly: { summary: report.assembly.summary, rawCount: report.assembly.rawCount },
         injection: { summary: report.injection.summary, rawCount: report.injection.rawCount },
       });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      respondError(res, err);
     }
   });
 
-  // Get stored report
-  app.get("/api/production/report", jwtAuth, requirePermission("production"), (req, res) => {
-    const date = req.query.date || formatShanghaiDate();
-    const report = readReport(date);
-    if (!report) return res.json({ exists: false, date });
-    res.json({ exists: true, ...report });
+  // Always regenerate from the selected source, including empty reports.
+  app.get("/api/production/report", jwtAuth, requirePermission("production"), async (req, res) => {
+    try {
+      res.json({ exists: true, ...await getProductionReport(requestDate(req), requestActor(req)) });
+    } catch (error) { respondError(res, error); }
   });
 
   // Manually send WeCom message for a date
   app.post("/api/production/send", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
-      const date = req.query.date || formatShanghaiDate();
-      let report = readReport(date);
-      if (!report) {
-        report = await fetchAndStoreReport(date);
+      if (req.body?.confirmRepeat !== undefined && typeof req.body.confirmRepeat !== "boolean") {
+        return res.status(400).json({ error: "confirmRepeat 必须是布尔值" });
       }
-      const config = readConfig();
-      if (!config.wecomWebhook) throw new Error("未配置企微 Webhook");
-      const content = hasProductionData(report)
-        ? buildWecomContent(date, report.assembly, report.injection)
-        : buildEmptyContent(date);
-      await sendWecomMessage(config.wecomWebhook, content);
-      res.json({ ok: true, date, message: "已推送到企业微信群" });
+      res.json(await sendProductionReport(requestDate(req), { confirmRepeat: req.body?.confirmRepeat === true, actor: requestActor(req) }));
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      respondError(res, err);
     }
   });
 
   // Preview WeCom message content (without sending)
   app.post("/api/production/preview", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
-      const date = req.query.date || formatShanghaiDate();
-      let report = readReport(date);
-      if (!report) {
-        report = await fetchAndStoreReport(date);
-      }
-      const content = hasProductionData(report)
-        ? buildWecomContent(date, report.assembly, report.injection)
-        : buildEmptyContent(date);
-      res.json({ ok: true, date, content, hasData: hasProductionData(report) });
+      res.json(await previewProductionReport(requestDate(req), requestActor(req)));
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      respondError(res, err);
     }
   });
 }

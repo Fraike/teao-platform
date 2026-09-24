@@ -10,6 +10,7 @@ import {
   exportAssemblyEntries,
   getHistory,
 } from "../services/production-store.js";
+import { getTrustedProductionProduct } from "../services/production-product.js";
 
 // 确保数据库已初始化
 initDB();
@@ -51,11 +52,12 @@ export function registerProductionEntryRoutes(app) {
   app.post("/api/production/entries", jwtAuth, requirePermission("production"), (req, res) => {
     try {
       const user = req.user?.username || "unknown";
-      const entry = createEntry(req.body, user);
+      const product = getTrustedProductionProduct("assembly", req.body?.productId);
+      const entry = createEntry({ ...req.body, ...product }, user);
       res.status(201).json({ ok: true, data: entry });
     } catch (err) {
       console.error("[production-entry] create error:", err);
-      res.status(500).json({ error: "新增失败", detail: err.message });
+      res.status(err.status || 500).json({ error: err.message || "新增失败" });
     }
   });
 

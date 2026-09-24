@@ -36,14 +36,19 @@ export async function fetchVikaRecords(datasheetId, viewId, token, sortField, so
   url.searchParams.set("sort[0][field]", sortField);
   url.searchParams.set("sort[0][order]", sortOrder || "desc");
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Vika API error ${res.status}: ${text}`);
+  const signal = AbortSignal.timeout(15000);
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` }, signal,
+    });
+    if (!res.ok) throw new Error("Vika HTTP error");
+    const json = await res.json();
+    if (!json.success || !Array.isArray(json.data?.records)) throw new Error("Vika invalid response");
+    return json.data.records;
+  } catch {
+    const error = new Error(signal.aborted ? "维格表读取超时，请稍后重试或切换内部来源" : "维格表读取失败，请检查配置和服务状态");
+    error.code = signal.aborted ? "VIKA_READ_TIMEOUT" : "VIKA_READ_FAILED";
+    error.status = signal.aborted ? 504 : 502;
+    throw error;
   }
-  const json = await res.json();
-  if (!json.success) throw new Error(`Vika API: ${json.message}`);
-  return json.data.records;
 }

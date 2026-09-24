@@ -1,7 +1,7 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Button, Select } from "antd";
 import type { ProductionProductOption } from "../../lib/productionProductSearch";
-import { filterProductionProductOptions } from "../../lib/productionProductSearch";
+import { filterProductionProductOptions, getProductionProductSelectedValue, resolveProductionProductOption } from "../../lib/productionProductSearch";
 import styles from "./ProductionProductSelect.module.css";
 
 interface ProductionProductSelectProps {
@@ -9,8 +9,11 @@ interface ProductionProductSelectProps {
   loading?: boolean;
   onChange?: (value: string | undefined) => void;
   onProductSelect?: (option: ProductionProductOption) => void;
+  onProductClear?: () => void;
   options: ProductionProductOption[];
   placeholder?: string;
+  productId?: string;
+  productNumber?: string;
   value?: string;
 }
 
@@ -18,9 +21,12 @@ export function ProductionProductSelect({
   className,
   loading = false,
   onChange,
+  onProductClear,
   onProductSelect,
   options,
   placeholder = "搜索并选择商品",
+  productId,
+  productNumber,
   value,
 }: ProductionProductSelectProps) {
   const [searchValue, setSearchValue] = useState("");
@@ -32,11 +38,29 @@ export function ProductionProductSelect({
   );
 
   const clearSearch = () => setSearchValue("");
+  const resolvedOption = useMemo(
+    () => resolveProductionProductOption(options, { productId, productNumber, productName: value }),
+    [options, productId, productNumber, value]
+  );
+  const legacyValue = value?.trim() && !resolvedOption ? `legacy:${value}` : undefined;
+  const selectOptions = useMemo(() => {
+    if (!legacyValue) return filteredOptions;
+    return [{ value: legacyValue, label: `历史数据：${value}`, disabled: true }, ...filteredOptions];
+  }, [filteredOptions, legacyValue, value]);
   const selectedValue = useMemo(() => {
-    const selectedOption = options.find((option) => option.value === selectedOptionId);
-    if (selectedOption?.productName === value) return selectedOptionId;
-    return options.find((option) => option.productName === value)?.value;
-  }, [options, selectedOptionId, value]);
+    return getProductionProductSelectedValue(
+      options,
+      { productId, productNumber, productName: value },
+      selectedOptionId
+    ) || legacyValue;
+  }, [legacyValue, options, productId, productNumber, selectedOptionId, value]);
+
+  useEffect(() => {
+    if (!resolvedOption) return;
+    if (resolvedOption.value !== productId || resolvedOption.productNumber !== productNumber) {
+      onProductSelect?.(resolvedOption);
+    }
+  }, [onProductSelect, productId, productNumber, resolvedOption]);
 
   return (
     <Select
@@ -48,14 +72,16 @@ export function ProductionProductSelect({
       onChange={(nextValue) => {
         if (nextValue === undefined) {
           setSelectedOptionId(undefined);
+          onProductClear?.();
           onChange?.(undefined);
         }
       }}
       onClear={() => {
         setSelectedOptionId(undefined);
+        onProductClear?.();
         clearSearch();
       }}
-      onDropdownVisibleChange={(open) => { if (!open) clearSearch(); }}
+      onOpenChange={(open) => { if (!open) clearSearch(); }}
       onSearch={setSearchValue}
       onSelect={(selectedValue) => {
         const selectedOption = options.find((option) => option.value === selectedValue);
@@ -65,7 +91,7 @@ export function ProductionProductSelect({
         onChange?.(selectedOption.productName);
         onProductSelect?.(selectedOption);
       }}
-      options={filteredOptions}
+      options={selectOptions}
       placeholder={placeholder}
       popupRender={(menu) => (
         <>

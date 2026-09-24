@@ -1,5 +1,5 @@
 import { parseNum, parseRate, extractDateStr } from "./vika.js";
-import { readConfig, formatShanghaiDate, writeReport } from "../config.js";
+import { writeGeneratedReport } from "../config.js";
 import { fetchVikaRecords } from "./vika.js";
 import { getAssemblyEntriesForDate, getInjectionEntriesForDate } from "./production-store.js";
 
@@ -187,8 +187,8 @@ function aggregateLocalAssembly(records) {
       totalActualQty,
       totalDefects,
       totalBackorder: lineList.reduce((sum, line) => sum + line.totalBackorder, 0),
-      avgAchievementRate: totalPlanQty > 0 ? totalActualQty / totalPlanQty : 0,
-      avgQualifiedRate: totalActualQty > 0 ? (totalActualQty - totalDefects) / totalActualQty : 0,
+      avgAchievementRate: totalPlanQty > 0 ? totalActualQty / totalPlanQty : null,
+      avgQualifiedRate: totalActualQty > 0 ? (totalActualQty - totalDefects) / totalActualQty : null,
     },
     rawCount: records.length,
   };
@@ -239,7 +239,7 @@ function aggregateLocalInjection(records) {
       totalQty,
       totalDefects,
       totalBackorder: machineList.reduce((sum, machine) => sum + machine.totalBackorder, 0),
-      avgQualifiedRate: totalQty > 0 ? (totalQty - totalDefects) / totalQty : 0,
+      avgQualifiedRate: totalQty > 0 ? (totalQty - totalDefects) / totalQty : null,
     },
     rawCount: records.length,
   };
@@ -247,10 +247,13 @@ function aggregateLocalInjection(records) {
 
 // ---- WeCom content builder ----
 
-export function buildWecomContent(date, assembly, injection) {
+export function buildWecomContent(date, assembly, injection, dataSource = assembly.rateBasis === "internal" ? "internal" : "vika") {
   const lines = [];
   const asm = assembly.summary;
   const inj = injection.summary;
+  const internal = assembly.rateBasis === "internal";
+  const rateText = (rate, quantity, decimals) => quantity > 0 && Number.isFinite(rate)
+    ? `${(rate * 100).toFixed(decimals)}%` : "—";
 
   lines.push(`## 📊 生产日报 — ${date}`);
   lines.push("");
@@ -258,8 +261,8 @@ export function buildWecomContent(date, assembly, injection) {
   const injectionMachineCount = new Set(injection.records.map(m => m.machine)).size;
   lines.push("| 部门 | 产线/机台 | 产量(PCS) | 达成率 | 合格率 | 不良 |");
   lines.push("|------|----------|----------|--------|--------|------|");
-  lines.push(`| 装配 | ${asm.lines} 线 | ${asm.totalActualQty.toLocaleString()} | ${(asm.avgAchievementRate * 100).toFixed(0)}% | ${(asm.avgQualifiedRate * 100).toFixed(1)}% | ${asm.totalDefects} |`);
-  lines.push(`| 注塑 | ${injectionMachineCount} 机台(${inj.machines}班次) | ${inj.totalQty.toLocaleString()} | - | ${(inj.avgQualifiedRate * 100).toFixed(1)}% | ${inj.totalDefects} |`);
+  lines.push(`| 装配 | ${asm.lines} 线 | ${asm.totalActualQty.toLocaleString()} | ${rateText(asm.avgAchievementRate, asm.totalActualQty, 0)} | ${rateText(asm.avgQualifiedRate, asm.totalActualQty, 1)} | ${asm.totalDefects} |`);
+  lines.push(`| 注塑 | ${injectionMachineCount} 机台(${inj.machines}班次) | ${inj.totalQty.toLocaleString()} | - | ${rateText(inj.avgQualifiedRate, inj.totalQty, 1)} | ${inj.totalDefects} |`);
   lines.push("");
 
   const extractNum = (s) => {
@@ -269,6 +272,7 @@ export function buildWecomContent(date, assembly, injection) {
 
   const sortedAssembly = [...assembly.records].sort((a, b) => extractNum(a.line) - extractNum(b.line));
   lines.push("### 装配部");
+  if (assembly.rawCount === 0) lines.push("> ⚠️ 装配部：无记录，待补充。");
   lines.push("| 产线 | 品名 | 产量 | 不良 |");
   lines.push("|------|------|------|------|");
   for (const line of sortedAssembly) {
@@ -280,6 +284,7 @@ export function buildWecomContent(date, assembly, injection) {
 
   const sortedInjection = [...injection.records].sort((a, b) => extractNum(a.machine) - extractNum(b.machine));
   lines.push("### 注塑部");
+  if (injection.rawCount === 0) lines.push("> ⚠️ 注塑部：无记录，待补充。");
   lines.push("| 机台 | 品名 | 产量 | 不良 |");
   lines.push("|------|------|------|------|");
   for (const m of sortedInjection) {
@@ -308,17 +313,19 @@ export function buildWecomContent(date, assembly, injection) {
 
   const anomalies = [];
   for (const line of sortedAssembly) {
-    const total = line.totalActual + line.totalDefects;
-    const rate = total > 0 ? line.totalActual / total : 1;
-    if (rate < 0.98) anomalies.push(`装配${line.line}合格率偏低(${(rate * 100).toFixed(1)}%)`);
-    if (line.totalDefects > 50) anomalies.push(`装配${line.line}不良数偏高(${line.totalDefects})`);
+    const total = internal ? line.totalActual : line.totalActual + line.totalDefects;
+    const rate = total > 0 ? (internal ? line.totalActual - line.totalDefects : line.totalActual) / total : null;
+    if (line.totalActual > 0 && rate < 0.98) anomalies.push(`装配${line.line}合格率偏低(${(rate * 100).toFixed(1)}%)`);
+    if (line.totalActual > 0 && line.totalDefects > 50) anomalies.push(`装配${line.line}不良数偏高(${line.totalDefects})`);
   }
   for (const m of sortedInjection) {
-    const total = m.totalQty + m.totalDefects;
-    const rate = total > 0 ? m.totalQty / total : 1;
-    if (rate < 0.995) anomalies.push(`注塑${m.machine}合格率偏低(${(rate * 100).toFixed(1)}%)`);
+    const total = internal ? m.totalQty : m.totalQty + m.totalDefects;
+    const rate = total > 0 ? (internal ? m.totalQty - m.totalDefects : m.totalQty) / total : null;
+    if (m.totalQty > 0 && rate < 0.995) anomalies.push(`注塑${m.machine}合格率偏低(${(rate * 100).toFixed(1)}%)`);
   }
   if (remarks.length > 0) anomalies.push(`${remarks.length} 条产线备注（停线/异常）`);
+  if (!assembly.rawCount) anomalies.push("装配部无记录，待补充");
+  if (!injection.rawCount) anomalies.push("注塑部无记录，待补充");
 
   lines.push("### 📋 昨日总结");
   if (anomalies.length > 0) {
@@ -329,19 +336,20 @@ export function buildWecomContent(date, assembly, injection) {
   }
   lines.push("");
 
-  lines.push(`> 数据来源：生产日报系统 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
+  lines.push(`> 数据来源：${dataSource === "internal" ? "内部平台" : "维格表"} · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
   lines.push(`> 详情查阅：[teao.work/production-report](https://teao.work/production-report)`);
 
   return lines.join("\n");
 }
 
-export function buildEmptyContent(date) {
+export function buildEmptyContent(date, dataSource = "vika") {
   return [
     `## 📊 生产日报 — ${date}`,
     "",
     "> ⚠️ **暂无生产数据**",
     "> ",
     "> 装配部和注塑部昨日均无生产记录。",
+    `> 数据来源：${dataSource === "internal" ? "内部平台" : "维格表"}`,
     "> 请相关人员及时前往生产日报录入页面补充数据！",
     "> ",
     `> 推送时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
@@ -350,35 +358,48 @@ export function buildEmptyContent(date) {
 }
 
 export function hasProductionData(report) {
-  const asm = report.assembly.summary;
-  const inj = report.injection.summary;
-  return (asm.totalActualQty > 0 || inj.totalQty > 0);
+  return report.assembly.rawCount > 0 || report.injection.rawCount > 0;
 }
 
 export async function fetchAndStoreReport(date) {
-  const localAssembly = getAssemblyEntriesForDate(date);
-  const localInjection = getInjectionEntriesForDate(date);
-  let assembly = localAssembly.length > 0 ? aggregateLocalAssembly(localAssembly) : null;
-  let injection = localInjection.length > 0 ? aggregateLocalInjection(localInjection) : null;
+  const { getProductionReport } = await import("./production-report-control.js");
+  return getProductionReport(date);
+}
 
-  if (!assembly || !injection) {
-    const config = readConfig();
-    if (!config.enabled) throw new Error("生产日报功能未启用");
-    const [assemblyRaw, injectionRaw] = await Promise.all([
-      assembly ? Promise.resolve(null) : fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
-      injection ? Promise.resolve(null) : fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
+export async function generateProductionReport(date, config) {
+  let assembly;
+  let injection;
+  if (config.dataSource === "internal") {
+    assembly = aggregateLocalAssembly(getAssemblyEntriesForDate(date));
+    injection = aggregateLocalInjection(getInjectionEntriesForDate(date));
+    assembly.rateBasis = injection.rateBasis = "internal";
+  } else if (config.dataSource === "vika") {
+    if (!(config.vikaToken && config.assemblyDatasheetId && config.injectionDatasheetId)) {
+      throw new Error("维格表配置不完整");
+    }
+    const results = await Promise.allSettled([
+      fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
+      fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
     ]);
-    if (!assembly) assembly = aggregateAssembly(assemblyRaw, date);
-    if (!injection) injection = aggregateInjection(injectionRaw, date);
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
+    const [assemblyRaw, injectionRaw] = results.map((result) => result.value);
+    assembly = aggregateAssembly(assemblyRaw, date);
+    injection = aggregateInjection(injectionRaw, date);
+  } else {
+    throw new Error("生产日报数据来源无效");
   }
 
   const report = {
     date,
     fetchedAt: new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
+    dataSource: config.dataSource,
+    missingDepartments: [assembly.rawCount ? null : "assembly", injection.rawCount ? null : "injection"].filter(Boolean),
     assembly,
     injection,
   };
 
-  writeReport(date, report);
+  writeGeneratedReport(report);
   return report;
 }

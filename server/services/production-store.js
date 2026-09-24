@@ -109,6 +109,15 @@ export function initDB() {
   if (!auditColumns.some((column) => column.name === "record_type")) {
     d.exec("ALTER TABLE audit_log ADD COLUMN record_type TEXT NOT NULL DEFAULT 'assembly'");
   }
+  for (const table of ["assembly_records", "injection_records"]) {
+    const columns = d.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some((column) => column.name === "product_id")) {
+      d.exec(`ALTER TABLE ${table} ADD COLUMN product_id TEXT DEFAULT ''`);
+    }
+    if (!columns.some((column) => column.name === "product_number")) {
+      d.exec(`ALTER TABLE ${table} ADD COLUMN product_number TEXT DEFAULT ''`);
+    }
+  }
   d.exec("CREATE INDEX IF NOT EXISTS idx_audit_record_type ON audit_log(record_type, record_id)");
 }
 
@@ -163,6 +172,8 @@ function recordToRow(row) {
     customer: row.customer,
     spec: row.spec,
     productName: row.product_name,
+    productId: row.product_id || "",
+    productNumber: row.product_number || "",
     materialBatch: row.material_batch,
     workHours: row.work_hours,
     productionBatch: row.production_batch,
@@ -308,12 +319,12 @@ export function createEntry(data, user) {
   const now = new Date().toISOString();
   const stmt = d.prepare(`
     INSERT INTO assembly_records (
-      date, line, customer, spec, product_name, material_batch, work_hours,
+      date, line, customer, spec, product_name, product_id, product_number, material_batch, work_hours,
       production_batch, order_qty, daily_qty, plan_qty, cumulative_qty, defects,
       oil_injection, rubber_ring, capping, shaft_core, ultrasonic, testing, gear,
       filler, remark, created_at, updated_at, created_by, updated_by
     ) VALUES (
-      @date, @line, @customer, @spec, @product_name, @material_batch, @work_hours,
+      @date, @line, @customer, @spec, @product_name, @product_id, @product_number, @material_batch, @work_hours,
       @production_batch, @order_qty, @daily_qty, @plan_qty, @cumulative_qty, @defects,
       @oil_injection, @rubber_ring, @capping, @shaft_core, @ultrasonic, @testing, @gear,
       @filler, @remark, @created_at, @updated_at, @created_by, @updated_by
@@ -322,6 +333,7 @@ export function createEntry(data, user) {
   const result = stmt.run({
     date: data.date, line: data.line, customer: data.customer,
     spec: data.spec || "", product_name: data.productName,
+    product_id: data.productId || "", product_number: data.productNumber || "",
     material_batch: data.materialBatch || "", work_hours: data.workHours || 0,
     production_batch: data.productionBatch || "",
     order_qty: data.orderQty || 0, daily_qty: data.dailyQty || 0,
@@ -366,7 +378,8 @@ export function updateEntry(id, data, user) {
   const now = new Date().toISOString();
   const fieldMap = {
     date: "date", line: "line", customer: "customer", spec: "spec",
-    productName: "product_name", materialBatch: "material_batch", workHours: "work_hours",
+    productName: "product_name", productId: "product_id", productNumber: "product_number",
+    materialBatch: "material_batch", workHours: "work_hours",
     productionBatch: "production_batch", orderQty: "order_qty", dailyQty: "daily_qty",
     planQty: "plan_qty", cumulativeQty: "cumulative_qty", defects: "defects",
     oilInjection: "oil_injection", rubberRing: "rubber_ring", capping: "capping",
@@ -459,7 +472,8 @@ export function getAssemblyEntriesForDate(date) {
 function injectionRow(row) {
   return {
     id: row.id, date: row.date, machine: row.machine,
-    productName: row.product_name, material: row.material,
+    productName: row.product_name, productId: row.product_id || "",
+    productNumber: row.product_number || "", material: row.material,
     materialBatch: row.material_batch, shift: row.shift,
     operator: row.operator,
     orderQty: row.order_qty, dailyQty: row.daily_qty,
@@ -517,9 +531,10 @@ export function exportInjectionEntries(filters = {}) {
 
 export function createInjectionEntry(data, user) {
   const d = getDB(); const now = new Date().toISOString();
-  const stmt = d.prepare(`INSERT INTO injection_records (date, machine, product_name, material, material_batch, shift, operator, order_qty, daily_qty, cumulative_qty, defects, batch_no, remark, created_at, updated_at, created_by, updated_by) VALUES (@date, @machine, @product_name, @material, @material_batch, @shift, @operator, @order_qty, @daily_qty, @cumulative_qty, @defects, @batch_no, @remark, @created_at, @updated_at, @created_by, @updated_by)`);
+  const stmt = d.prepare(`INSERT INTO injection_records (date, machine, product_name, product_id, product_number, material, material_batch, shift, operator, order_qty, daily_qty, cumulative_qty, defects, batch_no, remark, created_at, updated_at, created_by, updated_by) VALUES (@date, @machine, @product_name, @product_id, @product_number, @material, @material_batch, @shift, @operator, @order_qty, @daily_qty, @cumulative_qty, @defects, @batch_no, @remark, @created_at, @updated_at, @created_by, @updated_by)`);
   const result = stmt.run({
     date: data.date, machine: data.machine, product_name: data.productName,
+    product_id: data.productId || "", product_number: data.productNumber || "",
     material: data.material || "", material_batch: data.materialBatch || "",
     shift: data.shift, operator: data.operator || "",
     order_qty: data.orderQty || 0, daily_qty: data.dailyQty || 0,
@@ -554,7 +569,7 @@ export function updateInjectionEntry(id, data, user) {
   const d = getDB(); const old = d.prepare("SELECT * FROM injection_records WHERE id = ?").get(id);
   if (!old) return null;
   const now = new Date().toISOString();
-  const fieldMap = { date: "date", machine: "machine", productName: "product_name", material: "material", materialBatch: "material_batch", shift: "shift", operator: "operator", orderQty: "order_qty", dailyQty: "daily_qty", cumulativeQty: "cumulative_qty", defects: "defects", batchNo: "batch_no", remark: "remark" };
+  const fieldMap = { date: "date", machine: "machine", productName: "product_name", productId: "product_id", productNumber: "product_number", material: "material", materialBatch: "material_batch", shift: "shift", operator: "operator", orderQty: "order_qty", dailyQty: "daily_qty", cumulativeQty: "cumulative_qty", defects: "defects", batchNo: "batch_no", remark: "remark" };
   const updates = []; const auditLogs = [];
   for (const [jsKey, dbCol] of Object.entries(fieldMap)) {
     if (data[jsKey] !== undefined && String(data[jsKey]) !== String(old[dbCol] ?? "")) {

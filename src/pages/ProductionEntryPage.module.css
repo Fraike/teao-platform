@@ -89,10 +89,6 @@
   font-weight: 600;
 }
 
-.quickProductSelect {
-  width: 130px;
-}
-
 .truncatedTag {
   display: inline-block;
   max-width: 100%;
@@ -111,6 +107,49 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dayShiftBadge,
+.nightShiftBadge {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.dayShiftBadge {
+  color: #ad4e00;
+  background: #fff7e6;
+  border-color: #ffc069;
+}
+
+.nightShiftBadge {
+  color: #ffffff;
+  background: #391085;
+  border-color: #722ed1;
+}
+
+.dailyQuantity {
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.defectQuantity {
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.zeroQuantity {
+  color: #bfbfbf;
+  font-size: 12px;
 }
 
 :global(.editable-cell):hover {

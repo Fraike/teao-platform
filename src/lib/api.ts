@@ -31,10 +31,12 @@ export function clearLoginTimestamp(): void {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -99,7 +101,7 @@ async function request<T>(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new ApiError(data.error || `请求失败 (${res.status})`, res.status);
+    throw new ApiError(data.error || `请求失败 (${res.status})`, res.status, typeof data.code === "string" ? data.code : undefined);
   }
   return data as T;
 }

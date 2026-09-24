@@ -5,6 +5,8 @@ export interface ProductionRecord {
   customer: string;
   spec: string;
   productName: string;
+  productId?: string;
+  productNumber?: string;
   materialBatch: string;
   workHours: number;
   productionBatch: string;
@@ -66,6 +68,8 @@ export interface ProductionEntryInput {
   customer: string;
   spec?: string;
   productName: string;
+  productId?: string;
+  productNumber?: string;
   materialBatch?: string;
   workHours?: number;
   productionBatch?: string;
