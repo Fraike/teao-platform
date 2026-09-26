@@ -9,6 +9,14 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# 本项目的原生依赖按 Node.js 24 编译。若系统默认 Node 不是 24，
+# 自动在临时的 Node.js 24 环境中重新执行，避免后端启动后立即退出。
+NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || true)
+if [ "$NODE_MAJOR" != "24" ]; then
+  echo "检测到 Node.js $(node --version 2>/dev/null || echo '未知')，正在切换到 Node.js 24..."
+  exec npx -y -p node@24 -c "bash \"$PROJECT_DIR/start-dev.sh\""
+fi
+
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,6 +25,8 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 cleanup() {
+  EXIT_CODE="${1:-$?}"
+  trap - EXIT SIGINT SIGTERM
   echo ""
   echo -e "${YELLOW}🛑 正在停止所有服务...${NC}"
   if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
@@ -28,11 +38,13 @@ cleanup() {
     echo -e "${GREEN}✅ 前端已停止${NC}"
   fi
   echo -e "${GREEN}👋 开发环境已关闭${NC}"
-  exit 0
+  exit "$EXIT_CODE"
 }
 
 # 捕获退出信号
-trap cleanup SIGINT SIGTERM EXIT
+trap 'cleanup 130' SIGINT
+trap 'cleanup 143' SIGTERM
+trap 'cleanup $?' EXIT
 
 echo -e "${CYAN}============================================${NC}"
 echo -e "${CYAN}  🚀 Teao Platform 开发环境启动中...${NC}"
@@ -67,7 +79,7 @@ echo -e "${GREEN}  后端 PID: $BACKEND_PID${NC}"
 # 启动前端
 echo -e "${YELLOW}🎨 启动前端 (Vite)...${NC}"
 cd "$PROJECT_DIR"
-npx vite --host &
+"$PROJECT_DIR/node_modules/.bin/vite" --host &
 FRONTEND_PID=$!
 echo -e "${GREEN}  前端 PID: $FRONTEND_PID${NC}"
 
@@ -80,5 +92,16 @@ echo -e "${YELLOW}  按 Ctrl+C 停止所有服务${NC}"
 echo -e "${CYAN}============================================${NC}"
 echo ""
 
-# 等待任意子进程退出
-wait
+# 监控两个服务。任一服务异常退出时同时关闭另一服务，避免出现
+# “前端仍可访问，但所有 API 请求都失败”的假启动状态。
+while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
+  sleep 1
+done
+
+if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+  echo -e "${RED}❌ 后端服务已退出，请查看上方错误日志${NC}"
+else
+  echo -e "${RED}❌ 前端服务已退出，请查看上方错误日志${NC}"
+fi
+
+exit 1

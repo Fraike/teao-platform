@@ -45,7 +45,7 @@ async function getProductionMaterialOptions(forceRefresh = false): Promise<Produ
   }
   const refreshParam = forceRefresh ? "?refresh=1" : "";
   return productionMaterialRequestQueue(forceRefresh, async () => {
-    const response = await api.get<{ ok: boolean; data: { finishedProducts: Array<{ id: string | number; name: string; number?: string; spec?: string }>; plasticParts: Array<{ id: string | number; name: string; number?: string; spec?: string }> } }>(`/api/kingdee/production-materials${refreshParam}`);
+    const response = await api.get<{ ok: boolean; data: { finishedProducts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }>; plasticParts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }> } }>(`/api/kingdee/production-materials${refreshParam}`);
     const options = {
       finishedProducts: toProductionProductOptions(response.data.finishedProducts),
       plasticParts: toProductionProductOptions(response.data.plasticParts),

@@ -6,6 +6,8 @@ const productionRequestQueue = await import("../src/lib/productionMaterialReques
 assert.ok(productionMaterialConfig, "生产日报商品分类配置应存在");
 assert.equal(productionMaterialConfig.getProductionMaterialConfig("assembly").category, "2314557705978701824");
 assert.equal(productionMaterialConfig.getProductionMaterialConfig("injection").category, "2314559979366968320");
+assert.match(productionMaterialConfig.getProductionMaterialConfig("assembly").cacheKey, /_v4$/, "装配商品应避开缺少金蝶规格的旧缓存");
+assert.match(productionMaterialConfig.getProductionMaterialConfig("injection").cacheKey, /_v4$/, "注塑商品应与共享请求使用同一缓存版本");
 assert.notEqual(
   productionMaterialConfig.getProductionMaterialConfig("assembly").cacheKey,
   productionMaterialConfig.getProductionMaterialConfig("injection").cacheKey,

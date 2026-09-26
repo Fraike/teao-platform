@@ -25,7 +25,7 @@ import {
 import { buildInjectionCopyValues } from "../lib/productionCopy";
 import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
 import type { ProductionProductOption } from "../lib/productionProductSearch";
-import { resolveProductionProductOption, validateProductionProductSelection } from "../lib/productionProductSearch";
+import { resolveProductionProductForSubmit, validateProductionProductSelection } from "../lib/productionProductSearch";
 import { getProductionDailyTableSticky } from "../lib/productionTable";
 import { EditableCell } from "../components/production/EditableCell";
 import { buildInjectionSummary, getInjectionShiftVisual, sortRecordsByOrderQty, type OrderQtySort } from "../lib/productionEntry";
@@ -122,7 +122,10 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
   const handleSubmit = async () => {
     try {
       const v = await form.validateFields();
-      const selectedProduct = resolveProductionProductOption(materials, v);
+      const selectedProduct = resolveProductionProductForSubmit(materials, v, {
+        productId: form.getFieldValue("productId"),
+        productNumber: form.getFieldValue("productNumber"),
+      });
       const mode = isEdit ? "edit" : isCopy ? "copy" : "create";
       const productError = validateProductionProductSelection(mode, v.productName, selectedProduct);
       if (productError) {

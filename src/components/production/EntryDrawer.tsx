@@ -19,7 +19,7 @@ import { normalizePersonnel, personnelToTags } from "../../lib/productionEntry";
 import { buildAssemblyCopyValues } from "../../lib/productionCopy";
 import { ProductionProductSelect } from "./ProductionProductSelect";
 import type { ProductionProductOption } from "../../lib/productionProductSearch";
-import { resolveProductionProductOption, validateProductionProductSelection } from "../../lib/productionProductSearch";
+import { resolveProductionProductForSubmit, validateProductionProductSelection } from "../../lib/productionProductSearch";
 
 interface EntryDrawerProps {
   open: boolean;
@@ -141,7 +141,7 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
   const handleProductSelect = useCallback((product: ProductionProductOption) => {
     form.setFieldValue("productId", product.value);
     form.setFieldValue("productNumber", product.productNumber);
-    if (product.spec) form.setFieldValue("spec", product.spec);
+    form.setFieldValue("spec", product.spec || "");
     form.setFields([{ name: "productName", errors: [] }]);
   }, [form]);
 
@@ -166,7 +166,10 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
     try {
       commitAllPersonnelText();
       const values = await form.validateFields();
-      const selectedProduct = resolveProductionProductOption(materials, values);
+      const selectedProduct = resolveProductionProductForSubmit(materials, values, {
+        productId: form.getFieldValue("productId"),
+        productNumber: form.getFieldValue("productNumber"),
+      });
       const mode = isEdit ? "edit" : isCopy ? "copy" : "create";
       const productError = validateProductionProductSelection(mode, values.productName, selectedProduct);
       if (productError) {

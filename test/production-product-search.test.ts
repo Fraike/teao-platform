@@ -57,6 +57,27 @@ assert.equal(
   "连续编辑同名商品时必须优先当前记录的精确 ID"
 );
 
+const resolveForSubmit = (productSearch as Record<string, unknown>).resolveProductionProductForSubmit;
+assert.equal(typeof resolveForSubmit, "function", "保存时应显式合并未注册表单字段中的商品身份");
+assert.equal(
+  (resolveForSubmit as typeof productSearch.resolveProductionProductOption)(
+    duplicateProducts,
+    { productName: "RD-02" },
+    { productId: "second", productNumber: "SP0021-D" }
+  )?.value,
+  "second",
+  "复制同名历史商品后，应使用刚选择的金蝶 ID 精确保存"
+);
+
+const productsWithKingdeeSpecs = productSearch.toProductionProductOptions([
+  { id: "model-only", number: "SP0094-B", name: "RD-T013B-1000", model: "1050-1150" },
+  { id: "spec-first", number: "SP0095-B", name: "规格优先", spec: "内部规格", model: "金蝶型号" },
+  { id: "empty-spec", number: "SP0096-B", name: "无规格", spec: "", model: "" },
+]);
+assert.equal(productsWithKingdeeSpecs[0].spec, "1050-1150", "金蝶 model 应作为装配日报规格");
+assert.equal(productsWithKingdeeSpecs[1].spec, "内部规格", "同时存在 spec 和 model 时应优先使用 spec");
+assert.equal(productsWithKingdeeSpecs[2].spec, "", "金蝶没有规格时应返回空字符串");
+
 const unorderedProducts = productSearch.toProductionProductOptions([
   { id: "ten", number: "SP0010-D", name: "十号商品" },
   { id: "two", number: "SP0002-D", name: "二号商品" },

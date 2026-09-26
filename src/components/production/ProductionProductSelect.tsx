@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Button, Select } from "antd";
 import type { ProductionProductOption } from "../../lib/productionProductSearch";
 import { filterProductionProductOptions, getProductionProductSelectedValue, resolveProductionProductOption } from "../../lib/productionProductSearch";
@@ -54,13 +54,6 @@ export function ProductionProductSelect({
       selectedOptionId
     ) || legacyValue;
   }, [legacyValue, options, productId, productNumber, selectedOptionId, value]);
-
-  useEffect(() => {
-    if (!resolvedOption) return;
-    if (resolvedOption.value !== productId || resolvedOption.productNumber !== productNumber) {
-      onProductSelect?.(resolvedOption);
-    }
-  }, [onProductSelect, productId, productNumber, resolvedOption]);
 
   return (
     <Select

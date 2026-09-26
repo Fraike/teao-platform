@@ -23,6 +23,7 @@ interface ProductionMaterialSource {
   name: string;
   number?: string;
   spec?: string;
+  model?: string;
 }
 
 const materialNumberCollator = new Intl.Collator("zh-CN", {
@@ -50,7 +51,7 @@ export function toProductionProductOptions(materials: ProductionMaterialSource[]
     label: material.number ? `${material.number} · ${material.name}` : material.name,
     productName: material.name,
     productNumber: material.number?.trim() || "",
-    spec: material.spec || "",
+    spec: material.spec?.trim() || material.model?.trim() || "",
   }));
 }
 
@@ -72,6 +73,18 @@ export function resolveProductionProductOption(
   if (!productName) return undefined;
   const byName = options.filter((option) => option.productName === productName);
   return byName.length === 1 ? byName[0] : undefined;
+}
+
+export function resolveProductionProductForSubmit(
+  options: ProductionProductOption[],
+  validatedValues: ProductionProductIdentity,
+  currentIdentity: ProductionProductIdentity
+): ProductionProductOption | undefined {
+  return resolveProductionProductOption(options, {
+    productId: currentIdentity.productId ?? validatedValues.productId,
+    productNumber: currentIdentity.productNumber ?? validatedValues.productNumber,
+    productName: validatedValues.productName,
+  });
 }
 
 export function validateProductionProductSelection(
