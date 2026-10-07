@@ -8,9 +8,12 @@ export interface User {
   createdAt?: string;
 }
 
+export type AuthSessionMode = "standard" | "remember";
+
 export interface LoginRequest {
   username: string;
   password: string;
+  rememberLogin?: boolean;
 }
 
 export interface RegisterRequest {

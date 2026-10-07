@@ -7,11 +7,11 @@ const recoveryLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempt
 
 export function registerAuthRoutes(app) {
   app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body || {};
+    const { username, password, rememberLogin } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: "请输入用户名和密码" });
     }
-    const result = await loginUser({ username, password });
+    const result = await loginUser({ username, password, rememberLogin: rememberLogin === true });
     if (result.error) {
       // Only count actual auth failures (not missing fields)
       if (result.error === "用户名或密码错误") {
@@ -64,7 +64,12 @@ export function registerAuthRoutes(app) {
 
   app.post("/api/auth/change-password", jwtAuth, adminAuth, async (req, res) => {
     const { currentPassword, newPassword } = req.body || {};
-    const result = await changeAdminPassword({ userId: req.user.id, currentPassword, newPassword });
+    const result = await changeAdminPassword({
+      userId: req.user.id,
+      currentPassword,
+      newPassword,
+      rememberLogin: req.user.rememberLogin === true,
+    });
     if (result.error) return res.status(400).json({ error: result.error });
     res.json(result);
   });

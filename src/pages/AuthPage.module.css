@@ -6,6 +6,13 @@
   background: #f0f2f5;
 }
 
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
 .card {
   width: 400px;
   max-width: 90vw;
@@ -13,6 +20,33 @@
 
 .titleArea {
   text-align: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin-bottom: 4px !important;
+}
+
+.alert {
+  margin-bottom: 16px;
+}
+
+.rememberItem {
+  margin-bottom: 16px;
+}
+
+.submitItem {
+  margin-bottom: 8px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footerText {
+  font-size: 13px;
 }
 
 .linkArea {

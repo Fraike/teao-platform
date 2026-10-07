@@ -1,10 +1,13 @@
-import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Card, Form, Input, Button, Typography, App, Alert, Modal } from "antd";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation, Link, Navigate } from "react-router-dom";
+import { Card, Form, Input, Button, Typography, App, Alert, Modal, Checkbox, Spin } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../lib/authStore";
-import { api } from "../lib/api";
+import { api, clearToken } from "../lib/api";
+import { getSessionExpiryReason } from "../lib/authSession";
+import { useTabStore } from "../lib/tabStore";
 import { LOGIN_AUTOCOMPLETE } from "../lib/loginConfig";
+import type { AuthSessionMode, LoginRequest } from "../types/auth";
 import styles from "./AuthPage.module.css";
 
 const { Title, Text } = Typography;
@@ -17,12 +20,28 @@ export function LoginPage() {
   const [recoveryForm] = Form.useForm();
   const { message } = App.useApp();
   const login = useAuthStore((s) => s.login);
+  const user = useAuthStore((s) => s.user);
+  const authLoading = useAuthStore((s) => s.loading);
+  const initialized = useAuthStore((s) => s.initialized);
+  const fetchMe = useAuthStore((s) => s.fetchMe);
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || "/";
-  const expired = (location.state as { expired?: boolean })?.expired;
+  const expiredMode = (location.state as { expiredMode?: AuthSessionMode })?.expiredMode;
+  const [initialExpiryMode] = useState<AuthSessionMode | null>(() => getSessionExpiryReason());
 
-  const onFinish = async (values: { username: string; password: string }) => {
+  useEffect(() => {
+    if (initialized) return;
+    if (initialExpiryMode) {
+      clearToken();
+      useTabStore.getState().resetForAuthentication();
+      useAuthStore.setState({ user: null, initialized: true });
+      return;
+    }
+    void fetchMe();
+  }, [fetchMe, initialExpiryMode, initialized]);
+
+  const onFinish = async (values: LoginRequest) => {
     setLoginError("");
     setLoading(true);
     try {
@@ -55,25 +74,38 @@ export function LoginPage() {
     }
   };
 
+  if (!initialized || authLoading) {
+    return <div className={styles.loading}><Spin size="large" /></div>;
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className={styles.container}>
       <Card className={styles.card}>
-        <div className={styles.titleArea} style={{ marginBottom: 24 }}>
-          <Title level={3} style={{ marginBottom: 4 }}>特澳科技后台</Title>
+        <div className={styles.titleArea}>
+          <Title level={3} className={styles.title}>特澳科技后台</Title>
           <Text type="secondary">请登录以继续</Text>
         </div>
 
-        <Form onFinish={onFinish} size="large" autoComplete={LOGIN_AUTOCOMPLETE.form}>
-          {expired && (
+        <Form
+          onFinish={onFinish}
+          size="large"
+          autoComplete={LOGIN_AUTOCOMPLETE.form}
+          initialValues={{ rememberLogin: false }}
+        >
+          {expiredMode && (
             <Alert
               type="warning"
               showIcon
-              message="登录已过期（超过 12 小时），请重新登录"
-              style={{ marginBottom: 16 }}
+              message={expiredMode === "remember" ? "超过15天未使用，请重新登录" : "登录已过期（超过12小时），请重新登录"}
+              className={styles.alert}
             />
           )}
           {loginError && (
-            <Alert type="error" showIcon message={loginError} style={{ marginBottom: 16 }} closable onClose={() => setLoginError("")} />
+            <Alert type="error" showIcon message={loginError} className={styles.alert} closable onClose={() => setLoginError("")} />
           )}
           <Form.Item name="username" rules={[{ required: true, message: "请输入用户名" }]}>
             <Input name="username" autoComplete={LOGIN_AUTOCOMPLETE.username} prefix={<UserOutlined />} placeholder="用户名" />
@@ -81,17 +113,20 @@ export function LoginPage() {
           <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
             <Input.Password name="password" autoComplete={LOGIN_AUTOCOMPLETE.password} prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
-          <Form.Item style={{ marginBottom: 8 }}>
+          <Form.Item name="rememberLogin" valuePropName="checked" className={styles.rememberItem}>
+            <Checkbox>15天内免登录</Checkbox>
+          </Form.Item>
+          <Form.Item className={styles.submitItem}>
             <Button type="primary" htmlType="submit" loading={loading} block>
               登录
             </Button>
           </Form.Item>
         </Form>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className={styles.footer}>
           <Button type="link" size="small" onClick={() => setRecoveryOpen(true)}>
             管理员找回密码
           </Button>
-          <Text type="secondary" style={{ fontSize: 13 }}>
+          <Text type="secondary" className={styles.footerText}>
             没有账号？<Link to="/register">申请注册</Link>
           </Text>
         </div>

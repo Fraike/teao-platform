@@ -1,3 +1,5 @@
+import { clearAuthSession, markAuthTokenRefreshed } from "./authSession.ts";
+
 const TOKEN_KEY = "auth_token";
 
 export function getToken(): string | null {
@@ -10,23 +12,7 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(LOGIN_TIMESTAMP_KEY);
-}
-
-// ---- login timestamp (会话过期检测) ----
-const LOGIN_TIMESTAMP_KEY = "login_timestamp";
-export const SESSION_DURATION_MS = 12 * 60 * 60 * 1000; // 12 小时
-
-export function getLoginTimestamp(): string | null {
-  return localStorage.getItem(LOGIN_TIMESTAMP_KEY);
-}
-
-export function setLoginTimestamp(): void {
-  localStorage.setItem(LOGIN_TIMESTAMP_KEY, String(Date.now()));
-}
-
-export function clearLoginTimestamp(): void {
-  localStorage.removeItem(LOGIN_TIMESTAMP_KEY);
+  clearAuthSession();
 }
 
 export class ApiError extends Error {
@@ -47,7 +33,7 @@ export function isApiError(err: unknown): err is ApiError {
 let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
 
-async function refreshToken(): Promise<string | null> {
+export async function refreshAuthToken(): Promise<string | null> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
   const token = getToken();
@@ -62,7 +48,9 @@ async function refreshToken(): Promise<string | null> {
       });
       if (!res.ok) return null;
       const data = await res.json();
+      if (getToken() !== token) return null;
       setToken(data.token);
+      markAuthTokenRefreshed();
       return data.token;
     } catch {
       return null;
@@ -92,7 +80,7 @@ async function request<T>(
 
   // Auto-refresh on 401 (single attempt)
   if (res.status === 401 && token) {
-    const newToken = await refreshToken();
+    const newToken = await refreshAuthToken();
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`;
       res = await fetch(url, { ...options, headers });
@@ -107,7 +95,7 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>(url),
+  get: <T>(url: string, options?: RequestInit) => request<T>(url, options),
   post: <T>(url: string, body?: unknown) =>
     request<T>(url, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(url: string, body?: unknown) =>

@@ -9,11 +9,6 @@ assert.equal(new ApiError("旧接口", 400).code, undefined, "兼容没有 code 
 const ui = await import("../src/lib/productionReportUi.ts").catch(() => null);
 assert.ok(ui, "生产汇总共享行为工具应存在");
 
-assert.deepEqual(ui.getSourceSwitchAction("admin", "vika"), { label: "切换到内部平台", target: "internal" });
-assert.deepEqual(ui.getSourceSwitchAction("admin", "internal"), { label: "切回维格表", target: "vika" });
-assert.equal(ui.getSourceSwitchAction("user", "vika"), null, "普通用户不得获得来源切换操作");
-assert.equal(ui.getSourceSwitchAction(undefined, "internal"), null);
-assert.equal(ui.getSourceSwitchAction("admin", null), null, "获取配置失败不得猜测默认来源");
 assert.equal(ui.formatReportRate(null), "—");
 assert.equal(ui.formatReportRate(undefined), "—");
 assert.equal(ui.formatReportRate(0), "0.0%");
@@ -24,34 +19,32 @@ assert.equal(ui.requiresRepeatConfirmation(new ApiError("忙", 409, "PRODUCTION_
 assert.equal(ui.requiresRepeatConfirmation(new ApiError("未知", 502, "SEND_RESULT_UNCERTAIN")), false);
 assert.equal(ui.requiresRepeatConfirmation(new ApiError("重复", 409)), false);
 
-const coordinator = ui.createProductionReportCoordinator("2026-09-15", "vika");
+assert.deepEqual(ui.getDefaultProductionReportRange("2026-10-07"), { dateFrom: "2026-09-30", dateTo: "2026-10-06" });
+assert.equal(ui.validateProductionReportRange("2026-01-01", "2026-12-31"), null);
+assert.match(ui.validateProductionReportRange("2026-01-01", "2027-01-01")!, /365/);
+assert.match(ui.validateProductionReportRange("2026-09-03", "2026-09-01")!, /开始日期/);
+assert.equal(ui.isSingleDayRange("2026-09-15", "2026-09-15"), true);
+assert.equal(ui.isSingleDayRange("2026-09-14", "2026-09-15"), false);
+
+const coordinator = ui.createProductionReportCoordinator("2026-09-14", "2026-09-15");
 const oldReport = coordinator.begin("report");
 const newReport = coordinator.begin("report");
 assert.equal(coordinator.isCurrent(oldReport), false, "旧刷新结果及错误不能覆盖新刷新");
 assert.equal(coordinator.isCurrent(newReport), true);
 const repeat = coordinator.begin("send");
-assert.deepEqual(ui.getConfirmedSendRequest(coordinator, repeat), {
-  url: "/api/production/send?date=2026-09-15", body: { confirmRepeat: true },
-});
-const sourceConfirmation = coordinator.begin("sourceConfirmation");
-assert.deepEqual(ui.getConfirmedSourceRequest(coordinator, sourceConfirmation, "admin"), {
-  url: "/api/production/source", body: { dataSource: "internal" },
-});
-assert.equal(ui.getConfirmedSourceRequest(coordinator, sourceConfirmation, "user"), null);
-coordinator.setContext("2026-09-14", "vika");
+assert.equal(ui.getConfirmedSendRequest(coordinator, repeat), null, "多日范围不得确认企微重发");
+coordinator.setContext("2026-09-15", "2026-09-15");
 assert.equal(coordinator.isCurrent(newReport), false, "换日期后旧报表不能恢复");
 assert.equal(ui.getConfirmedSendRequest(coordinator, repeat), null, "换日期后不能确认旧重发");
-assert.equal(ui.getConfirmedSourceRequest(coordinator, sourceConfirmation, "admin"), null, "换日期后不能执行过期切换确认");
-coordinator.setContext("2026-09-15", "vika");
+const singleDayRepeat = coordinator.begin("send");
+assert.deepEqual(ui.getConfirmedSendRequest(coordinator, singleDayRepeat), {
+  url: "/api/production/send?date=2026-09-15", body: { confirmRepeat: true },
+});
+coordinator.setContext("2026-09-15", "2026-09-15");
 assert.equal(coordinator.isCurrent(newReport), false, "切回同一日期也不能复活旧结果");
 const preview = coordinator.begin("preview");
 coordinator.invalidate("preview");
 assert.equal(coordinator.isCurrent(preview), false, "关闭预览后迟到结果不能重开弹窗");
-const sourceReport = coordinator.begin("report");
-const sourceRepeat = coordinator.begin("send");
-coordinator.setContext("2026-09-15", "internal");
-assert.equal(coordinator.isCurrent(sourceReport), false, "切换来源后旧报表不能恢复");
-assert.equal(ui.getConfirmedSendRequest(coordinator, sourceRepeat), null, "切换来源后不得发送旧确认");
 const currentReport = coordinator.begin("report");
 coordinator.invalidateAll();
 assert.equal(coordinator.isCurrent(currentReport), false, "卸载后请求不能更新页面");

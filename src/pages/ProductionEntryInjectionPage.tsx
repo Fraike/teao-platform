@@ -26,7 +26,7 @@ import { buildInjectionCopyValues } from "../lib/productionCopy";
 import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
 import type { ProductionProductOption } from "../lib/productionProductSearch";
 import { resolveProductionProductForSubmit, validateProductionProductSelection } from "../lib/productionProductSearch";
-import { getProductionDailyTableSticky } from "../lib/productionTable";
+import { getProductionDailyTableSticky, productionDailyPagination } from "../lib/productionTable";
 import { EditableCell } from "../components/production/EditableCell";
 import { buildInjectionSummary, getInjectionShiftVisual, sortRecordsByOrderQty, type OrderQtySort } from "../lib/productionEntry";
 import styles from "./ProductionEntryPage.module.css";
@@ -213,6 +213,7 @@ export function ProductionEntryInjectionPage() {
   const [editRec, setEditRec] = useState<InjRecord | null>(null);
   const [copyRec, setCopyRec] = useState<InjRecord | null>(null);
   const offsetRef = useRef(0);
+  const queryController = useRef<AbortController | null>(null);
   const groupsRef = useRef<InjGroup[]>([]);
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
@@ -254,20 +255,40 @@ export function ProductionEntryInjectionPage() {
   };
 
   const fetchData = useCallback(async (append: boolean) => {
+    queryController.current?.abort();
+    const controller = new AbortController();
+    queryController.current = controller;
     setLoading(true); const curr = append ? offsetRef.current : 0;
     try {
       const p = new URLSearchParams();
       if (dateFrom) p.set("dateFrom", dateFrom); if (dateTo) p.set("dateTo", dateTo);
       if (machine) p.set("machine", machine); if (product) p.set("product", product); if (search) p.set("search", search);
       p.set("limit", String(PAGE_SIZE)); p.set("offset", String(curr));
-      const r = await api.get<{ ok: boolean; data: { groups: InjGroup[]; total: number; hasMore: boolean } }>(`/api/production/injection/entries?${p.toString()}`);
+      const r = await api.get<{ ok: boolean; data: { groups: InjGroup[]; total: number; hasMore: boolean } }>(`/api/production/injection/entries?${p.toString()}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const d = r.data;
       setGroups(append ? [...groupsRef.current, ...d.groups] : d.groups);
       setTotal(d.total); setHasMore(d.hasMore); offsetRef.current = curr + PAGE_SIZE;
-    } catch { message.error("加载失败"); } finally { setLoading(false); }
+    } catch {
+      if (!controller.signal.aborted) message.error("加载失败");
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, [dateFrom, dateTo, machine, product, search]);
 
-  useEffect(() => { void Promise.resolve().then(() => { offsetRef.current = 0; return fetchData(false); }); }, [fetchData]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        offsetRef.current = 0;
+        return fetchData(false);
+      }
+    });
+    return () => {
+      active = false;
+      queryController.current?.abort();
+    };
+  }, [fetchData]);
 
   const add = useCallback(() => { setEditRec(null); setCopyRec(null); setModalOpen(true); }, []);
   const edit = useCallback((r: InjRecord) => { setEditRec(r); setCopyRec(null); setModalOpen(true); }, []);
@@ -377,7 +398,7 @@ export function ProductionEntryInjectionPage() {
                   title={<Space size={6} wrap><span style={{ fontSize: 14, fontWeight: 600 }}>{g.date}</span><Tag color="purple" style={{ fontSize: 11 }}>{g.summary.machines}台机</Tag><Tag style={{ fontSize: 11 }}>{g.records.length}条</Tag><span style={{ color: "#999", fontSize: 11 }}>|</span><span style={{ fontSize: 11 }}>订单 <b>{g.summary.totalOrderQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>当天 <b style={{ color: "#722ed1" }}>{g.summary.totalDailyQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>累计 <b>{g.summary.totalCumulativeQty.toLocaleString()}</b></span><Tag color={g.summary.totalDefects > 0 ? "red" : "green"} style={{ fontSize: 10 }}>不良 {g.summary.totalDefects}</Tag><span style={{ fontSize: 11 }}>合格率 <b style={{ color: (g.summary.qualifiedRate ?? 1) >= 0.95 ? "#52c41a" : "#ff4d4f" }}>{g.summary.qualifiedRate != null ? `${(g.summary.qualifiedRate * 100).toFixed(1)}%` : "-"}</b></span><span style={{ fontSize: 11 }}>欠数 <b style={{ color: g.summary.totalBackorder > 0 ? "#faad14" : "#333" }}>{g.summary.totalBackorder.toLocaleString()}</b></span></Space>}
                   size="small"
                 >
-                  <ResponsiveTable columns={columns} dataSource={sortRecordsByOrderQty(g.records, orderQtySort).map(r => ({ ...r, key: r.id }))} pagination={false} size="small" minWidth={1600} bordered
+                  <ResponsiveTable columns={columns} dataSource={sortRecordsByOrderQty(g.records, orderQtySort).map(r => ({ ...r, key: r.id }))} pagination={productionDailyPagination} size="small" minWidth={1600} bordered
                     rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} sticky={dailyTableSticky} />
                 </Card>
               ))}

@@ -23,7 +23,7 @@ import { ResponsiveTable } from "../components/ResponsiveTable";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
 import { sortRecordsByOrderQty, splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
 import { refreshProductionMaterialOptions } from "../lib/productionReferenceData";
-import { getProductionDailyTableSticky } from "../lib/productionTable";
+import { getProductionDailyTableSticky, productionDailyPagination } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -100,6 +100,7 @@ export function ProductionEntryPage() {
   const [copyFromRecord, setCopyFromRecord] = useState<ProductionRecord | null>(null);
   const [defaultDate, setDefaultDate] = useState("");
   const offsetRef = useRef(0);
+  const queryController = useRef<AbortController | null>(null);
   const groupsRef = useRef<DailyGroup[]>([]);
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
@@ -161,6 +162,9 @@ export function ProductionEntryPage() {
   };
 
   const fetchData = useCallback(async (append: boolean) => {
+    queryController.current?.abort();
+    const controller = new AbortController();
+    queryController.current = controller;
     setLoading(true); const curr = append ? offsetRef.current : 0;
     try {
       const af = activeFilters;
@@ -171,18 +175,37 @@ export function ProductionEntryPage() {
       if (af.customer) p.set("customer", af.customer);
       if (af.search) p.set("search", af.search);
       p.set("limit", String(PAGE_SIZE)); p.set("offset", String(curr));
-      const r = await api.get<ProductionQueryResponse>(`/api/production/entries?${p.toString()}`);
+      const r = await api.get<ProductionQueryResponse>(`/api/production/entries?${p.toString()}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (!r || !r.data) { console.error("API response missing data:", r); message.error("数据格式异常"); return; }
       const d = r.data;
       setGroups(append ? [...groupsRef.current, ...d.groups] : d.groups);
       setTotal(d.total); setHasMore(d.hasMore);
       offsetRef.current = curr + PAGE_SIZE;
-    } catch (err) { console.error("fetchData error:", err); message.error("加载数据失败"); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.error("fetchData error:", err);
+        message.error("加载数据失败");
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, [activeFilters]);
 
   // activeFilters 变化 → 重新加载
-  useEffect(() => { void Promise.resolve().then(() => { offsetRef.current = 0; return fetchData(false); }); }, [fetchData]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        offsetRef.current = 0;
+        return fetchData(false);
+      }
+    });
+    return () => {
+      active = false;
+      queryController.current?.abort();
+    };
+  }, [fetchData]);
 
   const cellSave = useCallback(async (rec: ProductionRecord, field: keyof ProductionRecord, val: string | number) => {
     try {
@@ -379,7 +402,7 @@ export function ProductionEntryPage() {
                   <ResponsiveTable
                     columns={columns}
                     dataSource={sortRecordsByOrderQty(group.records, orderQtySort).map((record) => ({ ...record, key: record.id }))}
-                    pagination={false} size="small" minWidth={2050} bordered
+                    pagination={productionDailyPagination} size="small" minWidth={2050} bordered
                     rowClassName={rowCls} locale={{ emptyText: "暂无数据" }}
                     sticky={dailyTableSticky}
                   />

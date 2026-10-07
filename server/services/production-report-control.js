@@ -2,7 +2,14 @@ import cron from "node-cron";
 import { createHash } from "node:crypto";
 import { readConfig, writeConfig } from "../config.js";
 import { getDB } from "./production-store.js";
-import { generateProductionReport, buildWecomContent, buildEmptyContent, hasProductionData } from "./report.js";
+import {
+  generateProductionReport,
+  generateProductionReportRange,
+  getProductionReportRecordPage,
+  buildWecomContent,
+  buildEmptyContent,
+  hasProductionData,
+} from "./report.js";
 import { sendWecomMessage } from "./wecom.js";
 
 let busy = false;
@@ -70,8 +77,6 @@ async function withOperation(action, actor, run, changesConfig = false) {
 }
 
 export function isProductionSourceReady(config) {
-  if (config.dataSource === "vika") return !!(config.vikaToken && config.assemblyDatasheetId && config.injectionDatasheetId);
-  if (config.dataSource !== "internal") return false;
   try {
     getDB().prepare("SELECT 1 FROM assembly_records LIMIT 1").get();
     getDB().prepare("SELECT 1 FROM injection_records LIMIT 1").get();
@@ -81,20 +86,11 @@ export function isProductionSourceReady(config) {
   }
 }
 
-export async function switchProductionSource(dataSource, actor) {
-  if (!["vika", "internal"].includes(dataSource)) throw apiError(400, "无效的数据来源");
-  return withOperation("switch_source", actor, async (config) => {
-    const next = { ...config, dataSource };
-    if (!isProductionSourceReady(next)) throw apiError(400, dataSource === "vika" ? "维格表配置不完整，无法切换" : "内部日报数据库不可读，无法切换");
-    return { nextConfig: next, response: { ok: true, dataSource } };
-  }, true);
-}
-
 export async function updateProductionConfig(updates, actor) {
   if (!updates || typeof updates !== "object" || Array.isArray(updates)) throw apiError(400, "配置格式无效");
-  if (Object.hasOwn(updates, "dataSource")) throw apiError(400, "请使用专用数据来源切换接口");
+  if (Object.hasOwn(updates, "dataSource")) throw apiError(400, "生产日报已固定使用内部平台数据");
   return withOperation("update_config", actor, async (config) => {
-    const fields = ["vikaToken", "assemblyDatasheetId", "assemblyViewId", "injectionDatasheetId", "injectionViewId", "wecomWebhook", "cronExpression", "enabled", "restDays", "makeupWorkdays"];
+    const fields = ["wecomWebhook", "cronExpression", "enabled", "restDays", "makeupWorkdays"];
     const next = { ...config };
     for (const field of fields) if (updates[field] !== undefined) next[field] = updates[field];
     if (!cron.validate(next.cronExpression)) throw apiError(400, "定时表达式无效");
@@ -105,13 +101,36 @@ export async function updateProductionConfig(updates, actor) {
 function validateDate(date) {
   const parsed = new Date(`${date}T00:00:00Z`);
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
-    throw apiError(400, "日期格式无效");
+    throw apiError(400, "日期格式无效", "INVALID_DATE");
   }
+}
+
+function validateRange(dateFrom, dateTo) {
+  validateDate(dateFrom);
+  validateDate(dateTo);
+  const from = Date.parse(`${dateFrom}T00:00:00Z`);
+  const to = Date.parse(`${dateTo}T00:00:00Z`);
+  if (from > to) throw apiError(400, "开始日期不能晚于结束日期", "INVALID_DATE_RANGE");
+  const days = Math.floor((to - from) / 86400000) + 1;
+  if (days > 365) throw apiError(400, "单次最多查询365个自然日", "DATE_RANGE_TOO_LARGE");
 }
 
 export async function getProductionReport(date, actor) {
   validateDate(date);
   return withOperation("generate_report", actor, (config) => generateProductionReport(date, config));
+}
+
+export async function getProductionReportRange(dateFrom, dateTo, actor) {
+  validateRange(dateFrom, dateTo);
+  return withOperation("generate_range_report", actor, () => generateProductionReportRange(dateFrom, dateTo));
+}
+
+export async function getProductionReportRecords(department, dateFrom, dateTo, page = 1, pageSize = 50) {
+  validateRange(dateFrom, dateTo);
+  if (!['assembly', 'injection'].includes(department)) throw apiError(400, "部门参数无效", "INVALID_DEPARTMENT");
+  if (!Number.isInteger(page) || page < 1) throw apiError(400, "页码必须为正整数", "INVALID_PAGE");
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) throw apiError(400, "每页数量必须在1到100之间", "INVALID_PAGE_SIZE");
+  return getProductionReportRecordPage(department, dateFrom, dateTo, page, pageSize);
 }
 
 export async function previewProductionReport(date, actor) {

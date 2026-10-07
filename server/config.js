@@ -23,12 +23,7 @@ export function onProductionConfigChange(listener) {
 }
 
 export const DEFAULT_CONFIG = {
-  dataSource: "vika",
-  vikaToken: process.env.VIKA_TOKEN || "",
-  assemblyDatasheetId: process.env.ASSEMBLY_DATASHEET_ID || "",
-  assemblyViewId: process.env.ASSEMBLY_VIEW_ID || "",
-  injectionDatasheetId: process.env.INJECTION_DATASHEET_ID || "",
-  injectionViewId: process.env.INJECTION_VIEW_ID || "",
+  dataSource: "internal",
   wecomWebhook: process.env.WECOM_WEBHOOK || "",
   cronExpression: process.env.CRON_EXPRESSION || "0 0 13 * * *",
   enabled: process.env.PRODUCTION_REPORT_ENABLED !== "false",
@@ -69,9 +64,9 @@ function readExistingConfig(file) {
   }
   const value = JSON.parse(text);
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid config object");
-  const config = { ...DEFAULT_CONFIG, ...value };
-  if (!["vika", "internal"].includes(config.dataSource)) throw new Error("Invalid config source");
-  return config;
+  // Legacy Vika fields remain untouched on disk for a safe rollout, but the
+  // runtime is internal-only from this version onward.
+  return { ...DEFAULT_CONFIG, ...value, dataSource: "internal" };
 }
 
 export function writeConfig(config) {
@@ -132,7 +127,7 @@ export function writeReport(date, data) {
 }
 
 export function writeGeneratedReport(report) {
-  if (!["vika", "internal"].includes(report.dataSource) || !/^\d{4}-\d{2}-\d{2}$/.test(report.date)) {
+  if (report.dataSource !== "internal" || !/^\d{4}-\d{2}-\d{2}$/.test(report.date)) {
     throw new Error("Invalid generated report cache key");
   }
   const base = path.join(REPORTS_DIR, "source-cache");

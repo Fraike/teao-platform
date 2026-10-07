@@ -1,143 +1,14 @@
-import { parseNum, parseRate, extractDateStr } from "./vika.js";
 import { writeGeneratedReport } from "../config.js";
-import { fetchVikaRecords } from "./vika.js";
-import { getAssemblyEntriesForDate, getInjectionEntriesForDate } from "./production-store.js";
+import {
+  getAssemblyEntriesForDate,
+  getAssemblyEntriesForRange,
+  getAssemblyReportPage,
+  getInjectionEntriesForDate,
+  getInjectionEntriesForRange,
+  getInjectionReportPage,
+} from "./production-store.js";
 
 // ---- aggregation ----
-
-export function aggregateAssembly(records, dateStr) {
-  const filtered = records.filter((r) => {
-    const d = extractDateStr(r.fields["日期"]) || extractDateStr(r.fields["创建时间"]);
-    return d === dateStr;
-  });
-
-  const lines = new Map();
-  for (const r of filtered) {
-    const lineName = r.fields["产线"] || "未知产线";
-    if (!lines.has(lineName)) {
-      lines.set(lineName, {
-        line: lineName,
-        products: [],
-        totalPlan: 0,
-        totalActual: 0,
-        totalDefects: 0,
-        totalBackorder: 0,
-        recordCount: 0,
-      });
-    }
-    const line = lines.get(lineName);
-    const planQty = parseNum(r.fields["计划生产数量"]);
-    const actualQty = parseNum(r.fields["当天生产数量"]);
-    const defects = parseNum(r.fields["不良数"]);
-    const backorder = parseNum(r.fields["订单累计欠数"]);
-    line.products.push({
-      date: extractDateStr(r.fields["日期"]) || extractDateStr(r.fields["创建时间"]) || dateStr,
-      name: r.fields["品名"] || "-",
-      spec: r.fields["规格"] || "-",
-      customer: r.fields["客户名称"] || "-",
-      planQty,
-      actualQty,
-      achievementRate: parseRate(r.fields["计划达成率"]),
-      defects,
-      qualifiedRate: parseRate(r.fields["合格率"]),
-      backorder,
-      batchNo: r.fields["生产批号"] || "-",
-      remark: r.fields["备注"] || "",
-    });
-    line.totalPlan += planQty;
-    line.totalActual += actualQty;
-    line.totalDefects += defects;
-    line.totalBackorder += backorder;
-    line.recordCount++;
-  }
-
-  const lineList = Array.from(lines.values());
-  const summary = {
-    lines: lineList.length,
-    totalPlanQty: lineList.reduce((s, l) => s + l.totalPlan, 0),
-    totalActualQty: lineList.reduce((s, l) => s + l.totalActual, 0),
-    totalDefects: lineList.reduce((s, l) => s + l.totalDefects, 0),
-    totalBackorder: lineList.reduce((s, l) => s + l.totalBackorder, 0),
-    avgAchievementRate:
-      lineList.length > 0
-        ? lineList.reduce((s, l) => s + (l.totalPlan > 0 ? l.totalActual / l.totalPlan : 0), 0) / lineList.length
-        : 0,
-    avgQualifiedRate:
-      lineList.length > 0
-        ? lineList.reduce((s, l) => {
-            const total = l.totalActual + l.totalDefects;
-            return s + (total > 0 ? l.totalActual / total : 1);
-          }, 0) / lineList.length
-        : 0,
-  };
-
-  return { records: lineList, summary, rawCount: filtered.length };
-}
-
-export function aggregateInjection(records, dateStr) {
-  const filtered = records.filter((r) => {
-    const d = extractDateStr(r.fields["日期"]);
-    return d === dateStr;
-  });
-
-  const machines = new Map();
-  for (const r of filtered) {
-    const machine = r.fields["机台"] || "未知机台";
-    const shift = r.fields["班次"] || "-";
-    const key = `${machine}-${shift}`;
-    if (!machines.has(key)) {
-      machines.set(key, {
-        machine,
-        shift,
-        products: [],
-        totalQty: 0,
-        totalDefects: 0,
-        totalBackorder: 0,
-        recordCount: 0,
-      });
-    }
-    const m = machines.get(key);
-    const actualQty = parseNum(r.fields["当天生产数量"]);
-    const defects = parseNum(r.fields["不良数"]);
-    const backorder = parseNum(r.fields["订单累计欠数"]);
-    m.products.push({
-      date: extractDateStr(r.fields["日期"]) || dateStr,
-      name: r.fields["品名/型号"] || "-",
-      material: r.fields["原材料"] || "-",
-      planQty: parseNum(r.fields["订单数量"]),
-      actualQty,
-      defects,
-      qualifiedRate: parseRate(r.fields["合格率"]),
-      backorder,
-      batchNo: r.fields["半成品生产批号"] || "-",
-      operator: r.fields["操作人"] || "-",
-      remark: r.fields["备注"] || "",
-    });
-    m.totalQty += actualQty;
-    m.totalDefects += defects;
-    m.totalBackorder += backorder;
-    m.recordCount++;
-  }
-
-  const machineList = Array.from(machines.values());
-  const totalQty = machineList.reduce((s, m) => s + m.totalQty, 0);
-  const totalDefects = machineList.reduce((s, m) => s + m.totalDefects, 0);
-  const summary = {
-    machines: machineList.length,
-    totalQty,
-    totalDefects,
-    totalBackorder: machineList.reduce((s, m) => s + m.totalBackorder, 0),
-    avgQualifiedRate:
-      machineList.length > 0
-        ? machineList.reduce((s, m) => {
-            const total = m.totalQty + m.totalDefects;
-            return s + (total > 0 ? m.totalQty / total : 1);
-          }, 0) / machineList.length
-        : 0,
-  };
-
-  return { records: machineList, summary, rawCount: filtered.length };
-}
 
 function aggregateLocalAssembly(records) {
   const lines = new Map();
@@ -247,7 +118,7 @@ function aggregateLocalInjection(records) {
 
 // ---- WeCom content builder ----
 
-export function buildWecomContent(date, assembly, injection, dataSource = assembly.rateBasis === "internal" ? "internal" : "vika") {
+export function buildWecomContent(date, assembly, injection) {
   const lines = [];
   const asm = assembly.summary;
   const inj = injection.summary;
@@ -336,20 +207,20 @@ export function buildWecomContent(date, assembly, injection, dataSource = assemb
   }
   lines.push("");
 
-  lines.push(`> 数据来源：${dataSource === "internal" ? "内部平台" : "维格表"} · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
+  lines.push(`> 数据来源：内部平台 · ${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`);
   lines.push(`> 详情查阅：[teao.work/production-report](https://teao.work/production-report)`);
 
   return lines.join("\n");
 }
 
-export function buildEmptyContent(date, dataSource = "vika") {
+export function buildEmptyContent(date) {
   return [
     `## 📊 生产日报 — ${date}`,
     "",
     "> ⚠️ **暂无生产数据**",
     "> ",
     "> 装配部和注塑部昨日均无生产记录。",
-    `> 数据来源：${dataSource === "internal" ? "内部平台" : "维格表"}`,
+    "> 数据来源：内部平台",
     "> 请相关人员及时前往生产日报录入页面补充数据！",
     "> ",
     `> 推送时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
@@ -367,34 +238,15 @@ export async function fetchAndStoreReport(date) {
 }
 
 export async function generateProductionReport(date, config) {
-  let assembly;
-  let injection;
-  if (config.dataSource === "internal") {
-    assembly = aggregateLocalAssembly(getAssemblyEntriesForDate(date));
-    injection = aggregateLocalInjection(getInjectionEntriesForDate(date));
-    assembly.rateBasis = injection.rateBasis = "internal";
-  } else if (config.dataSource === "vika") {
-    if (!(config.vikaToken && config.assemblyDatasheetId && config.injectionDatasheetId)) {
-      throw new Error("维格表配置不完整");
-    }
-    const results = await Promise.allSettled([
-      fetchVikaRecords(config.assemblyDatasheetId, config.assemblyViewId, config.vikaToken, "日期", "desc"),
-      fetchVikaRecords(config.injectionDatasheetId, config.injectionViewId, config.vikaToken, "日期", "desc"),
-    ]);
-    const failed = results.find((result) => result.status === "rejected");
-    if (failed) throw failed.reason;
-    const [assemblyRaw, injectionRaw] = results.map((result) => result.value);
-    assembly = aggregateAssembly(assemblyRaw, date);
-    injection = aggregateInjection(injectionRaw, date);
-  } else {
-    throw new Error("生产日报数据来源无效");
-  }
+  const assembly = aggregateLocalAssembly(getAssemblyEntriesForDate(date));
+  const injection = aggregateLocalInjection(getInjectionEntriesForDate(date));
+  assembly.rateBasis = injection.rateBasis = "internal";
 
   const report = {
     date,
     fetchedAt: new Date().toISOString(),
     generatedAt: new Date().toISOString(),
-    dataSource: config.dataSource,
+    dataSource: "internal",
     missingDepartments: [assembly.rawCount ? null : "assembly", injection.rawCount ? null : "injection"].filter(Boolean),
     assembly,
     injection,
@@ -402,4 +254,94 @@ export async function generateProductionReport(date, config) {
 
   writeGeneratedReport(report);
   return report;
+}
+
+function latestBackorder(records) {
+  const date = records.reduce((latest, record) => record.date > latest ? record.date : latest, "");
+  return {
+    latestBackorder: date ? records.filter((record) => record.date === date).reduce((sum, record) => sum + record.backorder, 0) : 0,
+    backorderAsOf: date || null,
+  };
+}
+
+export function generateProductionReportRange(dateFrom, dateTo) {
+  const assemblyRecords = getAssemblyEntriesForRange(dateFrom, dateTo);
+  const injectionRecords = getInjectionEntriesForRange(dateFrom, dateTo);
+  const assembly = aggregateLocalAssembly(assemblyRecords);
+  const injection = aggregateLocalInjection(injectionRecords);
+  const assemblyBackorder = latestBackorder(assemblyRecords);
+  const injectionBackorder = latestBackorder(injectionRecords);
+  assembly.summary = { ...assembly.summary, totalBackorder: assemblyBackorder.latestBackorder, ...assemblyBackorder };
+  injection.summary = {
+    ...injection.summary,
+    machines: new Set(injectionRecords.map((record) => record.machine)).size,
+    machineShifts: new Set(injectionRecords.map((record) => `${record.machine}\u0000${record.shift}`)).size,
+    totalBackorder: injectionBackorder.latestBackorder,
+    ...injectionBackorder,
+  };
+  return {
+    exists: true,
+    dateFrom,
+    dateTo,
+    dataSource: "internal",
+    generatedAt: new Date().toISOString(),
+    missingDepartments: [assembly.rawCount ? null : "assembly", injection.rawCount ? null : "injection"].filter(Boolean),
+    assembly: { rawCount: assembly.rawCount, summary: assembly.summary },
+    injection: { rawCount: injection.rawCount, summary: injection.summary },
+  };
+}
+
+function assemblyReportRecord(record) {
+  return {
+    id: record.id,
+    date: record.date,
+    line: record.line,
+    name: record.productName,
+    spec: record.spec || "-",
+    customer: record.customer || "-",
+    planQty: record.planQty,
+    actualQty: record.dailyQty,
+    achievementRate: record.achievementRate,
+    defects: record.defects,
+    qualifiedRate: record.qualifiedRate,
+    backorder: record.backorder,
+    batchNo: record.productionBatch || "-",
+    remark: record.remark || "",
+  };
+}
+
+function injectionReportRecord(record) {
+  return {
+    id: record.id,
+    date: record.date,
+    machine: record.machine,
+    shift: record.shift,
+    name: record.productName,
+    material: record.material || "-",
+    planQty: record.orderQty,
+    actualQty: record.dailyQty,
+    defects: record.defects,
+    qualifiedRate: record.qualifiedRate,
+    backorder: record.backorder,
+    batchNo: record.batchNo || "-",
+    operator: record.operator || "-",
+    remark: record.remark || "",
+  };
+}
+
+export function getProductionReportRecordPage(department, dateFrom, dateTo, page, pageSize) {
+  const result = department === "assembly"
+    ? getAssemblyReportPage(dateFrom, dateTo, page, pageSize)
+    : getInjectionReportPage(dateFrom, dateTo, page, pageSize);
+  const mapRecord = department === "assembly" ? assemblyReportRecord : injectionReportRecord;
+  return {
+    department,
+    dateFrom,
+    dateTo,
+    page,
+    pageSize,
+    total: result.total,
+    totalPages: Math.ceil(result.total / pageSize),
+    records: result.records.map(mapRecord),
+  };
 }

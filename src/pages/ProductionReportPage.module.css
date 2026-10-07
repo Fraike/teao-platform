@@ -16,23 +16,17 @@
   margin: 0;
 }
 
-.sourceTag {
-  display: block;
-  width: fit-content;
+.rangePicker {
   margin-top: 8px;
+  min-width: 420px;
 }
 
-.datePicker {
-  margin-top: 8px;
-  min-width: 260px;
-}
-
-.datePicker:global(.ant-picker-large) {
+.rangePicker:global(.ant-picker-large) {
   height: 48px;
 }
 
-.datePicker:global(.ant-picker-large) input {
-  font-size: 22px;
+.rangePicker:global(.ant-picker-large) input {
+  font-size: 18px;
   font-weight: 600;
 }
 
@@ -62,8 +56,22 @@
 .rateBad :global(.ant-statistic-content) { color: #ff4d4f; }
 .rateUnknown :global(.ant-statistic-content) { color: #8c8c8c; }
 
+.summaryRow { margin-bottom: 20px; }
+.departmentSummary { margin-bottom: 16px; }
+.assemblyTotal :global(.ant-statistic-content) { color: #1677ff; }
+.injectionTotal :global(.ant-statistic-content) { color: #722ed1; }
+.defectTotal :global(.ant-statistic-content) { color: #ff4d4f; }
+.goodTotal :global(.ant-statistic-content) { color: #52c41a; }
+.backorderTotal :global(.ant-statistic-content) { color: #fa8c16; }
+.defectValue { color: #ff4d4f; }
+.backorderValue { color: #fa8c16; }
+.backorderCard { margin-bottom: 16px; background: #fffbe6; border-color: #ffe58f; }
+.warningIcon { color: #faad14; }
+.emptyCard { text-align: center; padding: 60px; }
+.emptyText { color: #999; margin-bottom: 16px; font-size: 16px; }
+
 @media (max-width: 767px) {
   .page { padding: 16px; }
   .actions { margin-top: 0; }
-  .datePicker { min-width: 0; width: 100%; }
+  .rangePicker { min-width: 0; width: 100%; }
 }

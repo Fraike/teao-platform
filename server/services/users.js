@@ -37,6 +37,7 @@ if (isPlaceholderSecret) {
   console.warn("[auth] WARNING: development is using an insecure JWT_SECRET");
 }
 const JWT_EXPIRES_IN = "7d";
+const REMEMBERED_JWT_EXPIRES_IN = "15d";
 const JWT_REFRESH_WINDOW = "1d"; // allow refresh within 1 day of expiry
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
@@ -126,11 +127,18 @@ function isRecoveryCodeValid(input) {
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
-function issueToken(user) {
+function issueToken(user, rememberLogin = false) {
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role, permissions: user.permissions, passwordVersion: user.passwordVersion || 0 },
+    {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      permissions: user.permissions,
+      passwordVersion: user.passwordVersion || 0,
+      rememberLogin,
+    },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { expiresIn: rememberLogin ? REMEMBERED_JWT_EXPIRES_IN : JWT_EXPIRES_IN }
   );
 }
 
@@ -190,7 +198,7 @@ export async function registerUser({ name, username, password }) {
   });
 }
 
-export async function loginUser({ username, password }) {
+export async function loginUser({ username, password, rememberLogin = false }) {
   return withUsers(async (users) => {
     const user = users.find((u) => u.username === username);
     if (!user) return { error: "用户名或密码错误" };
@@ -198,7 +206,7 @@ export async function loginUser({ username, password }) {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return { error: "用户名或密码错误" };
 
-    const token = issueToken(user);
+    const token = issueToken(user, rememberLogin === true);
     return {
       token,
       user: { id: user.id, name: user.name, username: user.username, role: user.role, permissions: user.permissions },
@@ -228,14 +236,14 @@ export async function recoverAdminPassword({ username, recoveryCode, newPassword
   });
 }
 
-export async function changeAdminPassword({ userId, currentPassword, newPassword }) {
+export async function changeAdminPassword({ userId, currentPassword, newPassword, rememberLogin = false }) {
   if (!isValidPassword(newPassword)) return { error: "密码必须至少6位且包含字母和数字" };
   return withUsers(async (users) => {
     const user = users.find((item) => item.id === userId && item.role === "admin" && item.status === "active");
     if (!user || !(await verifyPassword(currentPassword || "", user.passwordHash))) return { error: "当前密码错误" };
     user.passwordHash = await hashPassword(newPassword);
     user.passwordVersion = (user.passwordVersion || 0) + 1;
-    return { ok: true, token: issueToken(user) };
+    return { ok: true, token: issueToken(user, rememberLogin === true) };
   });
 }
 
@@ -312,8 +320,10 @@ export function refreshToken(oldToken) {
       return { error: "token已过期超过24小时，请重新登录" };
     }
     const user = readUsersUnsafe().find((item) => item.id === payload.id);
-    if (!user || (user.passwordVersion || 0) !== (payload.passwordVersion || 0)) return { error: "登录状态已失效，请重新登录" };
-    const newToken = issueToken(user);
+    if (!user || user.status !== "active" || (user.passwordVersion || 0) !== (payload.passwordVersion || 0)) {
+      return { error: "登录状态已失效，请重新登录" };
+    }
+    const newToken = issueToken(user, payload.rememberLogin === true);
     return { token: newToken };
   } catch {
     return { error: "token无效" };

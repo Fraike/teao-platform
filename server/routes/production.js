@@ -1,6 +1,14 @@
 import { adminAuth, jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
 import { readConfig, formatShanghaiDate } from "../config.js";
-import { getProductionReport, previewProductionReport, sendProductionReport, switchProductionSource, updateProductionConfig, isProductionSourceReady } from "../services/production-report-control.js";
+import {
+  getProductionReport,
+  getProductionReportRange,
+  getProductionReportRecords,
+  previewProductionReport,
+  sendProductionReport,
+  updateProductionConfig,
+  isProductionSourceReady,
+} from "../services/production-report-control.js";
 
 function respondError(res, error) {
   res.status(error.status || 500).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
@@ -8,6 +16,16 @@ function respondError(res, error) {
 
 const requestDate = (req) => req.query.date ?? formatShanghaiDate();
 const requestActor = (req) => req.user?.id || "user";
+const requestRange = (req) => {
+  if (req.query.date !== undefined && req.query.dateFrom === undefined && req.query.dateTo === undefined) {
+    return { dateFrom: req.query.date, dateTo: req.query.date };
+  }
+  if (req.query.dateFrom === undefined && req.query.dateTo === undefined) {
+    const date = formatShanghaiDate();
+    return { dateFrom: date, dateTo: date };
+  }
+  return { dateFrom: req.query.dateFrom, dateTo: req.query.dateTo };
+};
 
 export function registerProductionRoutes(app) {
   // Get config (masks sensitive fields)
@@ -16,11 +34,8 @@ export function registerProductionRoutes(app) {
       const config = readConfig();
       res.json({
         enabled: config.enabled,
-        dataSource: config.dataSource,
+        dataSource: "internal",
         cronExpression: config.cronExpression,
-        hasToken: !!config.vikaToken,
-        hasAssemblyId: !!config.assemblyDatasheetId,
-        hasInjectionId: !!config.injectionDatasheetId,
         hasWebhook: !!config.wecomWebhook,
         configured: !!config.wecomWebhook && isProductionSourceReady(config),
       });
@@ -31,12 +46,6 @@ export function registerProductionRoutes(app) {
   app.post("/api/production/config", jwtAuth, adminAuth, async (req, res) => {
     try {
       res.json(await updateProductionConfig(req.body, requestActor(req)));
-    } catch (error) { respondError(res, error); }
-  });
-
-  app.post("/api/production/source", jwtAuth, adminAuth, async (req, res) => {
-    try {
-      res.json(await switchProductionSource(req.body?.dataSource, requestActor(req)));
     } catch (error) { respondError(res, error); }
   });
 
@@ -62,7 +71,17 @@ export function registerProductionRoutes(app) {
   // Always regenerate from the selected source, including empty reports.
   app.get("/api/production/report", jwtAuth, requirePermission("production"), async (req, res) => {
     try {
-      res.json({ exists: true, ...await getProductionReport(requestDate(req), requestActor(req)) });
+      const { dateFrom, dateTo } = requestRange(req);
+      res.json(await getProductionReportRange(dateFrom, dateTo, requestActor(req)));
+    } catch (error) { respondError(res, error); }
+  });
+
+  app.get("/api/production/report/records", jwtAuth, requirePermission("production"), async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = requestRange(req);
+      const page = req.query.page === undefined ? 1 : Number(req.query.page);
+      const pageSize = req.query.pageSize === undefined ? 50 : Number(req.query.pageSize);
+      res.json(await getProductionReportRecords(req.query.department, dateFrom, dateTo, page, pageSize));
     } catch (error) { respondError(res, error); }
   });
 

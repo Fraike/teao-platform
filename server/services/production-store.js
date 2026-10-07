@@ -208,8 +208,18 @@ function writeAudit(d, recordType, values) {
   ).run({ record_type: recordType, ...values });
 }
 
-function countDates(d, table, where, params) {
-  return d.prepare(`SELECT COUNT(DISTINCT date) as cnt FROM ${table} ${where}`).get(params).cnt;
+function queryDatePage(d, table, where, params, limit, offset) {
+  // Group once: reuse the same filtered scan for totals and date pagination.
+  const days = d.prepare(
+    `SELECT date, COUNT(*) AS cnt FROM ${table} ${where} GROUP BY date ORDER BY date DESC`
+  ).all(params);
+  const start = Math.max(0, Math.trunc(offset) || 0);
+  const size = Math.max(1, Math.trunc(limit) || 10);
+  return {
+    total: days.reduce((sum, day) => sum + day.cnt, 0),
+    totalGroups: days.length,
+    dates: days.slice(start, start + size).map((day) => day.date),
+  };
 }
 
 function importValidationError(message) {
@@ -276,15 +286,7 @@ export function queryEntries({
   const nonDateConditions = conditions.filter(c => !c.startsWith("date"));
   const nonDateWhere = nonDateConditions.length > 0 ? `AND ${nonDateConditions.join(" AND ")}` : "";
 
-  const countRow = d.prepare(`SELECT COUNT(*) as cnt FROM assembly_records ${where}`).get(params);
-  const total = countRow.cnt;
-  const totalGroups = countDates(d, "assembly_records", where, params);
-
-  const dateRows = d.prepare(
-    `SELECT DISTINCT date FROM assembly_records ${where} ORDER BY date DESC LIMIT @limit OFFSET @offset`
-  ).all({ ...params, limit, offset });
-
-  const dates = dateRows.map((r) => r.date);
+  const { total, totalGroups, dates } = queryDatePage(d, "assembly_records", where, params, limit, offset);
   if (dates.length === 0) return { groups: [], total, totalGroups, hasMore: false };
 
   const placeholders = dates.map((_, i) => `@date${i}`).join(",");
@@ -467,6 +469,23 @@ export function getAssemblyEntriesForDate(date) {
     .map(recordToRow);
 }
 
+export function getAssemblyEntriesForRange(dateFrom, dateTo) {
+  return getDB()
+    .prepare("SELECT * FROM assembly_records WHERE date >= ? AND date <= ? ORDER BY date DESC, line ASC, id ASC")
+    .all(dateFrom, dateTo)
+    .map(recordToRow);
+}
+
+export function getAssemblyReportPage(dateFrom, dateTo, page, pageSize) {
+  const d = getDB();
+  const total = d.prepare("SELECT COUNT(*) AS count FROM assembly_records WHERE date >= ? AND date <= ?")
+    .get(dateFrom, dateTo).count;
+  const records = d.prepare("SELECT * FROM assembly_records WHERE date >= ? AND date <= ? ORDER BY date DESC, line ASC, id ASC LIMIT ? OFFSET ?")
+    .all(dateFrom, dateTo, pageSize, (page - 1) * pageSize)
+    .map(recordToRow);
+  return { records, total };
+}
+
 // ======================== 注塑部 ========================
 
 function injectionRow(row) {
@@ -510,11 +529,7 @@ export function queryInjectionEntries({ dateFrom, dateTo, machine, product, sear
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const nonDateConditions = conditions.filter(c => !c.startsWith("date"));
   const nonDateWhere = nonDateConditions.length > 0 ? `AND ${nonDateConditions.join(" AND ")}` : "";
-  const countRow = d.prepare(`SELECT COUNT(*) as cnt FROM injection_records ${where}`).get(params);
-  const total = countRow.cnt;
-  const totalGroups = countDates(d, "injection_records", where, params);
-  const dateRows = d.prepare(`SELECT DISTINCT date FROM injection_records ${where} ORDER BY date DESC LIMIT @limit OFFSET @offset`).all({ ...params, limit, offset });
-  const dates = dateRows.map((r) => r.date);
+  const { total, totalGroups, dates } = queryDatePage(d, "injection_records", where, params, limit, offset);
   if (dates.length === 0) return { groups: [], total, totalGroups, hasMore: false };
   const placeholders = dates.map((_, i) => `@date${i}`).join(",");
   const dateParams = {}; dates.forEach((dt, i) => { dateParams[`date${i}`] = dt; });
@@ -609,4 +624,21 @@ export function getInjectionEntriesForDate(date) {
     .prepare("SELECT * FROM injection_records WHERE date = ? ORDER BY machine ASC, shift ASC, id ASC")
     .all(date)
     .map(injectionRow);
+}
+
+export function getInjectionEntriesForRange(dateFrom, dateTo) {
+  return getDB()
+    .prepare("SELECT * FROM injection_records WHERE date >= ? AND date <= ? ORDER BY date DESC, machine ASC, shift ASC, id ASC")
+    .all(dateFrom, dateTo)
+    .map(injectionRow);
+}
+
+export function getInjectionReportPage(dateFrom, dateTo, page, pageSize) {
+  const d = getDB();
+  const total = d.prepare("SELECT COUNT(*) AS count FROM injection_records WHERE date >= ? AND date <= ?")
+    .get(dateFrom, dateTo).count;
+  const records = d.prepare("SELECT * FROM injection_records WHERE date >= ? AND date <= ? ORDER BY date DESC, machine ASC, shift ASC, id ASC LIMIT ? OFFSET ?")
+    .all(dateFrom, dateTo, pageSize, (page - 1) * pageSize)
+    .map(injectionRow);
+  return { records, total };
 }

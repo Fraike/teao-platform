@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { User, LoginRequest, RegisterRequest } from "../types/auth";
-import { api, setToken, clearToken, getToken, isApiError, setLoginTimestamp, clearLoginTimestamp, getLoginTimestamp, SESSION_DURATION_MS } from "./api";
+import { api, setToken, clearToken, getToken, isApiError, refreshAuthToken } from "./api";
+import {
+  getAuthSessionMode,
+  getSessionExpiryReason,
+  markAuthTokenRefreshed,
+  recordRememberedActivity,
+  startAuthSession,
+} from "./authSession";
 import { clearKingdeeCache } from "./kingdeeCache";
 import { useTabStore } from "./tabStore";
 
@@ -26,7 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       req
     );
     setToken(data.token);
-    setLoginTimestamp();
+    startAuthSession(req.rememberLogin === true);
     useTabStore.getState().resetForAuthentication();
     set({ user: data.user });
   },
@@ -41,7 +48,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     clearToken();
-    clearLoginTimestamp();
     clearKingdeeCache();
     useTabStore.getState().resetForAuthentication();
     set({ user: null });
@@ -55,13 +61,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     set({ loading: true });
     try {
+      if (getAuthSessionMode() === "remember") {
+        await refreshAuthToken();
+      }
       const user = await api.get<User>("/api/auth/me");
+      recordRememberedActivity();
       set({ user, loading: false, initialized: true });
     } catch (err) {
       // Only clear token on auth errors (401/403), not network errors
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {
         clearToken();
-        clearLoginTimestamp();
         useTabStore.getState().resetForAuthentication();
         set({ user: null, loading: false, initialized: true });
       } else {
@@ -75,13 +84,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   changeAdminPassword: async (currentPassword, newPassword) => {
     const data = await api.post<{ token: string }>("/api/auth/change-password", { currentPassword, newPassword });
     setToken(data.token);
-    setLoginTimestamp();
+    markAuthTokenRefreshed();
   },
 }));
 
 export function isSessionExpired(): boolean {
-  const ts = getLoginTimestamp();
-  if (!ts) return false;
-  const elapsed = Date.now() - Number(ts);
-  return elapsed > SESSION_DURATION_MS;
+  return getSessionExpiryReason() !== null;
 }

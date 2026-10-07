@@ -20,7 +20,7 @@ try {
   fs.chmodSync(config.CONFIG_FILE, 0o600);
   const before = fs.readFileSync(config.CONFIG_FILE, "utf8");
   fs.renameSync = () => { throw new Error("fixture rename failure"); };
-  assert.throws(() => config.writeConfig({ ...config.readConfig(), vikaToken: "fixture-only" }));
+  assert.throws(() => config.writeConfig({ ...config.readConfig(), wecomWebhook: "changed-fixture" }));
   assert.equal(fs.readFileSync(config.CONFIG_FILE, "utf8"), before);
   const temporary = fs.readdirSync(directory).filter((name) => name.endsWith(".tmp"));
   assert.ok(temporary.length > 0);
