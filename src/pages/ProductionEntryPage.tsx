@@ -22,7 +22,7 @@ import { ProductionImportModal } from "../components/production/ProductionImport
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
 import { sortRecordsByOrderQty, splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
-import { refreshProductionMaterialOptions } from "../lib/productionReferenceData";
+import { KingdeeDataRefreshButton } from "../components/production/KingdeeDataRefreshButton";
 import { getProductionDailyTableSticky, productionDailyPagination } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
 
@@ -70,7 +70,7 @@ function BatchText({ text }: { text: string }) {
 
 const ASSEMBLY_DETAIL_COLUMNS: ExportColumn[] = [
   { key: "date", title: "日期" }, { key: "line", title: "产线" }, { key: "customer", title: "客户名称" }, { key: "spec", title: "规格" }, { key: "productNumber", title: "商品编码" }, { key: "productId", title: "金蝶商品ID" }, { key: "productName", title: "品名" }, { key: "materialBatch", title: "原材料批号" }, { key: "workHours", title: "工时" }, { key: "productionBatch", title: "生产批号" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "planQty", title: "计划生产", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "ppm", title: "PPM", format: "#,##0" }, { key: "backorder", title: "欠数", format: "#,##0" },
-  ...PROCESS_FIELDS.map((field) => ({ key: field.key, title: field.label })), { key: "filler", title: "填表人" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
+  ...PROCESS_FIELDS.map((field) => ({ key: field.key, title: field.label })), { key: "filler", title: "填表人" }, { key: "remark", title: "备注" }, { key: "createdBy", title: "创建人" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
 ];
 const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
   { key: "date", title: "日期" }, { key: "lines", title: "产线数" }, { key: "totalOrderQty", title: "订单数量", format: "#,##0" }, { key: "totalPlanQty", title: "计划生产", format: "#,##0" }, { key: "totalDailyQty", title: "当天生产", format: "#,##0" }, { key: "totalCumulativeQty", title: "累计生产", format: "#,##0" }, { key: "totalDefects", title: "不良数", format: "#,##0" }, { key: "achievementRate", title: "达成率", format: "0.0%" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "totalBackorder", title: "欠数", format: "#,##0" },
@@ -93,7 +93,6 @@ export function ProductionEntryPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [refreshingMaterials, setRefreshingMaterials] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ProductionRecord | null>(null);
@@ -147,18 +146,6 @@ export function ProductionEntryPage() {
       message.success(`已导出 ${response.data.groups.length} 天生产日报`);
     } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
     finally { setExporting(false); }
-  };
-
-  const refreshKingdeeMaterials = async () => {
-    setRefreshingMaterials(true);
-    try {
-      const { finishedProducts, plasticParts } = await refreshProductionMaterialOptions();
-      message.success(`金蝶商品已更新：成品 ${finishedProducts.length} 条，塑胶配件 ${plasticParts.length} 条`);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "金蝶商品更新失败，已保留当前缓存");
-    } finally {
-      setRefreshingMaterials(false);
-    }
   };
 
   const fetchData = useCallback(async (append: boolean) => {
@@ -359,7 +346,7 @@ export function ProductionEntryPage() {
           <Button size="middle" onClick={doReset}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
-          <Button size="small" icon={<ReloadOutlined />} onClick={refreshKingdeeMaterials} loading={refreshingMaterials}>更新金蝶商品</Button>
+          <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />

@@ -24,4 +24,10 @@ normalResolve?.(1);
 assert.equal(await normalRequest, 1);
 assert.equal(await refreshRequest, 2, "手动更新必须在旧请求结束后重新获取数据");
 
+const refreshResult = await import("../src/lib/kingdeeRefreshResult.ts").catch(() => null);
+assert.ok(refreshResult, "手动刷新应检查服务器是否回退到旧缓存");
+assert.throws(() => refreshResult.requireFreshKingdeeData({ stale: true, data: ["old"] }), /上次缓存/);
+assert.throws(() => refreshResult.requireFreshKingdeeData({ stale: false, data: ["old"] }), /上次缓存/);
+assert.deepEqual(refreshResult.requireFreshKingdeeData({ stale: false, refreshed: true, data: ["fresh"] }), ["fresh"]);
+
 console.log("Production reference data tests passed.");

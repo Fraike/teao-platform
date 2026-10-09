@@ -13,9 +13,11 @@ import { registerProductionEntryRoutes } from "./routes/production-entry.js";
 import { registerProductionEntryInjectionRoutes } from "./routes/production-entry-injection.js";
 import { registerQuotationRoutes } from "./routes/quotations.js";
 import { createProductionScheduler } from "./services/production-report-scheduler.js";
+import { productionQueryMetrics } from "./middleware/request-metrics.js";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
+app.use(productionQueryMetrics);
 
 // ---- routes ----
 

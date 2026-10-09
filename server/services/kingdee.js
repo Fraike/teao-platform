@@ -206,7 +206,10 @@ export async function fetchAllPages(path, baseParams = {}, pageSize = 100) {
   const data = first.data;
   // 兼容两种格式：{rows, count} 或 直接数组
   const rows = data.rows ?? (Array.isArray(data) ? data : []);
-  const totalCount = data.count ?? data.total ?? rows.length;
+  const totalCount = Number(data.count ?? data.total ?? rows.length);
+  if (!Array.isArray(rows) || !Number.isSafeInteger(totalCount) || totalCount < rows.length) {
+    throw new Error(`获取 ${path} 第1页返回的记录数无效`);
+  }
   allRows.push(...rows);
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -215,10 +218,14 @@ export async function fetchAllPages(path, baseParams = {}, pageSize = 100) {
       "app-token": token,
       "X-GW-Router-Addr": domain,
     });
-    if (isSuccess(result)) {
-      const r = result.data?.rows ?? (Array.isArray(result.data) ? result.data : []);
-      allRows.push(...r);
-    }
+    if (!isSuccess(result)) throw new Error(`获取 ${path} 第${page}页失败: ${result.description || result.errcode || result.code}`);
+    const r = result.data?.rows ?? (Array.isArray(result.data) ? result.data : null);
+    if (!Array.isArray(r)) throw new Error(`获取 ${path} 第${page}页返回的数据无效`);
+    allRows.push(...r);
+  }
+
+  if (allRows.length !== totalCount) {
+    throw new Error(`获取 ${path} 记录不完整：预期${totalCount}条，实际${allRows.length}条`);
   }
 
   return allRows;

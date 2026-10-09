@@ -19,9 +19,9 @@ import { ResponsiveTable } from "../components/ResponsiveTable";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
 import {
   getInjectionPlasticPartOptions,
-  refreshProductionMaterialOptions,
   subscribeToProductionMaterialUpdates,
 } from "../lib/productionReferenceData";
+import { KingdeeDataRefreshButton } from "../components/production/KingdeeDataRefreshButton";
 import { buildInjectionCopyValues } from "../lib/productionCopy";
 import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
 import type { ProductionProductOption } from "../lib/productionProductSearch";
@@ -62,7 +62,7 @@ function ShiftBadge({ shift }: { shift: string }) {
 }
 
 const INJECTION_DETAIL_COLUMNS: ExportColumn[] = [
-  { key: "date", title: "日期" }, { key: "machine", title: "机台" }, { key: "shift", title: "班次" }, { key: "productNumber", title: "商品编码" }, { key: "productId", title: "金蝶商品ID" }, { key: "productName", title: "品名/型号" }, { key: "material", title: "原材料" }, { key: "materialBatch", title: "原材料批号" }, { key: "operator", title: "操作人" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "backorder", title: "欠数", format: "#,##0" }, { key: "batchNo", title: "半成品生产批号" }, { key: "remark", title: "备注" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
+  { key: "date", title: "日期" }, { key: "machine", title: "机台" }, { key: "shift", title: "班次" }, { key: "productNumber", title: "商品编码" }, { key: "productId", title: "金蝶商品ID" }, { key: "productName", title: "品名/型号" }, { key: "material", title: "原材料" }, { key: "materialBatch", title: "原材料批号" }, { key: "operator", title: "操作人" }, { key: "orderQty", title: "订单数量", format: "#,##0" }, { key: "dailyQty", title: "当天生产", format: "#,##0" }, { key: "cumulativeQty", title: "累计生产", format: "#,##0" }, { key: "defects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "backorder", title: "欠数", format: "#,##0" }, { key: "batchNo", title: "半成品生产批号" }, { key: "remark", title: "备注" }, { key: "createdBy", title: "创建人" }, { key: "updatedBy", title: "编辑人" }, { key: "createdAt", title: "创建时间" },
 ];
 const INJECTION_SUMMARY_COLUMNS: ExportColumn[] = [
   { key: "date", title: "日期" }, { key: "machines", title: "机台数" }, { key: "totalOrderQty", title: "订单数量", format: "#,##0" }, { key: "totalDailyQty", title: "当天生产", format: "#,##0" }, { key: "totalCumulativeQty", title: "累计生产", format: "#,##0" }, { key: "totalDefects", title: "不良数", format: "#,##0" }, { key: "qualifiedRate", title: "合格率", format: "0.0%" }, { key: "totalBackorder", title: "欠数", format: "#,##0" },
@@ -207,7 +207,6 @@ export function ProductionEntryInjectionPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [refreshingMaterials, setRefreshingMaterials] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editRec, setEditRec] = useState<InjRecord | null>(null);
@@ -243,15 +242,6 @@ export function ProductionEntryInjectionPage() {
       message.success(`已导出 ${response.data.groups.length} 天生产日报`);
     } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
     finally { setExporting(false); }
-  };
-
-  const refreshKingdeeMaterials = async () => {
-    setRefreshingMaterials(true);
-    try {
-      const { finishedProducts, plasticParts } = await refreshProductionMaterialOptions();
-      message.success(`金蝶商品已更新：成品 ${finishedProducts.length} 条，塑胶配件 ${plasticParts.length} 条`);
-    } catch (error) { message.error(error instanceof Error ? error.message : "金蝶商品更新失败，已保留当前缓存"); }
-    finally { setRefreshingMaterials(false); }
   };
 
   const fetchData = useCallback(async (append: boolean) => {
@@ -379,7 +369,7 @@ export function ProductionEntryInjectionPage() {
           <Button size="middle" onClick={() => { setMachine(null); setProduct(""); setLProduct(""); setSearch(""); setLSearch(""); }}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
-          <Button size="small" icon={<ReloadOutlined />} onClick={refreshKingdeeMaterials} loading={refreshingMaterials}>更新金蝶商品</Button>
+          <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />

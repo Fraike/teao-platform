@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { DATA_DIR } from "../config.js";
 
 const LEGACY_DATA_KEYS = {
@@ -28,5 +29,17 @@ export function readKingdeeCache(key) {
 export function writeKingdeeCache(key, data) {
   const file = cacheFile(key);
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ fetchedAt: new Date().toISOString(), data }), "utf8");
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    const fd = fs.openSync(temporary, "wx", 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify({ fetchedAt: new Date().toISOString(), data }), "utf8");
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(temporary, file);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
 }

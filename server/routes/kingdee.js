@@ -43,10 +43,19 @@ export function getProductionMaterialRefreshOptions(forceRefresh) {
 async function fetchAndCache(cacheKey, fetchData) {
   const pending = pendingKingdeeRequests.get(cacheKey);
   if (pending) return pending;
+  const startedAt = performance.now();
+  const resource = cacheKey.split("-")[0];
   const request = fetchData()
     .then((data) => {
       writeKingdeeCache(cacheKey, data);
+      console.info(JSON.stringify({ event: "kingdee_refresh", resource, status: "success",
+        durationMs: Math.round(performance.now() - startedAt), recordCount: data.length }));
       return data;
+    })
+    .catch((error) => {
+      console.info(JSON.stringify({ event: "kingdee_refresh", resource, status: "failed",
+        durationMs: Math.round(performance.now() - startedAt), recordCount: 0 }));
+      throw error;
     })
     .finally(() => pendingKingdeeRequests.delete(cacheKey));
   pendingKingdeeRequests.set(cacheKey, request);
@@ -74,19 +83,19 @@ async function respondWithCachedData(res, cacheKey, fetchData, options = {}) {
   } = options;
   const cached = readKingdeeCache(cacheKey);
   if (cached && !forceRefresh) {
-    return res.json({ ok: true, data: transformData(cached.data), stale: false, fetchedAt: cached.fetchedAt });
+    return res.json({ ok: true, data: transformData(cached.data), stale: false, refreshed: false, fetchedAt: cached.fetchedAt });
   }
   try {
     const data = await fetchAndCache(cacheKey, fetchData);
     const refreshed = readKingdeeCache(cacheKey);
-    return res.json({ ok: true, data: transformData(data), stale: false, fetchedAt: refreshed?.fetchedAt || null });
+    return res.json({ ok: true, data: transformData(data), stale: false, refreshed: forceRefresh, fetchedAt: refreshed?.fetchedAt || null });
   } catch (err) {
     const fallbackData = preferFallback
       ? fallback?.() || readKingdeeCache(cacheKey)
       : readKingdeeCache(cacheKey) || fallback?.();
     if (fallbackData) {
       console.warn(`[kingdee] ${cacheKey} using cached data:`, err.message);
-      return res.json({ ok: true, data: transformData(fallbackData.data), stale: true, fetchedAt: fallbackData.fetchedAt });
+      return res.json({ ok: true, data: transformData(fallbackData.data), stale: true, refreshed: false, fetchedAt: fallbackData.fetchedAt });
     }
     console.error(`[kingdee] ${cacheKey} error:`, err);
     return res.status(503).json({ error: "金蝶资料暂时不可用，请联系管理员检查金蝶 API 凭据", detail: err.message });
@@ -145,11 +154,12 @@ export function registerKingdeeRoutes(app) {
         ok: true,
         data: splitProductionMaterials(materials.data, categories.data),
         stale: materials.stale || categories.stale,
+        refreshed: forceRefresh && !materials.stale && !categories.stale,
         fetchedAt: materials.fetchedAt,
       });
     } catch (error) {
       console.error("[kingdee] production materials error:", error);
-      return res.status(503).json({ error: "金蝶生产商品暂时不可用，请点击更新金蝶商品后重试", detail: error.message });
+      return res.status(503).json({ error: "金蝶生产商品暂时不可用，请点击更新金蝶数据后重试", detail: error.message });
     }
   });
 
@@ -179,11 +189,13 @@ export function registerKingdeeRoutes(app) {
 
   /**
    * GET /api/kingdee/customers
-   * 获取客户列表，支持 ?search=
+   * 获取客户列表，支持 ?search=&refresh=1
    */
   app.get("/api/kingdee/customers", jwtAuth, requireAnyPermission(TECHNICAL_DATA_PERMISSIONS), async (req, res) => {
-    const { search } = req.query;
-    await respondWithCachedData(res, getQueryCacheKey("customers", { search }), () => fetchAllCustomers({ search }));
+    const { search, refresh } = req.query;
+    await respondWithCachedData(res, getQueryCacheKey("customers", { search }), () => fetchAllCustomers({ search }), {
+      forceRefresh: refresh === "1",
+    });
   });
 
   // ---- 供应商资料 ----

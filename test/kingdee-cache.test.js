@@ -58,6 +58,15 @@ try {
     { id: "finished-1", parent_id: "finished-child", name: "Finished item" },
     { id: "plastic-1", parent_id: "2314559979366968320", name: "Plastic part" },
   ]);
+  const savedMaterials = readKingdeeCache("materials");
+  const originalRename = fs.renameSync;
+  fs.renameSync = () => { throw new Error("simulated rename failure"); };
+  try {
+    assert.throws(() => writeKingdeeCache("materials", [{ id: "incomplete" }]), /simulated rename failure/);
+  } finally {
+    fs.renameSync = originalRename;
+  }
+  assert.deepEqual(readKingdeeCache("materials"), savedMaterials, "缓存替换失败时必须保留上一份完整资料");
   writeKingdeeCache("categories", [{
     id: "2314557705978701824",
     children: [{ id: "finished-child", children: [] }],
@@ -91,6 +100,25 @@ try {
     assert.equal(productionResponse.status, 200);
     assert.deepEqual(productionBody.data.finishedProducts.map((item) => item.id), ["finished-1"]);
     assert.deepEqual(productionBody.data.plasticParts.map((item) => item.id), ["plastic-1"]);
+
+    const refreshEvents = [];
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+    console.info = (line) => { refreshEvents.push(JSON.parse(String(line))); };
+    console.warn = () => undefined;
+    try {
+      const refreshResponse = await fetch(`http://127.0.0.1:${port}/api/kingdee/materials?refresh=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const refreshBody = await refreshResponse.json();
+      assert.equal(refreshBody.stale, true, "刷新失败时应明确标记为旧缓存");
+      assert.equal(refreshBody.data.length, 2, "刷新失败时应继续提供上一份完整缓存");
+      assert.ok(refreshEvents.some((event) => event.event === "kingdee_refresh" && event.status === "failed"),
+        "金蝶刷新失败应记录耗时和状态");
+    } finally {
+      console.info = originalInfo;
+      console.warn = originalWarn;
+    }
 
     const originalConsoleError = console.error;
     console.error = () => undefined;

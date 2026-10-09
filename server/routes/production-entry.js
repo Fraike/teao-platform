@@ -11,6 +11,13 @@ import {
   getHistory,
 } from "../services/production-store.js";
 import { getTrustedProductionProduct } from "../services/production-product.js";
+import {
+  createProductionActorResolver,
+  getProductionActorName,
+  mapProductionHistoryActors,
+  mapProductionQueryActors,
+  mapProductionRecordActors,
+} from "../services/production-actors.js";
 
 // 确保数据库已初始化
 initDB();
@@ -41,7 +48,7 @@ export function registerProductionEntryRoutes(app) {
         limit: limit ? parseInt(limit, 10) : 10,
         offset: offset ? parseInt(offset, 10) : 0,
       });
-      res.json({ ok: true, data: result });
+      res.json({ ok: true, data: mapProductionQueryActors(result) });
     } catch (err) {
       console.error("[production-entry] query error:", err);
       res.status(500).json({ error: "查询失败", detail: err.message });
@@ -51,10 +58,11 @@ export function registerProductionEntryRoutes(app) {
   // 新增
   app.post("/api/production/entries", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const user = req.user?.username || "unknown";
+      const resolveActor = createProductionActorResolver();
+      const user = getProductionActorName(req.user, resolveActor);
       const product = getTrustedProductionProduct("assembly", req.body?.productId);
       const entry = createEntry({ ...req.body, ...product }, user);
-      res.status(201).json({ ok: true, data: entry });
+      res.status(201).json({ ok: true, data: mapProductionRecordActors(entry, resolveActor) });
     } catch (err) {
       console.error("[production-entry] create error:", err);
       res.status(err.status || 500).json({ error: err.message || "新增失败" });
@@ -63,7 +71,8 @@ export function registerProductionEntryRoutes(app) {
 
   app.post("/api/production/entries/import", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const user = req.user?.username || "unknown";
+      const resolveActor = createProductionActorResolver();
+      const user = getProductionActorName(req.user, resolveActor);
       const result = replaceAssemblyEntries(req.body?.records, user);
       res.json({ ok: true, ...result });
     } catch (err) {
@@ -75,7 +84,8 @@ export function registerProductionEntryRoutes(app) {
   app.get("/api/production/entries/export", jwtAuth, requirePermission("production"), (req, res) => {
     try {
       const { dateFrom, dateTo, line, product, customer, search } = req.query;
-      res.json({ ok: true, data: exportAssemblyEntries({ dateFrom, dateTo, line, product, customer, search }) });
+      const result = exportAssemblyEntries({ dateFrom, dateTo, line, product, customer, search });
+      res.json({ ok: true, data: mapProductionQueryActors(result) });
     } catch (err) {
       res.status(500).json({ error: "导出数据查询失败", detail: err.message });
     }
@@ -84,10 +94,11 @@ export function registerProductionEntryRoutes(app) {
   // 更新
   app.put("/api/production/entries/:id", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const user = req.user?.username || "unknown";
+      const resolveActor = createProductionActorResolver();
+      const user = getProductionActorName(req.user, resolveActor);
       const entry = updateEntry(parseInt(req.params.id, 10), req.body, user);
       if (!entry) return res.status(404).json({ error: "记录不存在" });
-      res.json({ ok: true, data: entry });
+      res.json({ ok: true, data: mapProductionRecordActors(entry, resolveActor) });
     } catch (err) {
       console.error("[production-entry] update error:", err);
       res.status(500).json({ error: "更新失败", detail: err.message });
@@ -97,7 +108,8 @@ export function registerProductionEntryRoutes(app) {
   // 删除
   app.delete("/api/production/entries/:id", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const user = req.user?.username || "unknown";
+      const resolveActor = createProductionActorResolver();
+      const user = getProductionActorName(req.user, resolveActor);
       const ok = deleteEntry(parseInt(req.params.id, 10), user);
       if (!ok) return res.status(404).json({ error: "记录不存在" });
       res.json({ ok: true });
@@ -111,7 +123,8 @@ export function registerProductionEntryRoutes(app) {
   app.get("/api/production/entries/:id/history", jwtAuth, requirePermission("production"), (req, res) => {
     try {
       const history = getHistory("assembly", parseInt(req.params.id, 10));
-      res.json({ ok: true, data: history });
+      const resolveActor = createProductionActorResolver();
+      res.json({ ok: true, data: mapProductionHistoryActors(history, resolveActor) });
     } catch (err) {
       console.error("[production-entry] history error:", err);
       res.status(500).json({ error: "查询历史失败", detail: err.message });
