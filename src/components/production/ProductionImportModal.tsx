@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Alert, Button, Collapse, Modal, Popconfirm, Table, Upload, message } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import type { UploadProps } from "antd";
@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { getImportedDateRange, type ImportDateRange } from "../../lib/productionImport";
 import { validateSpreadsheetFileSize, validateSpreadsheetShape } from "../../lib/spreadsheetImport";
 import styles from "./ProductionImportModal.module.css";
+import type { ProductionImportPreview } from "../../types/productionImport";
 
 type Department = "assembly" | "injection";
 type ImportedRecord = Record<string, string | number>;
@@ -127,6 +128,8 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
   const [records, setRecords] = useState<ImportedRecord[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<ProductionImportPreview | null>(null);
+  const previewGeneration = useRef(0);
 
   const previewColumns = useMemo(
     () => config.columns.map((key) => ({
@@ -139,9 +142,11 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
   );
 
   const reset = () => {
+    previewGeneration.current += 1;
     setFileName("");
     setRecords([]);
     setErrors([]);
+    setPreview(null);
   };
 
   const handleClose = () => {
@@ -150,6 +155,9 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
   };
 
   const parseFile = async (file: File) => {
+    const generation = ++previewGeneration.current;
+    setPreview(null);
+    setRecords([]);
     try {
       const fileSizeError = validateSpreadsheetFileSize(file.size);
       if (fileSizeError) throw new Error(fileSizeError);
@@ -176,10 +184,13 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
       });
 
       if (parsed.length === 0) throw new Error("没有可导入的有效记录");
+      if (generation !== previewGeneration.current) return;
       setFileName(file.name);
       setRecords(parsed);
       setErrors(rowErrors);
+      setPreview(null);
     } catch (error) {
+      if (generation !== previewGeneration.current) return;
       reset();
       message.error(error instanceof Error ? error.message : "文件解析失败");
     }
@@ -195,15 +206,30 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
     },
   };
 
-  const importRecords = async () => {
+  const requestPreview = async () => {
+    const generation = ++previewGeneration.current;
     setImporting(true);
     try {
-      const result = await api.post<{ ok: boolean; count: number }>(config.endpoint, { records });
+      const result = await api.post<{ ok: boolean; data: ProductionImportPreview }>(`${config.endpoint}/preview`, { records });
+      if (generation === previewGeneration.current) setPreview(result.data);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "预览失败");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const importRecords = async () => {
+    if (!preview) return;
+    setImporting(true);
+    try {
+      const result = await api.post<{ ok: boolean; count: number }>(config.endpoint, { records, previewToken: preview.previewToken });
       message.success(`${config.label}生产日报已覆盖导入 ${result.count} 条记录`);
       const dateRange = getImportedDateRange(records);
       handleClose();
       if (dateRange) onImported(dateRange);
     } catch (error) {
+      setPreview(null);
       message.error(error instanceof Error ? error.message : "导入失败");
     } finally {
       setImporting(false);
@@ -218,10 +244,10 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
       width={920}
       footer={[
         <Button key="cancel" onClick={handleClose}>取消</Button>,
-        <Popconfirm
+        !preview ? <Button key="preview" type="primary" loading={importing} disabled={records.length === 0} onClick={requestPreview}>预览覆盖差异</Button> : <Popconfirm
           key="confirm"
           title={`确认覆盖${config.label}全部生产日报记录？`}
-          description="原记录将从当前日报列表中移除，此操作不能撤销。"
+          description="已核对下方差异，系统会先生成独立备份，再全量替换当前部门记录。"
           onConfirm={importRecords}
           okText="确认覆盖"
           cancelText="返回检查"
@@ -263,6 +289,22 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
               </ul>
             ),
           }]}
+        />
+      )}
+
+      {preview && (
+        <Alert
+          className={styles.resultAlert}
+          type="warning"
+          showIcon
+          message={`当前 ${preview.currentCount} 条将全部替换为 ${preview.incomingCount} 条`}
+          description={<div className={styles.differenceDetails}>
+            <div>当前日期：{preview.currentDateRange ? `${preview.currentDateRange.from} 至 ${preview.currentDateRange.to}` : "无"}</div>
+            <div>导入日期：{preview.incomingDateRange ? `${preview.incomingDateRange.from} 至 ${preview.incomingDateRange.to}` : "无"}</div>
+            <div>导入后消失的日期：{preview.disappearingDates.length ? preview.disappearingDates.map(({ date, count }) => `${date}（${count}条）`).join("、") : "无"}</div>
+            <div>每日条数变化：{preview.dateDifferences.length ? preview.dateDifferences.map(({ date, currentCount, incomingCount }) => `${date}：${currentCount}→${incomingCount}`).join("、") : "无"}</div>
+            <div>原有 {preview.replacedCount} 条记录均会从当前列表移除；请核对后再确认。</div>
+          </div>}
         />
       )}
 

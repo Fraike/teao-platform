@@ -36,12 +36,12 @@ if (isPlaceholderSecret && process.env.NODE_ENV !== "development") {
 if (isPlaceholderSecret) {
   console.warn("[auth] WARNING: development is using an insecure JWT_SECRET");
 }
-const JWT_EXPIRES_IN = "7d";
+const JWT_EXPIRES_IN = "12h";
 const REMEMBERED_JWT_EXPIRES_IN = "15d";
-const JWT_REFRESH_WINDOW = "1d"; // allow refresh within 1 day of expiry
+const STANDARD_SESSION_DURATION_SECONDS = 12 * 60 * 60;
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
-const ALL_PERMISSIONS = ["business", "production", "hr", "tools", "admin", "basic_data"];
+const ALL_PERMISSIONS = ["business", "production", "production_import", "hr", "tools", "admin", "basic_data"];
 
 const userMutex = createMutex();
 
@@ -217,6 +217,9 @@ export async function loginUser({ username, password, rememberLogin = false }) {
 export function isTokenSessionValid(token) {
   try {
     const payload = typeof token === "string" ? jwt.verify(token, JWT_SECRET) : token;
+    if (payload.rememberLogin !== true && (!Number.isFinite(payload.iat) || Date.now() / 1000 - payload.iat >= STANDARD_SESSION_DURATION_SECONDS)) {
+      return false;
+    }
     const user = readUsersUnsafe().find((item) => item.id === payload.id);
     return Boolean(user && user.status === "active" && (user.passwordVersion || 0) === (payload.passwordVersion || 0));
   } catch {
@@ -252,6 +255,12 @@ export function getUserById(id) {
   const user = users.find((u) => u.id === id);
   if (!user) return null;
   return { id: user.id, name: user.name, username: user.username, role: user.role, status: user.status, permissions: user.permissions || DEFAULT_PERMISSIONS };
+}
+
+export function hasProductionImportAccess(id) {
+  const user = getUserById(id);
+  return Boolean(user?.status === "active" && (user.role === "admin" ||
+    (user.permissions.includes("production") && user.permissions.includes("production_import"))));
 }
 
 export function listUsers() {
@@ -296,6 +305,7 @@ export async function resetUserPassword(id, newPassword) {
 }
 
 export async function setUserPermission(id, permission, enabled) {
+  if (!ALL_PERMISSIONS.includes(permission) || permission === "admin") return { error: "无效的权限" };
   return withUsers(async (users) => {
     const idx = users.findIndex((u) => u.id === id);
     if (idx < 0) return { error: "用户不存在" };
@@ -310,23 +320,19 @@ export async function setUserPermission(id, permission, enabled) {
   });
 }
 
-/** Refresh token — issue a new one if the old one is still valid (or recently expired) */
+/** Only active remembered sessions can renew their token. */
 export function refreshToken(oldToken) {
   try {
-    const payload = jwt.verify(oldToken, JWT_SECRET, { ignoreExpiration: true });
-    // Only allow refresh if within the refresh window after expiry
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && (payload.exp + 86400) < now) {
-      return { error: "token已过期超过24小时，请重新登录" };
-    }
+    const payload = jwt.verify(oldToken, JWT_SECRET);
+    if (payload.rememberLogin !== true) return { error: "登录状态已失效，请重新登录" };
     const user = readUsersUnsafe().find((item) => item.id === payload.id);
     if (!user || user.status !== "active" || (user.passwordVersion || 0) !== (payload.passwordVersion || 0)) {
       return { error: "登录状态已失效，请重新登录" };
     }
-    const newToken = issueToken(user, payload.rememberLogin === true);
+    const newToken = issueToken(user, true);
     return { token: newToken };
   } catch {
-    return { error: "token无效" };
+    return { error: "登录状态已失效，请重新登录" };
   }
 }
 

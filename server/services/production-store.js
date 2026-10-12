@@ -228,6 +228,13 @@ function importValidationError(message) {
   return error;
 }
 
+function validImportDate(value) {
+  const date = String(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
 function validateImportedRecords(records, requiredFields) {
   if (!Array.isArray(records) || records.length === 0) {
     throw importValidationError("没有可导入的记录");
@@ -245,7 +252,7 @@ function validateImportedRecords(records, requiredFields) {
         throw importValidationError(`第 ${index + 1} 行缺少必填字段：${field}`);
       }
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(record.date))) {
+    if (!validImportDate(record.date)) {
       throw importValidationError(`第 ${index + 1} 行日期格式无效`);
     }
     for (const field of ["orderQty", "dailyQty", "planQty", "cumulativeQty", "defects", "workHours"]) {
@@ -257,6 +264,13 @@ function validateImportedRecords(records, requiredFields) {
       throw importValidationError(`第 ${index + 1} 行不良数不能大于当天生产数量`);
     }
   }
+}
+
+export function validateProductionImportRecords(department, records) {
+  const fields = department === "assembly" ? ["date", "line", "customer", "productName"]
+    : department === "injection" ? ["date", "machine", "shift", "productName"] : null;
+  if (!fields) throw importValidationError("未知生产部门");
+  validateImportedRecords(records, fields);
 }
 
 // ---- 公开 API ----
@@ -362,10 +376,15 @@ export function createEntry(data, user) {
   return recordToRow(row);
 }
 
-export function replaceAssemblyEntries(records, user) {
+export function replaceAssemblyEntries(records, user, backupFile = null) {
   validateImportedRecords(records, ["date", "line", "customer", "productName"]);
   const d = getDB();
   d.transaction((rows) => {
+    if (backupFile) writeAudit(d, "assembly", {
+      record_id: 0, action: "IMPORT_REPLACE", field_name: "*",
+      old_value: JSON.stringify({ count: d.prepare("SELECT COUNT(*) AS count FROM assembly_records").get().count, backupFile }),
+      new_value: JSON.stringify({ count: rows.length }), changed_by: user, changed_at: new Date().toISOString(),
+    });
     d.prepare("DELETE FROM assembly_records").run();
     for (const row of rows) createEntry(row, user);
   })(records);
@@ -570,10 +589,15 @@ export function createInjectionEntry(data, user) {
   return injectionRow(row);
 }
 
-export function replaceInjectionEntries(records, user) {
+export function replaceInjectionEntries(records, user, backupFile = null) {
   validateImportedRecords(records, ["date", "machine", "shift", "productName"]);
   const d = getDB();
   d.transaction((rows) => {
+    if (backupFile) writeAudit(d, "injection", {
+      record_id: 0, action: "IMPORT_REPLACE", field_name: "*",
+      old_value: JSON.stringify({ count: d.prepare("SELECT COUNT(*) AS count FROM injection_records").get().count, backupFile }),
+      new_value: JSON.stringify({ count: rows.length }), changed_by: user, changed_at: new Date().toISOString(),
+    });
     d.prepare("DELETE FROM injection_records").run();
     for (const row of rows) createInjectionEntry(row, user);
   })(records);

@@ -12,3 +12,13 @@
 .errorList li + li {
   margin-top: 6px;
 }
+
+.differenceDetails {
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.differenceDetails > div + div {
+  margin-top: 4px;
+}

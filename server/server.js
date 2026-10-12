@@ -14,10 +14,12 @@ import { registerProductionEntryInjectionRoutes } from "./routes/production-entr
 import { registerQuotationRoutes } from "./routes/quotations.js";
 import { createProductionScheduler } from "./services/production-report-scheduler.js";
 import { productionQueryMetrics } from "./middleware/request-metrics.js";
+import { productionRecoveryLock } from "./middleware/production-recovery-lock.js";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 app.use(productionQueryMetrics);
+app.use(productionRecoveryLock);
 
 // ---- routes ----
 

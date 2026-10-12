@@ -194,6 +194,8 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
 
 // ---- 主页面 ----
 export function ProductionEntryInjectionPage() {
+  const currentUser = useAuthStore((s) => s.user);
+  const canImport = currentUser?.role === "admin" || (currentUser?.permissions.includes("production") && currentUser.permissions.includes("production_import"));
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 9); return d.toISOString().slice(0, 10); });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [machine, setMachine] = useState<string | null>(null);
@@ -371,7 +373,7 @@ export function ProductionEntryInjectionPage() {
         <div className={styles.topActions}>
           <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
-          <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
+          {canImport && <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>}
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={add}>新增录入</Button>
         </div>

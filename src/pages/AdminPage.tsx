@@ -11,6 +11,7 @@ const { Title } = Typography;
 const PERMISSION_OPTIONS = [
   { key: "business", label: "业务" },
   { key: "production", label: "装配" },
+  { key: "production_import", label: "生产日报导入（可全量覆盖）" },
   { key: "hr", label: "人事" },
   { key: "tools", label: "工具" },
   { key: "basic_data", label: "基础资料" },

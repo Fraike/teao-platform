@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { isTokenSessionValid } from "../services/users.js";
+import { hasProductionImportAccess, isTokenSessionValid } from "../services/users.js";
 
 export function jwtAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -42,4 +42,11 @@ export function requireAnyPermission(permissions) {
     }
     return res.status(403).json({ error: "无权限" });
   };
+}
+
+export function requireProductionImport(req, res, next) {
+  if (hasProductionImportAccess(req.user?.id)) {
+    return next();
+  }
+  return res.status(403).json({ error: "没有生产日报导入权限" });
 }

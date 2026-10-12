@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
+
+const serverRequire = createRequire(new URL("../server/package.json", import.meta.url));
+const jwt = serverRequire("jsonwebtoken");
 
 const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "teao-remember-login-test-"));
 process.env.DATA_DIR = dataDirectory;
@@ -9,7 +13,7 @@ process.env.NODE_ENV = "production";
 process.env.JWT_SECRET = "01234567890123456789012345678901";
 process.env.INITIAL_ADMIN_PASSWORD = "InitialAdmin2026";
 
-const { initDefaultAdmin, loginUser, refreshToken, changeAdminPassword } = await import("../server/services/users.js");
+const { initDefaultAdmin, loginUser, refreshToken, changeAdminPassword, isTokenSessionValid } = await import("../server/services/users.js");
 
 function decodeDurationDays(token) {
   const payload = decodeToken(token);
@@ -26,7 +30,19 @@ try {
   const standard = await loginUser({ username: "admin", password: "InitialAdmin2026" });
   const standardPayload = decodeToken(standard.token);
   assert.equal(standardPayload.rememberLogin, false);
-  assert.equal(decodeDurationDays(standard.token), 7);
+  assert.equal(decodeDurationDays(standard.token), 0.5);
+  assert.deepEqual(refreshToken(standard.token), { error: "登录状态已失效，请重新登录" });
+
+  const { exp: standardExpiry, ...standardClaims } = standardPayload;
+  assert.ok(standardExpiry);
+  const oldStandardToken = jwt.sign({ ...standardClaims, iat: Math.floor(Date.now() / 1000) - 13 * 3600 }, process.env.JWT_SECRET, { expiresIn: "7d" });
+  assert.equal(isTokenSessionValid(oldStandardToken), false);
+  assert.deepEqual(refreshToken(oldStandardToken), { error: "登录状态已失效，请重新登录" });
+
+  const { rememberLogin: oldMode, ...legacyClaims } = standardClaims;
+  assert.equal(oldMode, false);
+  const legacyToken = jwt.sign({ ...legacyClaims, iat: Math.floor(Date.now() / 1000) - 13 * 3600 }, process.env.JWT_SECRET, { expiresIn: "7d" });
+  assert.equal(isTokenSessionValid(legacyToken), false);
 
   const remembered = await loginUser({
     username: "admin",
@@ -37,9 +53,20 @@ try {
   assert.equal(rememberedPayload.rememberLogin, true);
   assert.equal(decodeDurationDays(remembered.token), 15);
 
+  const { exp: activeExpiry, ...activeClaims } = rememberedPayload;
+  assert.ok(activeExpiry);
+  const activeRememberedToken = jwt.sign({ ...activeClaims, iat: Math.floor(Date.now() / 1000) - 13 * 3600 }, process.env.JWT_SECRET, { expiresIn: "15d" });
+  assert.equal(isTokenSessionValid(activeRememberedToken), true);
+  assert.equal(decodeToken(refreshToken(activeRememberedToken).token).rememberLogin, true);
+
   const refreshed = refreshToken(remembered.token);
   assert.equal(decodeToken(refreshed.token).rememberLogin, true);
   assert.equal(decodeDurationDays(refreshed.token), 15);
+
+  const { exp: rememberedExpiry, ...rememberedClaims } = rememberedPayload;
+  assert.ok(rememberedExpiry);
+  const expiredRememberedToken = jwt.sign({ ...rememberedClaims, iat: Math.floor(Date.now() / 1000) - 16 * 86400 }, process.env.JWT_SECRET, { expiresIn: "15d" });
+  assert.deepEqual(refreshToken(expiredRememberedToken), { error: "登录状态已失效，请重新登录" });
 
   const changed = await changeAdminPassword({
     userId: remembered.user.id,

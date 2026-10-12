@@ -5,7 +5,6 @@ import {
   getAuthSessionMode,
   getSessionExpiryReason,
   markAuthTokenRefreshed,
-  recordRememberedActivity,
   startAuthSession,
 } from "./authSession";
 import { clearKingdeeCache } from "./kingdeeCache";
@@ -65,7 +64,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         await refreshAuthToken();
       }
       const user = await api.get<User>("/api/auth/me");
-      recordRememberedActivity();
       set({ user, loading: false, initialized: true });
     } catch (err) {
       // Only clear token on auth errors (401/403), not network errors

@@ -1,4 +1,5 @@
-import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
+import { jwtAuth, requirePermission, requireProductionImport } from "../middleware/jwt-auth.js";
+import { previewProductionImport, confirmProductionImport } from "../services/production-import.js";
 import {
   initDB,
   getDB,
@@ -6,7 +7,6 @@ import {
   createEntry,
   updateEntry,
   deleteEntry,
-  replaceAssemblyEntries,
   exportAssemblyEntries,
   getHistory,
 } from "../services/production-store.js";
@@ -69,11 +69,17 @@ export function registerProductionEntryRoutes(app) {
     }
   });
 
-  app.post("/api/production/entries/import", jwtAuth, requirePermission("production"), (req, res) => {
+  app.post("/api/production/entries/import/preview", jwtAuth, requireProductionImport, (req, res) => {
+    try {
+      res.json({ ok: true, data: previewProductionImport("assembly", req.body?.records, req.user.id) });
+    } catch (err) { res.status(err.status || 500).json({ error: err.message || "预览失败" }); }
+  });
+
+  app.post("/api/production/entries/import", jwtAuth, requireProductionImport, async (req, res) => {
     try {
       const resolveActor = createProductionActorResolver();
       const user = getProductionActorName(req.user, resolveActor);
-      const result = replaceAssemblyEntries(req.body?.records, user);
+      const result = await confirmProductionImport("assembly", req.body?.records, req.body?.previewToken, req.user.id, user);
       res.json({ ok: true, ...result });
     } catch (err) {
       console.error("[production-entry] import error:", err);

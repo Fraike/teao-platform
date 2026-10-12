@@ -19,7 +19,7 @@ fs.writeFileSync(path.join(testDirectory, "users.json"), JSON.stringify({
       username: "operator-a",
       role: "user",
       status: "active",
-      permissions: ["production"],
+      permissions: ["production", "production_import"],
       passwordVersion: 0,
     },
     {
@@ -144,23 +144,29 @@ try {
     const injectionExport = await request("GET", "/api/production/injection/entries/export");
     assert.equal(injectionExport.body.data.groups[0].records[0].createdBy, "张三");
 
-    const assemblyImport = await request("POST", "/api/production/entries/import", { records: [{
+    const assemblyRecords = [{
       date: "2026-10-09",
       line: "2#",
       customer: "导入客户",
       productName: "导入成品",
       dailyQty: 10,
-    }] });
+    }];
+    const assemblyPreview = await request("POST", "/api/production/entries/import/preview", { records: assemblyRecords });
+    assert.equal(assemblyPreview.status, 200);
+    const assemblyImport = await request("POST", "/api/production/entries/import", { records: assemblyRecords, previewToken: assemblyPreview.body.data.previewToken });
     assert.equal(assemblyImport.status, 200);
     assert.equal(store.queryEntries().groups[0].records[0].createdBy, "张三");
 
-    const injectionImport = await request("POST", "/api/production/injection/entries/import", { records: [{
+    const injectionRecords = [{
       date: "2026-10-09",
       machine: "2#",
       shift: "夜班",
       productName: "导入塑胶件",
       dailyQty: 10,
-    }] });
+    }];
+    const injectionPreview = await request("POST", "/api/production/injection/entries/import/preview", { records: injectionRecords });
+    assert.equal(injectionPreview.status, 200);
+    const injectionImport = await request("POST", "/api/production/injection/entries/import", { records: injectionRecords, previewToken: injectionPreview.body.data.previewToken });
     assert.equal(injectionImport.status, 200);
     assert.equal(store.queryInjectionEntries().groups[0].records[0].createdBy, "张三");
 

@@ -1,4 +1,4 @@
-import { clearAuthSession, markAuthTokenRefreshed } from "./authSession.ts";
+import { clearAuthSession, getAuthSessionMode, getSessionExpiryReason, markAuthTokenRefreshed } from "./authSession.ts";
 
 const TOKEN_KEY = "auth_token";
 
@@ -37,7 +37,7 @@ export async function refreshAuthToken(): Promise<string | null> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
   const token = getToken();
-  if (!token) return null;
+  if (!token || getAuthSessionMode() !== "remember" || getSessionExpiryReason() !== null) return null;
 
   isRefreshing = true;
   refreshPromise = (async () => {

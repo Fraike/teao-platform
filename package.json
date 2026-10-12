@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "pretest": "node --test test/production-import-guard.test.js test/production-recovery-replay.test.js",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

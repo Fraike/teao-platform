@@ -15,8 +15,27 @@ function readTimestamp(key: string, storage: Storage): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function readTokenSession(storage: Storage): { mode: AuthSessionMode; issuedAt: number | null } | null {
+  const token = storage.getItem("auth_token");
+  if (!token) return null;
+  try {
+    const encoded = token.split(".")[1];
+    const payload = JSON.parse(atob(encoded.replace(/-/g, "+").replace(/_/g, "/"))) as {
+      rememberLogin?: unknown;
+      iat?: unknown;
+    };
+    return {
+      mode: payload.rememberLogin === true ? "remember" : "standard",
+      issuedAt: typeof payload.iat === "number" && Number.isFinite(payload.iat) && payload.iat > 0
+        ? payload.iat * 1000 : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getAuthSessionMode(storage: Storage = localStorage): AuthSessionMode {
-  return storage.getItem(SESSION_MODE_KEY) === "remember" ? "remember" : "standard";
+  return readTokenSession(storage)?.mode ?? (storage.getItem(SESSION_MODE_KEY) === "remember" ? "remember" : "standard");
 }
 
 export function startAuthSession(rememberLogin: boolean, now = Date.now(), storage: Storage = localStorage): void {
@@ -40,14 +59,17 @@ export function clearAuthSession(storage: Storage = localStorage): void {
 
 export function getSessionExpiryReason(now = Date.now(), storage: Storage = localStorage): AuthSessionMode | null {
   const mode = getAuthSessionMode(storage);
-  const loginAt = readTimestamp(LOGIN_TIMESTAMP_KEY, storage);
+  const tokenSession = readTokenSession(storage);
+  const loginAt = mode === "standard"
+    ? tokenSession?.issuedAt ?? readTimestamp(LOGIN_TIMESTAMP_KEY, storage)
+    : readTimestamp(LOGIN_TIMESTAMP_KEY, storage) ?? tokenSession?.issuedAt;
   if (!loginAt) return null;
 
   if (mode === "standard") {
     return now - loginAt > STANDARD_SESSION_DURATION_MS ? "standard" : null;
   }
 
-  const lastActiveAt = readTimestamp(LAST_ACTIVE_AT_KEY, storage) ?? loginAt;
+  const lastActiveAt = readTimestamp(LAST_ACTIVE_AT_KEY, storage) ?? tokenSession?.issuedAt ?? loginAt;
   return now - lastActiveAt > REMEMBERED_SESSION_DURATION_MS ? "remember" : null;
 }
 

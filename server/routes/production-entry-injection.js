@@ -1,5 +1,6 @@
-import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
-import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, replaceInjectionEntries, exportInjectionEntries, getHistory } from "../services/production-store.js";
+import { jwtAuth, requirePermission, requireProductionImport } from "../middleware/jwt-auth.js";
+import { previewProductionImport, confirmProductionImport } from "../services/production-import.js";
+import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, exportInjectionEntries, getHistory } from "../services/production-store.js";
 import { getTrustedProductionProduct } from "../services/production-product.js";
 import {
   createProductionActorResolver,
@@ -35,11 +36,17 @@ export function registerProductionEntryInjectionRoutes(app) {
     } catch (err) { res.status(err.status || 500).json({ error: err.message || "新增失败" }); }
   });
 
-  app.post("/api/production/injection/entries/import", jwtAuth, requirePermission("production"), (req, res) => {
+  app.post("/api/production/injection/entries/import/preview", jwtAuth, requireProductionImport, (req, res) => {
+    try {
+      res.json({ ok: true, data: previewProductionImport("injection", req.body?.records, req.user.id) });
+    } catch (err) { res.status(err.status || 500).json({ error: err.message || "预览失败" }); }
+  });
+
+  app.post("/api/production/injection/entries/import", jwtAuth, requireProductionImport, async (req, res) => {
     try {
       const resolveActor = createProductionActorResolver();
       const user = getProductionActorName(req.user, resolveActor);
-      const result = replaceInjectionEntries(req.body?.records, user);
+      const result = await confirmProductionImport("injection", req.body?.records, req.body?.previewToken, req.user.id, user);
       res.json({ ok: true, ...result });
     } catch (err) {
       console.error("[production-entry] injection import error:", err);

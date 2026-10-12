@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { api, getToken } from "../lib/api";
+import { useAuthStore } from "../lib/authStore";
 import type { ProductionRecord, DailyGroup, ProductionQueryResponse, AuditLog } from "../types/production";
 import { PROCESS_FIELDS } from "../types/production";
 import { EntryDrawer } from "../components/production/EntryDrawer";
@@ -77,6 +78,8 @@ const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
 ];
 
 export function ProductionEntryPage() {
+  const currentUser = useAuthStore((state) => state.user);
+  const canImport = currentUser?.role === "admin" || (currentUser?.permissions.includes("production") && currentUser.permissions.includes("production_import"));
   // ---- 所有筛选条件使用本地状态，点击"搜索"才提交 ----
   const [fDateFrom, setFDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 9); return d.toISOString().slice(0, 10); });
   const [fDateTo, setFDateTo] = useState(() => new Date().toISOString().slice(0, 10));
@@ -348,7 +351,7 @@ export function ProductionEntryPage() {
         <div className={styles.topActions}>
           <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
-          <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
+          {canImport && <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>}
           <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => add()}>新增录入</Button>
         </div>

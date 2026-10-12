@@ -54,4 +54,23 @@ assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS + 1
 clearAuthSession(storage);
 assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS * 2, storage), null);
 
+const rememberedPayload = { rememberLogin: true, iat: Math.floor(startedAt / 1000) };
+const rememberedToken = `header.${Buffer.from(JSON.stringify(rememberedPayload)).toString("base64url")}.signature`;
+storage.setItem("auth_token", rememberedToken);
+storage.setItem("login_timestamp", String(startedAt));
+assert.equal(getAuthSessionMode(storage), "remember");
+assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS + 1, storage), null);
+
+storage.removeItem("login_timestamp");
+assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage), "remember");
+
+storage.setItem("auth_token", `header.${Buffer.from(JSON.stringify({ rememberLogin: true, iat: Math.floor((startedAt + 14 * 86400 * 1000) / 1000) })).toString("base64url")}.signature`);
+storage.setItem("login_timestamp", String(startedAt));
+assert.equal(getSessionExpiryReason(startedAt + 16 * 86400 * 1000, storage), null);
+
+storage.setItem("auth_session_mode", "remember");
+storage.setItem("auth_token", `header.${Buffer.from(JSON.stringify({ rememberLogin: false, iat: Math.floor(startedAt / 1000) })).toString("base64url")}.signature`);
+assert.equal(getAuthSessionMode(storage), "standard");
+assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS + 1, storage), "standard");
+
 console.log("Auth session tests passed.");
