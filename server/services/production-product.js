@@ -37,9 +37,11 @@ function getCategoryDescendantIds(categories, categoryId, includeRoot = true) {
 }
 
 export function splitProductionMaterials(materials, categories) {
-  const finishedCategoryIds = getCategoryDescendantIds(categories, FINISHED_PRODUCT_CATEGORY, false);
+  const finishedCategoryIds = getCategoryDescendantIds(categories, FINISHED_PRODUCT_CATEGORY);
   return {
     finishedProducts: materials.filter((material) => finishedCategoryIds.has(String(material.parent_id))),
+    unclassifiedMaterials: materials.filter((material) => !String(material.parent_id ?? "").trim())
+      .map((material) => ({ id: String(material.id), number: String(material.number || ""), name: String(material.name || "") })),
     plasticParts: materials.filter((material) => String(material.parent_id) === INJECTION_PLASTIC_PARTS_CATEGORY),
   };
 }

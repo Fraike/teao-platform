@@ -52,6 +52,8 @@ try {
 
   assert.ok(productIdentity, "服务端生产商品校验模块应存在");
   fs.writeFileSync(path.join(testDirectory, "kingdee_materials.json"), JSON.stringify({ data: [
+    { id: "finished-root", number: "SP-ROOT", name: "根分类成品", parent_id: "2314557705978701824" },
+    { id: "missing-category", number: "SP0201-A", name: "RD-T023-60", parent_id: "", stock_name: "成品仓" },
     { id: "finished-1", number: "SP0001", name: "可信成品", parent_id: "finished-child" },
     { id: "plastic-1", number: "B0001", name: "可信塑胶件", parent_id: "2314559979366968320" },
   ] }));
@@ -65,6 +67,10 @@ try {
   assert.deepEqual(productIdentity.getTrustedProductionProduct("injection", "plastic-1"), {
     productId: "plastic-1", productNumber: "B0001", productName: "可信塑胶件",
   });
+  assert.deepEqual(productIdentity.getTrustedProductionProduct("assembly", "finished-root"), {
+    productId: "finished-root", productNumber: "SP-ROOT", productName: "根分类成品",
+  });
+  assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "missing-category"), /不属于装配部/);
   assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "plastic-1"), /不属于装配部/);
   assert.throws(() => productIdentity.getTrustedProductionProduct("injection", "fake-id"), /不存在/);
 

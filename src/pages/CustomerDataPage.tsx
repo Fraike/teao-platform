@@ -118,12 +118,12 @@ export function CustomerDataPage() {
           <Empty description="没有匹配的客户" />
         ) : (
           <ResponsiveTable
+            fitViewport
             columns={columns}
             dataSource={filtered}
             rowKey="id"
             size="small"
             minWidth={800}
-            scroll={{ y: "calc(100vh - 340px)" }}
             pagination={{
               defaultPageSize: 50,
               showSizeChanger: true,

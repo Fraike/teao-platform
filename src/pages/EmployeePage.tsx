@@ -232,6 +232,7 @@ export function EmployeePage() {
       </div>
 
       <ResponsiveTable
+        fitViewport
         dataSource={filtered}
         columns={columns}
         rowKey="id"

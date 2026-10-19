@@ -4,7 +4,7 @@ import { getProductionMaterialConfig } from "./productionMaterialConfig";
 import { toProductionProductOptions, type ProductionProductOption } from "./productionProductSearch";
 import { createProductionMaterialRequestQueue } from "./productionMaterialRequestQueue";
 import { requireFreshKingdeeData } from "./kingdeeRefreshResult";
-import type { KingdeeDataRefreshResult, KingdeeRefreshMessage } from "../types/kingdeeRefresh";
+import type { KingdeeDataRefreshResult, KingdeeRefreshMessage, UnclassifiedKingdeeMaterial } from "../types/kingdeeRefresh";
 import type { KingdeeCustomer } from "../types/kingdee";
 
 export interface ReferenceOption {
@@ -17,6 +17,7 @@ const pendingRequests = new Map<string, Promise<ReferenceOption[]>>();
 const productionMaterialListeners = new Set<() => void>();
 
 interface ProductionMaterialOptions {
+  unclassifiedMaterials?: UnclassifiedKingdeeMaterial[];
   finishedProducts: ProductionProductOption[];
   plasticParts: ProductionProductOption[];
   fetchedAt?: string | null;
@@ -51,12 +52,13 @@ async function getProductionMaterialOptions(forceRefresh = false): Promise<Produ
   }
   const refreshParam = forceRefresh ? "?refresh=1" : "";
   return productionMaterialRequestQueue(forceRefresh, async () => {
-    const response = await api.get<{ ok: boolean; stale?: boolean; refreshed?: boolean; fetchedAt?: string | null; data: { finishedProducts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }>; plasticParts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }> } }>(`/api/kingdee/production-materials${refreshParam}`);
+    const response = await api.get<{ ok: boolean; stale?: boolean; refreshed?: boolean; fetchedAt?: string | null; data: { unclassifiedMaterials?: UnclassifiedKingdeeMaterial[]; finishedProducts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }>; plasticParts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }> } }>(`/api/kingdee/production-materials${refreshParam}`);
     const data = forceRefresh ? requireFreshKingdeeData(response) : response.data;
     const options = {
       finishedProducts: toProductionProductOptions(data.finishedProducts),
       plasticParts: toProductionProductOptions(data.plasticParts),
       fetchedAt: response.fetchedAt,
+      unclassifiedMaterials: data.unclassifiedMaterials,
     };
     setCache(finishedConfig.cacheKey, options.finishedProducts);
     setCache(plasticPartsConfig.cacheKey, options.plasticParts);
@@ -114,7 +116,7 @@ export function refreshKingdeeData(): Promise<KingdeeDataRefreshResult> {
     const result: KingdeeDataRefreshResult = {
       products: products.status === "fulfilled"
         ? { ok: true, finishedCount: products.value.finishedProducts.length,
-          plasticCount: products.value.plasticParts.length, fetchedAt: products.value.fetchedAt || null }
+          plasticCount: products.value.plasticParts.length, unclassifiedMaterials: products.value.unclassifiedMaterials, fetchedAt: products.value.fetchedAt || null }
         : { ok: false, error: refreshError(products.reason) },
       customers: customers.status === "fulfilled"
         ? { ok: true, count: customers.value.options.length, fetchedAt: customers.value.fetchedAt }
@@ -142,9 +144,13 @@ export function formatKingdeeRefreshMessage(result: KingdeeDataRefreshResult): K
   const customers = result.customers.ok
     ? `客户 ${result.customers.count} 条${fetchedAtLabel(result.customers.fetchedAt)}`
     : `客户更新失败：${result.customers.error}`;
-  const level = result.products.ok && result.customers.ok ? "success"
+  const unclassified = result.products.ok ? result.products.unclassifiedMaterials || [] : [];
+  const warning = unclassified.length
+    ? `；未分类商品 ${unclassified.length} 条（${unclassified.slice(0, 5).map(item => item.number || item.name || item.id).join("、")}${unclassified.length > 5 ? "等" : ""}），未纳入生产可选商品，请在金蝶补分类后重新更新`
+    : "";
+  const level = result.products.ok && result.customers.ok ? (unclassified.length ? "warning" : "success")
     : result.products.ok || result.customers.ok ? "warning" : "error";
-  return { level, content: `${products}；${customers}` };
+  return { level, content: `${products}；${customers}${warning}` };
 }
 
 export function getEmployeeOptions() {

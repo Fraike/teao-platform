@@ -12,10 +12,13 @@ import {
   SortAscendingOutlined, SortDescendingOutlined, SunOutlined, MoonOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { api, getToken } from "../lib/api";
+import { createProductionSaveQueue } from "../lib/productionSaveQueue";
+import { api } from "../lib/api";
 import { useAuthStore } from "../lib/authStore";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
-import { ResponsiveTable } from "../components/ResponsiveTable";
+import { ProductionDateTable } from "../components/productionDateTable";
+import { useProductionHistory } from "../lib/productionHistory";
+import { replaceProductionRecord } from "../lib/productionGroups";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
 import {
   getInjectionPlasticPartOptions,
@@ -26,9 +29,10 @@ import { buildInjectionCopyValues } from "../lib/productionCopy";
 import { ProductionProductSelect } from "../components/production/ProductionProductSelect";
 import type { ProductionProductOption } from "../lib/productionProductSearch";
 import { resolveProductionProductForSubmit, validateProductionProductSelection } from "../lib/productionProductSearch";
-import { getProductionDailyTableSticky, productionDailyPagination } from "../lib/productionTable";
+import { getProductionDailyTableSticky } from "../lib/productionTable";
 import { EditableCell } from "../components/production/EditableCell";
-import { buildInjectionSummary, getInjectionShiftVisual, sortRecordsByOrderQty, type OrderQtySort } from "../lib/productionEntry";
+import { buildInjectionSummary, getInjectionShiftVisual, type OrderQtySort } from "../lib/productionEntry";
+import type { AuditLog } from "../types/production";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -194,6 +198,7 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
 
 // ---- 主页面 ----
 export function ProductionEntryInjectionPage() {
+  const [saveQueue] = useState(() => createProductionSaveQueue());
   const currentUser = useAuthStore((s) => s.user);
   const canImport = currentUser?.role === "admin" || (currentUser?.permissions.includes("production") && currentUser.permissions.includes("production_import"));
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 9); return d.toISOString().slice(0, 10); });
@@ -218,14 +223,13 @@ export function ProductionEntryInjectionPage() {
   const groupsRef = useRef<InjGroup[]>([]);
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
-  const [histOpen, setHistOpen] = useState(false);
-  const [histData, setHistData] = useState<{ id: number; action: string; field_name: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string }[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
   const [orderQtySort, setOrderQtySort] = useState<OrderQtySort>(null);
-  const historyCacheRef = useRef(new Map<number, typeof histData>());
-  const dailyTableSticky = contentElement
+  const { open: histOpen, data: histData, loading: histLoading,
+    show: showHist, close: closeHistory, invalidate: invalidateHistory,
+  } = useProductionHistory<AuditLog>("/api/production/injection/entries");
+  const dailyTableSticky = useMemo(() => contentElement
     ? getProductionDailyTableSticky(() => contentElement)
-    : undefined;
+    : undefined, [contentElement]);
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   const doSearch = () => { setProduct(lProduct); setSearch(lSearch); };
@@ -287,39 +291,23 @@ export function ProductionEntryInjectionPage() {
   const copy = useCallback((r: InjRecord) => { setEditRec(null); setCopyRec(r); setModalOpen(true); }, []);
   const cellSave = useCallback(async (record: InjRecord, field: keyof InjRecord, value: string | number) => {
     try {
-      const response = await api.put<{ ok: boolean; data: InjRecord }>(`/api/production/injection/entries/${record.id}`, { [field]: value });
-      historyCacheRef.current.delete(record.id);
-      setGroups((current) => current.map((group) => {
-        const records = group.records.map((item) => item.id === record.id ? response.data : item);
-        return group.records.some((item) => item.id === record.id)
-          ? { ...group, records, summary: buildInjectionSummary(records) }
-          : group;
-      }));
-    } catch {
-      message.error("更新失败");
-    }
-  }, []);
-  const del = useCallback(async (id: number) => { try { await api.delete(`/api/production/injection/entries/${id}`); historyCacheRef.current.delete(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); } catch { message.error("删除失败"); } }, [fetchData]);
-  const onModalClose = (s: boolean) => { setModalOpen(false); setEditRec(null); setCopyRec(null); if (s) { historyCacheRef.current.clear(); offsetRef.current = 0; fetchData(false); } };
-  const showHist = useCallback(async (id: number) => {
-    setHistOpen(true);
-    const cached = historyCacheRef.current.get(id);
-    if (cached) { setHistData(cached); return; }
-    setHistLoading(true);
-    try {
-      const tk = getToken();
-      const r = await fetch(`/api/production/injection/entries/${id}/history`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
-      const d = await r.json();
-      if (d.ok) { historyCacheRef.current.set(id, d.data); setHistData(d.data); }
-    } catch { message.error("加载失败"); } finally { setHistLoading(false); }
-  }, []);
+      await saveQueue.run(record.id, async () => {
+        const response = await api.put<{ ok: boolean; data: InjRecord }>(`/api/production/injection/entries/${record.id}`, { [field]: value });
+        invalidateHistory(record.id);
+        setGroups((current) => replaceProductionRecord(current, response.data, buildInjectionSummary));
+      });
+    } catch { message.error("更新失败"); }
+  }, [saveQueue, invalidateHistory]);
+
+  const del = useCallback(async (id: number) => { try { await api.delete(`/api/production/injection/entries/${id}`); invalidateHistory(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); } catch { message.error("删除失败"); } }, [fetchData, invalidateHistory]);
+  const onModalClose = (s: boolean) => { setModalOpen(false); setEditRec(null); setCopyRec(null); if (s) { invalidateHistory(); offsetRef.current = 0; fetchData(false); } };
   const toggleOrderQtySort = useCallback(() => {
     setOrderQtySort((current) => current === null ? "desc" : current === "desc" ? "asc" : null);
   }, []);
 
   const flm: Record<string, string> = { date: "日期", machine: "机台", product_name: "品名/型号", product_id: "金蝶商品ID", product_number: "商品编码", material: "原材料", material_batch: "原材料批号", shift: "班次", operator: "操作人", order_qty: "订单数量", daily_qty: "当天生产数量", cumulative_qty: "累计生产", defects: "不良数", batch_no: "半成品生产批号", remark: "备注" };
 
-  const columns = useMemo<ColumnsType<InjRecord & { key: number }>>(() => [
+  const columns = useMemo<ColumnsType<InjRecord>>(() => [
     { title: "机台", dataIndex: "machine", key: "m", width: 48, fixed: "left", render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12 }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "d", width: 76, fixed: "left", render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span> },
     { title: "班次", dataIndex: "shift", key: "s", width: 68, render: (v: string) => <ShiftBadge shift={v} /> },
@@ -374,7 +362,7 @@ export function ProductionEntryInjectionPage() {
           <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           {canImport && <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>}
-          <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
+          <Button size="small" icon={<ReloadOutlined />} onClick={() => { invalidateHistory(); offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={add}>新增录入</Button>
         </div>
       </div>
@@ -390,8 +378,8 @@ export function ProductionEntryInjectionPage() {
                   title={<Space size={6} wrap><span style={{ fontSize: 14, fontWeight: 600 }}>{g.date}</span><Tag color="purple" style={{ fontSize: 11 }}>{g.summary.machines}台机</Tag><Tag style={{ fontSize: 11 }}>{g.records.length}条</Tag><span style={{ color: "#999", fontSize: 11 }}>|</span><span style={{ fontSize: 11 }}>订单 <b>{g.summary.totalOrderQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>当天 <b style={{ color: "#722ed1" }}>{g.summary.totalDailyQty.toLocaleString()}</b></span><span style={{ fontSize: 11 }}>累计 <b>{g.summary.totalCumulativeQty.toLocaleString()}</b></span><Tag color={g.summary.totalDefects > 0 ? "red" : "green"} style={{ fontSize: 10 }}>不良 {g.summary.totalDefects}</Tag><span style={{ fontSize: 11 }}>合格率 <b style={{ color: (g.summary.qualifiedRate ?? 1) >= 0.95 ? "#52c41a" : "#ff4d4f" }}>{g.summary.qualifiedRate != null ? `${(g.summary.qualifiedRate * 100).toFixed(1)}%` : "-"}</b></span><span style={{ fontSize: 11 }}>欠数 <b style={{ color: g.summary.totalBackorder > 0 ? "#faad14" : "#333" }}>{g.summary.totalBackorder.toLocaleString()}</b></span></Space>}
                   size="small"
                 >
-                  <ResponsiveTable columns={columns} dataSource={sortRecordsByOrderQty(g.records, orderQtySort).map(r => ({ ...r, key: r.id }))} pagination={productionDailyPagination} size="small" minWidth={1600} bordered
-                    rowClassName={(_, i) => i % 2 === 0 ? "table-row-even" : "table-row-odd"} locale={{ emptyText: "暂无数据" }} sticky={dailyTableSticky} />
+                  <ProductionDateTable records={g.records} columns={columns} orderQtySort={orderQtySort}
+                    minWidth={1600} sticky={dailyTableSticky} />
                 </Card>
               ))}
               {hasMore && <div className={styles.loadMore}><Button onClick={() => fetchData(true)} loading={loading}>加载更多（共 {total} 条）</Button></div>}
@@ -413,12 +401,12 @@ export function ProductionEntryInjectionPage() {
           setSearch("");
           setLProduct("");
           setLSearch("");
-          historyCacheRef.current.clear();
+          invalidateHistory();
           offsetRef.current = 0;
         }}
       />
 
-      <Modal title="修改历史" open={histOpen} onCancel={() => setHistOpen(false)} footer={null} width={700}>
+      <Modal title="修改历史" open={histOpen} onCancel={closeHistory} footer={null} width={700}>
         <Spin spinning={histLoading}>
           {histData.length === 0 && !histLoading ? <div style={{ color: "#999", textAlign: "center", padding: 20 }}>暂无修改记录</div> : (
             <div style={{ maxHeight: 400, overflow: "auto" }}>{histData.map((l, i) => (

@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip } from "antd";
+import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip, Space } from "antd";
 import {
   HomeOutlined,
   UserOutlined,
@@ -11,6 +11,7 @@ import {
   ToolOutlined,
   AppstoreOutlined,
   DatabaseOutlined,
+  ReadOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from "@ant-design/icons";
@@ -19,6 +20,8 @@ import { AuthGuard } from "./components/AuthGuard";
 import { useAuthStore } from "./lib/authStore";
 import { useTabStore } from "./lib/tabStore";
 import { AdminPasswordModal } from "./components/AdminPasswordModal";
+import { NotificationBell } from "./components/NotificationBell";
+import { FeedbackEntry } from "./components/feedback/FeedbackEntry";
 import { getNavigationItem, getVisibleMenuItems, NAVIGATION_GROUPS } from "./lib/navigation";
 import { getSidebarLayout } from "./lib/sidebarLayout";
 import styles from "./App.module.css";
@@ -45,6 +48,7 @@ const MaterialDetailPage = lazy(() => import("./pages/MaterialDetailPage").then(
 const CustomerDataPage = lazy(() => import("./pages/CustomerDataPage").then((m) => ({ default: m.CustomerDataPage })));
 const SupplierDataPage = lazy(() => import("./pages/SupplierDataPage").then((m) => ({ default: m.SupplierDataPage })));
 const CustomerProductPage = lazy(() => import("./pages/CustomerProductPage").then((m) => ({ default: m.CustomerProductPage })));
+const ProductStandardPage = lazy(() => import("./pages/ProductStandardPage").then((m) => ({ default: m.ProductStandardPage })));
 
 const { Header, Sider, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -56,6 +60,7 @@ const NAV_GROUP_ICONS: Record<string, React.ReactNode> = {
   hr: <TeamOutlined />,
   tools: <AppstoreOutlined />,
   "basic-data": <DatabaseOutlined />,
+  engineering: <ReadOutlined />,
 };
 
 function PageLoader() {
@@ -64,6 +69,11 @@ function PageLoader() {
 
 function AppLayout() {
   const location = useLocation();
+  const isTablePageViewport = [
+    "/product-standards", "/materials", "/customers", "/suppliers", "/employees", "/admin",
+    "/customer-products", "/quotation-management",
+    "/production-entry", "/production-entry-injection",
+  ].includes(location.pathname.replace(/\/+$/, ""));
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
@@ -144,7 +154,7 @@ function AppLayout() {
   const sidebarLayout = getSidebarLayout(isMobile);
 
   return (
-    <Layout style={{ height: "100vh", overflow: "hidden" }}>
+    <Layout className={styles.rootLayout}>
       {/* 左侧菜单 */}
       <Sider
         width={sidebarLayout.expandedWidth}
@@ -178,23 +188,13 @@ function AppLayout() {
           }}
           className={styles.menu}
         />
+        <FeedbackEntry collapsed={collapsed} />
       </Sider>
 
       {/* 右侧内容区 */}
-      <Layout>
+      <Layout className={styles.mainLayout}>
         {/* 顶部 Header + 标签栏 */}
-        <Header
-          style={{
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 16px",
-            height: 56,
-            borderBottom: "1px solid #f0f0f0",
-            lineHeight: "normal",
-          }}
-        >
+        <Header className={styles.header}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
             {/* 折叠按钮 */}
             <Button
@@ -240,7 +240,9 @@ function AppLayout() {
 
           {/* 用户区域 */}
           {user && (
-            <Dropdown
+            <Space size={4} className={styles.headerUserArea}>
+              <NotificationBell />
+              <Dropdown
               menu={{
                 items: [
                   ...(user.role === "admin"
@@ -264,49 +266,48 @@ function AppLayout() {
               <Button type="text" style={{ flexShrink: 0 }}>
                 <UserOutlined /> {!isMobile && user.name}
               </Button>
-            </Dropdown>
+              </Dropdown>
+            </Space>
           )}
         </Header>
         <AdminPasswordModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} />
 
         {/* 内容区 */}
-        <Content style={{ background: "#f5f5f5", overflow: "auto" }}>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
-              <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
-              <Route path="/quotation" element={<AuthGuard permission="business"><QuotationPage headerHeight={56} /></AuthGuard>} />
-              <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
-              <Route path="/quotation-management" element={<AuthGuard permission="business"><QuotationManagementPage /></AuthGuard>} />
-              <Route path="/cost" element={<AuthGuard permission="business"><CostCalculatorPage headerHeight={56} /></AuthGuard>} />
-              <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
-              <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
-              <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
-              <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
-              <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
-              <Route path="/materials" element={<AuthGuard permission="basic_data"><MaterialDataPage /></AuthGuard>} />
-              <Route path="/materials/:id" element={<AuthGuard permission="basic_data"><MaterialDetailPage /></AuthGuard>} />
-              <Route path="/customers" element={<AuthGuard permission="basic_data"><CustomerDataPage /></AuthGuard>} />
-              <Route path="/suppliers" element={<AuthGuard permission="basic_data"><SupplierDataPage /></AuthGuard>} />
-              <Route path="/customer-products" element={<AuthGuard permission="basic_data"><CustomerProductPage /></AuthGuard>} />
-            </Routes>
-          </Suspense>
+        <Content className={styles.content} data-page-scroll-container>
+          <div
+            className={isTablePageViewport ? styles.pageViewport : undefined}
+            data-table-page-viewport={isTablePageViewport ? "" : undefined}
+          >
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
+                <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
+                <Route path="/quotation" element={<AuthGuard permission="business"><QuotationPage headerHeight={56} /></AuthGuard>} />
+                <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
+                <Route path="/quotation-management" element={<AuthGuard permission="business"><QuotationManagementPage /></AuthGuard>} />
+                <Route path="/cost" element={<AuthGuard permission="business"><CostCalculatorPage headerHeight={56} /></AuthGuard>} />
+                <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
+                <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
+                <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
+                <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
+                <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
+                <Route path="/materials" element={<AuthGuard permission="basic_data"><MaterialDataPage /></AuthGuard>} />
+                <Route path="/materials/:id" element={<AuthGuard permission="basic_data"><MaterialDetailPage /></AuthGuard>} />
+                <Route path="/customers" element={<AuthGuard permission="basic_data"><CustomerDataPage /></AuthGuard>} />
+                <Route path="/suppliers" element={<AuthGuard permission="basic_data"><SupplierDataPage /></AuthGuard>} />
+                <Route path="/customer-products" element={<AuthGuard permission="basic_data"><CustomerProductPage /></AuthGuard>} />
+                <Route path="/product-standards" element={<AuthGuard><ProductStandardPage /></AuthGuard>} />
+              </Routes>
+            </Suspense>
+          </div>
         </Content>
 
-        <Footer
-          style={{
-            textAlign: "center",
-            background: "#f5f5f5",
-            padding: "8px 16px",
-            fontSize: 12,
-            color: "#999",
-          }}
-        >
+        <Footer className={styles.footer}>
           <a
             href="http://beian.miit.gov.cn/"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: "#999", textDecoration: "none" }}
+            className={styles.footerLink}
           >
             粤ICP备13044030号-7
           </a>

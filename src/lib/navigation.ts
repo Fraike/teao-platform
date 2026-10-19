@@ -29,6 +29,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
   { key: "hr", title: "人事" },
   { key: "tools", title: "公共工具" },
   { key: "basic-data", title: "基础资料" },
+  { key: "engineering", title: "工程部" },
 ];
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
@@ -47,10 +48,11 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { key: "/customers", title: "客户资料", description: "客户信息查询", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#531dab", menu: true, dashboard: true },
   { key: "/suppliers", title: "供应商资料", description: "供应商信息查询", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#08979c", menu: true, dashboard: true },
   { key: "/customer-products", title: "客户商品资料", description: "客户与商品对应资料", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#597ef7", menu: true, dashboard: true },
+  { key: "/product-standards", title: "产品标准", description: "产品生产标准的发布与审核", category: "工程管理", group: "engineering", icon: "read", color: "#fa541c", menu: true, dashboard: true },
   { key: "/admin", title: "用户管理", description: "账号审核、权限和密码管理", category: "系统管理", group: "system", adminOnly: true, icon: "setting", color: "#faad14", menu: false, dashboard: true },
 ];
 
-export const DASHBOARD_CATEGORY_ORDER = ["人事管理", "业务系统", "生产管理", "工具", "基础资料", "系统管理"];
+export const DASHBOARD_CATEGORY_ORDER = ["人事管理", "业务系统", "生产管理", "工程管理", "工具", "基础资料", "系统管理"];
 export function canAccessNavigationItem(item: NavigationItem, user: User | null): boolean { return !!user && (!item.adminOnly || user.role === "admin") && (!item.permission || user.role === "admin" || user.permissions.includes(item.permission)); }
 export function getNavigationItem(pathname: string): NavigationItem | undefined { return NAVIGATION_ITEMS.find((item) => item.key === pathname || item.match?.test(pathname)); }
 export function getVisibleNavigationItems(user: User | null): NavigationItem[] { return NAVIGATION_ITEMS.filter((item) => item.dashboard && canAccessNavigationItem(item, user)); }

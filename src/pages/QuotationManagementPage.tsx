@@ -22,6 +22,7 @@ import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
 import type { ManagedQuotation, Product, QuotationProductPreview } from "../types/quotation";
 import { ResponsiveTable } from "../components/ResponsiveTable";
+import styles from "./DataTablePage.module.css";
 import { formatDomesticPrice } from "../lib/quotationCompatibility";
 
 const { RangePicker } = DatePicker;
@@ -173,7 +174,7 @@ export default function QuotationManagementPage() {
   ];
 
   return (
-    <div style={{ padding: "20px 24px", minHeight: "100%" }}>
+    <div className={styles.quotationContainer}>
       {contextHolder}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 16 }}>
         <div>
@@ -224,6 +225,7 @@ export default function QuotationManagementPage() {
         }
       `}</style>
       <ResponsiveTable<ManagedQuotation>
+        fitViewport
         className="quotation-management-table"
         rowKey="id"
         columns={columns}

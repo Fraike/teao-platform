@@ -1,0 +1,15 @@
+.settings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+.setting { padding: 14px 16px; border: 1px solid var(--ant-color-border-secondary, #e7ebf0); border-radius: 8px; }
+.setting h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 14px; }
+.setting p { margin: 8px 0 0; color: var(--ant-color-text-secondary, #68758a); font-size: 12px; }
+.step { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ant-color-fill-secondary, #eef1f5); font-size: 12px; }
+.scopeSelect { width: 100%; }
+.outputHints { display: flex; flex-wrap: wrap; gap: 12px 26px; padding: 10px 14px; border-radius: 6px; background: var(--ant-color-fill-quaternary, #fafbfc); font-size: 13px; }
+.outputHints > span { display: inline-flex; align-items: center; gap: 6px; }
+.selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 14px 0 10px; }
+.search { width: 310px; max-width: 100%; }
+.count { font-weight: 600; color: var(--ant-color-primary, #1677ff); }
+.hint { color: var(--ant-color-text-secondary, #68758a); margin: 8px 0; }
+.progress { margin-top: 12px; }
+.table { margin-top: 10px; }
+@media (max-width: 640px) { .settings { grid-template-columns: 1fr; gap: 10px; } }

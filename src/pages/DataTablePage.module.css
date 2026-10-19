@@ -1,5 +1,7 @@
 .container {
-  padding: 24px;
+  padding: 24px 24px 0;
+  min-width: 0;
+  min-height: 0;
   max-width: none;
   margin: 0;
 }
@@ -20,8 +22,10 @@
 .content {
   background: #fff;
   border-radius: 8px;
-  padding: 16px;
+  padding: 16px 16px 0;
+  min-width: 0;
   border: 1px solid #f0f0f0;
+  border-bottom: 0;
 }
 
 .searchBar {
@@ -35,4 +39,15 @@
   display: flex;
   justify-content: center;
   padding: 80px;
+}
+
+/* 表格高度由内容区实际底边测量，外层不再叠加底部留白。 */
+.customerProductContainer {
+  min-width: 0;
+  padding: 16px 16px 0 8px;
+}
+
+.quotationContainer {
+  min-width: 0;
+  padding: 20px 24px 0;
 }

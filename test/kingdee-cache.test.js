@@ -22,13 +22,15 @@ const productionFixture = kingdeeRoutes.splitProductionMaterials([
   { id: "finished-child", parent_id: "finished-child", name: "Finished child" },
   { id: "finished-grandchild", parent_id: "finished-grandchild", name: "Finished grandchild" },
   { id: "finished-root", parent_id: "2314557705978701824", name: "Finished root" },
+  { id: "unclassified", number: "SP0201-A", name: "RD-T023-60", parent_id: "" },
   { id: "plastic", parent_id: "2314559979366968320", name: "Plastic part" },
 ], [{
   id: "2314557705978701824",
   children: [{ id: "finished-child", children: [{ id: "finished-grandchild", children: [] }] }],
 }]);
-assert.deepEqual(productionFixture.finishedProducts.map((item) => item.id), ["finished-child", "finished-grandchild"], "装配部应包含成品的所有子分类商品，但不包含根分类直挂商品");
+assert.deepEqual(productionFixture.finishedProducts.map((item) => item.id), ["finished-child", "finished-grandchild", "finished-root"], "装配部应包含成品根分类及全部后代商品");
 assert.deepEqual(productionFixture.plasticParts.map((item) => item.id), ["plastic"], "注塑部应只包含塑胶配件商品");
+assert.deepEqual(productionFixture.unclassifiedMaterials, [{ id: "unclassified", number: "SP0201-A", name: "RD-T023-60" }]);
 const require = createRequire(import.meta.url);
 const express = require("../server/node_modules/express");
 
@@ -100,6 +102,17 @@ try {
     assert.equal(productionResponse.status, 200);
     assert.deepEqual(productionBody.data.finishedProducts.map((item) => item.id), ["finished-1"]);
     assert.deepEqual(productionBody.data.plasticParts.map((item) => item.id), ["plastic-1"]);
+
+    writeKingdeeCache("materials", [...savedMaterials.data,
+      { id: "root", number: "SP-ROOT", name: "Root", parent_id: "2314557705978701824" },
+      { id: "missing", number: "SP0201-A", name: "RD-T023-60", parent_id: "" },
+    ]);
+    const complete = await fetch(`http://127.0.0.1:${port}/api/kingdee/production-materials`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(response => response.json());
+    assert.deepEqual(complete.data.finishedProducts.map(item => item.id), ["finished-1", "root"]);
+    assert.deepEqual(complete.data.unclassifiedMaterials, [{ id: "missing", number: "SP0201-A", name: "RD-T023-60" }]);
+    writeKingdeeCache("materials", savedMaterials.data);
 
     const refreshEvents = [];
     const originalInfo = console.info;

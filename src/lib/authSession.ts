@@ -1,12 +1,13 @@
 import type { AuthSessionMode } from "../types/auth";
+import { getToken } from "./authToken.ts";
 
 const LOGIN_TIMESTAMP_KEY = "login_timestamp";
 const SESSION_MODE_KEY = "auth_session_mode";
 const LAST_ACTIVE_AT_KEY = "auth_last_active_at";
 const LAST_REFRESH_AT_KEY = "auth_last_refresh_at";
 
-export const STANDARD_SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 export const REMEMBERED_SESSION_DURATION_MS = 15 * 24 * 60 * 60 * 1000;
+export const STANDARD_SESSION_DURATION_MS = REMEMBERED_SESSION_DURATION_MS;
 export const ACTIVITY_WRITE_THROTTLE_MS = 60 * 1000;
 export const REMEMBERED_TOKEN_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -15,19 +16,25 @@ function readTimestamp(key: string, storage: Storage): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function readTokenSession(storage: Storage): { mode: AuthSessionMode; issuedAt: number | null } | null {
-  const token = storage.getItem("auth_token");
+function readTokenSession(storage: Storage): { mode: AuthSessionMode; issuedAt: number | null; expiresAt: number | null } | null {
+  const token = storage === globalThis.localStorage ? getToken() : storage.getItem("auth_token");
   if (!token) return null;
   try {
     const encoded = token.split(".")[1];
     const payload = JSON.parse(atob(encoded.replace(/-/g, "+").replace(/_/g, "/"))) as {
       rememberLogin?: unknown;
       iat?: unknown;
+      exp?: unknown;
+      sessionStartedAt?: unknown;
+      sessionExpiresAt?: unknown;
     };
+    const start = typeof payload.sessionStartedAt === "number" ? payload.sessionStartedAt : payload.iat;
+    const deadlines = [payload.exp, payload.sessionExpiresAt, typeof start === "number" ? start + REMEMBERED_SESSION_DURATION_MS / 1000 : null]
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
     return {
       mode: payload.rememberLogin === true ? "remember" : "standard",
-      issuedAt: typeof payload.iat === "number" && Number.isFinite(payload.iat) && payload.iat > 0
-        ? payload.iat * 1000 : null,
+      issuedAt: typeof start === "number" && Number.isFinite(start) && start > 0 ? start * 1000 : null,
+      expiresAt: deadlines.length ? Math.min(...deadlines) * 1000 : null,
     };
   } catch {
     return null;
@@ -60,17 +67,11 @@ export function clearAuthSession(storage: Storage = localStorage): void {
 export function getSessionExpiryReason(now = Date.now(), storage: Storage = localStorage): AuthSessionMode | null {
   const mode = getAuthSessionMode(storage);
   const tokenSession = readTokenSession(storage);
-  const loginAt = mode === "standard"
-    ? tokenSession?.issuedAt ?? readTimestamp(LOGIN_TIMESTAMP_KEY, storage)
-    : readTimestamp(LOGIN_TIMESTAMP_KEY, storage) ?? tokenSession?.issuedAt;
-  if (!loginAt) return null;
-
-  if (mode === "standard") {
-    return now - loginAt > STANDARD_SESSION_DURATION_MS ? "standard" : null;
-  }
-
-  const lastActiveAt = readTimestamp(LAST_ACTIVE_AT_KEY, storage) ?? tokenSession?.issuedAt ?? loginAt;
-  return now - lastActiveAt > REMEMBERED_SESSION_DURATION_MS ? "remember" : null;
+  const loginAt = readTimestamp(LOGIN_TIMESTAMP_KEY, storage) ?? tokenSession?.issuedAt;
+  const deadline = tokenSession?.expiresAt ?? (loginAt ? loginAt + REMEMBERED_SESSION_DURATION_MS : null);
+  // 旧令牌的本地登录时间可能早于最近一次续签，不能把旧会话顺延。
+  const absoluteDeadline = loginAt && deadline ? Math.min(deadline, loginAt + REMEMBERED_SESSION_DURATION_MS) : deadline;
+  return absoluteDeadline && now >= absoluteDeadline ? mode : null;
 }
 
 export function recordRememberedActivity(

@@ -1,11 +1,26 @@
-import { registerUser, loginUser, getUserById, refreshToken, recoverAdminPassword, changeAdminPassword } from "../services/users.js";
+import { registerUser, loginUser, getUserById, refreshToken, recoverAdminPassword, changeAdminPassword, requestUserPasswordRecovery } from "../services/users.js";
 import { jwtAuth, adminAuth } from "../middleware/jwt-auth.js";
 import { createRateLimiter } from "../middleware/rate-limit.js";
+import { createHash } from "node:crypto";
 
 const loginLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, maxAttempts: 10, keyPrefix: "login" });
 const recoveryLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 5, keyPrefix: "admin-recovery" });
+const userRecoveryLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 5, keyPrefix: "user-recovery" });
+const userRecoveryIpLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 30, keyPrefix: "user-recovery-ip" });
 
 export function registerAuthRoutes(app) {
+  app.post("/api/auth/recover-password", async (req, res) => {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 100) : "";
+    const nameKey = createHash("sha256").update(name).digest("hex");
+    if (userRecoveryIpLimiter.recordFailure(req) || userRecoveryLimiter.recordFailure({ ip: nameKey })) return res.status(429).json({ error: "申请次数过多，请15分钟后再试" });
+    try {
+      const result = await requestUserPasswordRecovery(req.body || {});
+      if (result.error) return res.status(400).json({ error: result.error });
+      res.json({ ok: true, message: "申请已提交，管理员审核通过后请使用新密码登录" });
+    } catch {
+      res.status(500).json({ error: "申请提交失败，请稍后重试" });
+    }
+  });
   app.post("/api/auth/login", async (req, res) => {
     const { username, password, rememberLogin } = req.body || {};
     if (!username || !password) {
@@ -69,6 +84,8 @@ export function registerAuthRoutes(app) {
       currentPassword,
       newPassword,
       rememberLogin: req.user.rememberLogin === true,
+      sessionStartedAt: req.user.sessionStartedAt ?? req.user.iat,
+      sessionExpiresAt: req.user.sessionExpiresAt ?? req.user.exp,
     });
     if (result.error) return res.status(400).json({ error: result.error });
     res.json(result);

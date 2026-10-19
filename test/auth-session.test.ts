@@ -26,12 +26,12 @@ const startedAt = 1_700_000_000_000;
 
 startAuthSession(false, startedAt, storage);
 assert.equal(getAuthSessionMode(storage), "standard");
-assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS, storage), null);
+assert.equal(getSessionExpiryReason(startedAt + 13 * 3600 * 1000, storage), null);
 assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS + 1, storage), "standard");
 
 startAuthSession(true, startedAt, storage);
 assert.equal(getAuthSessionMode(storage), "remember");
-assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS, storage), null);
+assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS, storage), "remember");
 assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage), "remember");
 
 const throttled = recordRememberedActivity(startedAt + ACTIVITY_WRITE_THROTTLE_MS - 1, storage);
@@ -39,7 +39,7 @@ assert.deepEqual(throttled, { recorded: false, shouldRefreshToken: false, expire
 
 const active = recordRememberedActivity(startedAt + REMEMBERED_TOKEN_REFRESH_INTERVAL_MS, storage);
 assert.deepEqual(active, { recorded: true, shouldRefreshToken: true, expiredMode: null });
-assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage), null);
+assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage), "remember");
 
 startAuthSession(true, startedAt, storage);
 const expiredActivity = recordRememberedActivity(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage);
@@ -59,14 +59,14 @@ const rememberedToken = `header.${Buffer.from(JSON.stringify(rememberedPayload))
 storage.setItem("auth_token", rememberedToken);
 storage.setItem("login_timestamp", String(startedAt));
 assert.equal(getAuthSessionMode(storage), "remember");
-assert.equal(getSessionExpiryReason(startedAt + STANDARD_SESSION_DURATION_MS + 1, storage), null);
+assert.equal(getSessionExpiryReason(startedAt + 13 * 3600 * 1000, storage), null);
 
 storage.removeItem("login_timestamp");
 assert.equal(getSessionExpiryReason(startedAt + REMEMBERED_SESSION_DURATION_MS + 1, storage), "remember");
 
 storage.setItem("auth_token", `header.${Buffer.from(JSON.stringify({ rememberLogin: true, iat: Math.floor((startedAt + 14 * 86400 * 1000) / 1000) })).toString("base64url")}.signature`);
 storage.setItem("login_timestamp", String(startedAt));
-assert.equal(getSessionExpiryReason(startedAt + 16 * 86400 * 1000, storage), null);
+assert.equal(getSessionExpiryReason(startedAt + 16 * 86400 * 1000, storage), "remember");
 
 storage.setItem("auth_session_mode", "remember");
 storage.setItem("auth_token", `header.${Buffer.from(JSON.stringify({ rememberLogin: false, iat: Math.floor(startedAt / 1000) })).toString("base64url")}.signature`);

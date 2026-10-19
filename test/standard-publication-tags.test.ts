@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {getStandardPublicationNotice} from '../src/lib/standardFormat.ts';
+const now=Date.parse('2026-10-15T08:00:00Z');
+const row={status:'published' as const,customer:'汽车客户▲',publishedAt:'2026-10-14T08:00:00Z',reviewedAt:'2026-10-14T08:00:00Z',hasPreviousPublication:false};
+assert.equal(getStandardPublicationNotice(row,now),'new');
+assert.equal(getStandardPublicationNotice({...row,hasPreviousPublication:true},now),'changed');
+assert.equal(getStandardPublicationNotice({...row,customer:'客户▲*'},now),'new');
+assert.equal(getStandardPublicationNotice({...row,reviewedAt:''},now),null,'historical initialization must not look newly published');
+assert.equal(getStandardPublicationNotice({...row,reviewedAt:'',customer:'客户▲*'},now),'changed');
+assert.equal(getStandardPublicationNotice({...row,publishedAt:'2026-10-01T08:00:00Z'},now),'new','exactly 14 days is included');
+assert.equal(getStandardPublicationNotice({...row,publishedAt:'2026-10-01T07:59:59Z'},now),null);
+assert.equal(getStandardPublicationNotice({...row,publishedAt:'2026-10-16T08:00:00Z'},now),null);
+assert.equal(getStandardPublicationNotice({...row,publishedAt:'invalid'},now),null);
+assert.equal(getStandardPublicationNotice({...row,status:'draft'},now),null);
+assert.equal(getStandardPublicationNotice({...row,status:'pending_review'},now),null);
+assert.equal(getStandardPublicationNotice({...row,status:'obsolete'},now),null);
+console.log('14-day first publication, revision, legacy marker and import exclusion tags passed');

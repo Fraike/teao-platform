@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync} from 'node:fs';
+import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
+process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'feedback-test-'));
+process.env.JWT_SECRET='feedback-tests-only-secret-at-least-32-characters';
+const require=createRequire(new URL('../server/package.json',import.meta.url)),express=require('express'),jwt=require('jsonwebtoken');
+const users=[{id:'one',name:'甲',username:'one',role:'user',status:'active',permissions:[],passwordVersion:0},{id:'two',name:'乙',username:'two',role:'user',status:'active',permissions:[],passwordVersion:0},{id:'admin',name:'管理员',username:'admin',role:'admin',status:'active',permissions:[],passwordVersion:0}];
+const save=()=>writeFileSync(path.join(process.env.DATA_DIR,'users.json'),JSON.stringify({users}));save();
+const {registerFeedbackRoutes}=await import('../server/routes/feedback.js');
+const {closeFeedbackDB}=await import('../server/services/feedback-store.js');
+const app=express();app.use(express.json({limit:'12mb'}));registerFeedbackRoutes(app);const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+const tokens=Object.fromEntries(users.map(u=>[u.id,jwt.sign(u,process.env.JWT_SECRET,{expiresIn:'15d'})]));
+const call=async(user,url='',method='GET',body)=>{const r=await fetch(`http://127.0.0.1:${server.address().port}/api/feedback${url}`,{method,headers:{authorization:`Bearer ${tokens[user]}`,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:r.status,body:await r.json()};};
+const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT9sAAAAASUVORK5CYII=';
+const input={category:'data',description:'测试数据有误',pagePath:'/product-standards?secret=not-stored#fragment',pageTitle:'产品标准',screenshots:[{name:'截图.png',dataUrl:png}]};
+try{
+ assert.equal((await call('missing')).status,401);
+ let created=await call('one','','POST',input);assert.equal(created.status,201);const detail=created.body.data;
+ assert.equal(detail.pagePath,'/product-standards');assert.equal(detail.createdBy,'甲');assert.equal(detail.screenshotCount,1);
+ assert.equal((await call('one',`/${detail.id}`)).body.data.screenshots[0].dataUrl,png);
+ assert.equal((await call('two',`/${detail.id}`)).status,404);
+ const own=await call('one');assert.equal(own.body.total,1);assert(!JSON.stringify(own.body).includes('data:image'));assert.equal(own.body.data[0].screenshotCount,1);
+ assert.equal((await call('two')).body.total,0);assert.equal((await call('one','?scope=all')).status,403);
+ assert.equal((await call('admin','?scope=all')).body.total,1);
+ assert.equal((await call('one',`/${detail.id}`,'PUT',{status:'resolved',reply:'',revision:1})).status,403);
+ const updated=await call('admin',`/${detail.id}`,'PUT',{status:'processing',reply:'正在核对',revision:detail.revision});assert.equal(updated.status,200);assert.equal(updated.body.data.handledBy,'管理员');
+ assert.equal((await call('admin',`/${detail.id}`,'PUT',{status:'resolved',reply:'已修复',revision:detail.revision})).status,409);
+ assert.equal((await call('one',`/${detail.id}`)).body.data.reply,'正在核对');
+ for(const patch of [{category:'unknown'},{description:' '},{screenshots:[{name:'x.svg',dataUrl:'data:image/svg+xml;base64,PHN2Zz4='}]},{screenshots:[{name:'x.png',dataUrl:'data:image/png;base64,PHNjcmlwdD4='}]},{screenshots:Array(4).fill({name:'x.png',dataUrl:png})}])assert.equal((await call('one','','POST',{...input,...patch})).status,400);
+ assert.equal((await call('admin','?scope=all&page=bad')).status,400);
+ users[2].role='user';save();assert.equal((await call('admin','?scope=all')).status,403);assert.equal((await call('admin',`/${detail.id}`,'PUT',{status:'resolved',reply:'',revision:2})).status,403);
+ for(let index=0;index<4;index++)assert.equal((await call('one','','POST',{...input,description:`补充反馈${index}`,screenshots:[]})).status,201);
+ assert.equal((await call('one','','POST',{...input,screenshots:[]})).status,429);
+ const paged=await call('one','?page=1&pageSize=2');assert.equal(paged.body.total,5);assert.equal(paged.body.data.length,2);
+ assert.equal((await call('one','','POST',{...input,screenshots:[{name:'too-big.png',dataUrl:'data:image/png;base64,'+'A'.repeat(2800001)}]})).status,400);
+ users[0].status='disabled';save();assert.equal((await call('one')).status,401);
+ console.log('Feedback: authenticated ownership, admin processing, live revocation, screenshots, lightweight pagination, context privacy and revision conflicts passed.');
+}finally{await new Promise(r=>server.close(r));closeFeedbackDB();}

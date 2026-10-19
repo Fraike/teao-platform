@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(new URL('../server/package.json', import.meta.url));
+const express=require('express'), jwt=require('jsonwebtoken');
+process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'standard-routes-'));
+process.env.JWT_SECRET='isolated-test-secret-at-least-32-characters';
+process.env.PRODUCTION_CONFIG_PATH=path.join(process.env.DATA_DIR,'config.json');
+writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));
+let users=[{id:'admin',username:'admin',name:'管理员',role:'admin',status:'active',permissions:[],passwordVersion:0,wecomUserid:''},{id:'editor',username:'editor',name:'甲',role:'user',status:'active',permissions:['engineering_submit'],passwordVersion:0,wecomUserid:''},
+{id:'reviewer',username:'reviewer',name:'乙',role:'user',status:'active',permissions:['engineering_review'],passwordVersion:0,wecomUserid:''},
+{id:'reader',username:'reader',name:'丙',role:'user',status:'active',permissions:[],passwordVersion:0,wecomUserid:''},
+{id:'legacyViewer',username:'legacy_viewer',name:'仅查看',role:'user',status:'active',permissions:['engineering'],passwordVersion:0,wecomUserid:''}];
+const save=()=>writeFileSync(path.join(process.env.DATA_DIR,'users.json'),JSON.stringify({users}));save();
+const tokens=Object.fromEntries(users.map(u=>[u.id,jwt.sign({...u},process.env.JWT_SECRET)]));
+const {registerStandardRoutes}=await import('../server/routes/standards.js');
+const store=await import('../server/services/standard-store.js');
+const app=express();app.use(express.json());registerStandardRoutes(app);
+const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+const call=async(user,url,method='GET',body)=>{
+ const r=await fetch(`http://127.0.0.1:${server.address().port}${url}`,{method,headers:{authorization:`Bearer ${tokens[user]}`,'content-type':'application/json'},body:body?JSON.stringify(url.endsWith("/submit") ? {...body,reviewerId:"reviewer"} : body):undefined});return {status:r.status,body:await r.json()};
+};
+try {
+ const input={serialNo:'SP-ROUTE',categoryKey:'gear_damper',customer:'客户',model:'RD-T001',fields:{torque_standard:'12-18'}};
+ assert.equal((await call('reader','/api/standards','POST',input)).status,403);
+ assert.equal((await call('legacyViewer','/api/standards','POST',input)).status,403);
+ let r=await call('editor','/api/standards','POST',input);assert.equal(r.status,201);
+ const id=r.body.data.id;let d=r.body.data;
+ let expected=()=>({versionId:d.versions[0].id,revision:d.versions[0].revision});
+ assert.equal((await call('reader',`/api/standards/${id}`)).status,404);
+ r=await call('editor',`/api/standards/${id}/submit`,'POST',expected());d=r.body.data;
+ assert.equal((await call('reader',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo})).status,403);
+ assert.equal((await call('reviewer',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo})).status,403);
+ assert.equal((await call('missing',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo})).status,401);
+ assert.equal((await call('editor',`/api/standards/${id}/remind`,'POST',{})).status,400);
+ assert.equal((await call('admin',`/api/standards/${id}/remind`,'POST',{versionNo:999})).status,409);
+ const reminder=await call('editor',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
+ assert.equal(reminder.status,200);assert.equal(reminder.body.status,'not_configured');
+ const originalFetch=globalThis.fetch;let manualSends=0;
+ const mockWebhook='https://example.invalid/manual-reminder-test';
+ writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:mockWebhook}));
+ globalThis.fetch=async(url,options)=>{
+  if(String(url)===mockWebhook){manualSends++;return Response.json({errcode:0});}
+  return originalFetch(url,options);
+ };
+ try {
+  const sent=await call('editor',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
+  assert.equal(sent.status,200);assert.equal(sent.body.status,'sent');assert.equal(sent.body.mentionedReviewer,false);
+  const cooled=await call('admin',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
+  assert.equal(cooled.status,429);assert.equal(cooled.body.code,'REMINDER_COOLDOWN');assert(Date.parse(cooled.body.retryAt)>Date.now());
+  assert.equal(manualSends,1);
+ } finally {globalThis.fetch=originalFetch;writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));}
+ assert.equal((await call('reviewer',`/api/standards/${id}/review`,'POST',{...expected(),approve:'false'})).status,400);
+ r=await call('reviewer',`/api/standards/${id}/review`,'POST',{...expected(),approve:true});d=r.body.data;assert.equal(r.status,200);
+ const printable=await call('reader',`/api/standards/${id}?summary=true&comments=current`);
+ assert.equal(printable.status,200);assert.equal(printable.body.currentCommentsIncluded,true);assert.deepEqual(printable.body.data.changes,[]);
+ assert.equal((await call('reader',`/api/standards/${id}/publication`)).status,403);
+ assert.equal((await call('editor',`/api/standards/${id}/publication/retry`,'POST',{})).status,403);
+ const delivery=(await call('admin',`/api/standards/${id}/publication`)).body.data;
+ assert.equal(delivery.status,'not_configured');
+ assert.equal((await call('admin',`/api/standards/${id}/publication/retry`,'POST',{versionId:'stale',revision:delivery.revision})).status,409);
+ assert.equal((await call('admin',`/api/standards/${id}/publication/retry`,'POST',{versionId:delivery.versionId,revision:delivery.revision-1})).status,409);
+ assert.equal((await call('admin',`/api/standards/${id}/publication/retry`,'POST',{versionId:delivery.versionId,revision:delivery.revision})).body.data.status,'not_configured');
+ assert.equal((await call('admin',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo})).status,409);
+ r=await call('editor',`/api/standards/${id}`,'PUT',{...input,...expected(),fields:{torque_standard:'secret-draft'}});d=r.body.data;
+ const visible=await call('reader',`/api/standards/${id}`);assert(!JSON.stringify(visible.body).includes('secret-draft'));
+ const listed=await call('reader','/api/standards');assert.equal(listed.body.data.length,1);assert.equal(listed.body.data[0].fields.torque_standard,'12-18');
+ d=(await call('editor',`/api/standards/${id}/submit`,'POST',expected())).body.data;
+ const reviewerVersion=(await call('reviewer','/api/standards/version')).body.version;
+ users=users.map(u=>u.id==='reviewer'?{...u,permissions:[]}:u);save();
+ assert.notEqual((await call('reviewer','/api/standards/version')).body.version,reviewerVersion,'viewer permissions must invalidate collection version');
+ const restricted=(await call('reviewer','/api/standards?pageSize=1')).body;
+ assert.equal(restricted.canReview,false);assert(JSON.stringify(restricted.data).includes('secret-draft'),'designated reviewer can see only their assigned working version');
+ assert.equal((await call('reader','/api/standards?page=bad')).status,400);
+ assert.equal((await call('reader',`/api/standards/${id}/review`,'POST',{...expected(),approve:true})).status,403);
+ assert.equal((await call('reviewer',`/api/standards/${id}/review`,'POST',{...expected(),approve:true})).status,200);
+ const {setUserPermission}=await import('../server/services/users.js');
+ assert.equal((await setUserPermission('editor','engineering_submit',false)).error,undefined);
+ assert.equal((await call('editor','/api/standards','POST',{...input,serialNo:'SP-REVOKED'})).status,403);
+ assert.equal((await call('editor',`/api/standards/${id}`,'PUT',{...input,...expected()})).status,403);
+ assert.equal((await call('editor',`/api/standards/${id}/submit`,'POST',expected())).status,403);
+ assert.equal((await call('editor','/api/standards')).body.canEdit,false);
+ assert.equal((await setUserPermission('editor','engineering_submit',true)).error,undefined);
+ assert.equal((await call('editor','/api/standards')).body.canEdit,true);
+ assert.equal((await call('editor','/api/standards/import/preview','POST',{records:[input]})).status,403);
+ const roster=await call('editor','/api/standards/reviewers');assert(roster.body.data.some(user=>user.id==='reader'));assert(!roster.body.data.some(user=>user.id==='editor'));
+ const adminCreated=await call('admin','/api/standards','POST',{...input,serialNo:'SP-ADMIN'});assert.equal(adminCreated.body.data.versions[0].status,'published');
+ for(let i=0;i<205;i++) store.createStandard({...input,serialNo:`SP-FULL-${i}`},{id:'admin',name:'管理员',role:'admin'});
+ store.createStandard({...input,serialNo:'SP-FULL-HIDDEN',fields:{torque_standard:'unpublished-full-query'}},{id:'editor',name:'工程'});
+ const all=await call('reader','/api/standards?category=gear_damper&all=true');
+ assert.equal(all.status,200);assert.equal(all.body.pageSize,null);
+ assert.equal(all.body.data.length,all.body.total);assert(all.body.total>200);
+ assert(!JSON.stringify(all.body.data).includes('unpublished-full-query'));
+ assert.equal((await call('reader','/api/standards?all=true')).status,400);
+ const imported={...input,serialNo:'SP-disabled'};
+ const preview=await call('admin','/api/standards/import/preview','POST',{records:[imported]});
+ assert.equal(preview.status,200);
+ const db=store.getDB(), originalBackup=db.backup;
+ db.backup=async (...args)=>{
+  const result=await originalBackup.apply(db,args);
+  users=users.map(u=>u.id==='admin'?{...u,status:'pending'}:u);save();
+  return result;
+ };
+ const confirmation=await call('admin','/api/standards/import/confirm','POST',{records:[imported],token:preview.body.data.token});
+ assert.equal(confirmation.status,403);
+ assert(!store.listStandards().some(x=>x.serialNo==='SP-disabled'));
+ db.backup=originalBackup;
+ console.log('standard route authorization regression passed');
+} finally {await new Promise(resolve=>server.close(resolve));store.closeDB();}

@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import { buildStandardPublicationMessages } from "../server/services/standard-publication.js";
+const standard = { id: "s", serialNo: "SP-TABLE", categoryKey: "gear_damper", categoryName: "齿形阻尼器", sourceComments: [{ versionId: "v", fieldLabel: "测试标准", text: "保留原始批注" }] };
+const version = { id: "v", versionNo: 2, customer: "客户|名称", model: "RD-T001", standardType: "formal", submittedBy: "工程", publishedAt: "2026-10-19T00:00:00Z", fields: { gear_spec: "齿轮A\n齿轮B", test_standard: "12-18", remark: "参数*内容" } };
+const category = { fields: [{ key: "gear_spec", label: "齿轮规格" }, { key: "test_standard", label: "测试标准" }] };
+let messages = buildStandardPublicationMessages(standard, version, category, { reviewerName: "审核员", comment: "已核对" });
+assert.equal(messages[0].type, "text"); assert.deepEqual(messages[0].mentions, ["@all"]);
+assert(messages.slice(1).every(item => item.type === "markdown_v2"));
+let content = messages.slice(1).map(item => item.content).join("\n");
+for (const value of ["| 属性 | 标准内容 |", "基本信息", "完整标准参数", "审核与发布记录", "齿轮A", "齿轮B", "保留原始批注", "已核对", "客户\\|名称"]) assert(content.includes(value), value);
+assert(messages.every(item => Buffer.byteLength(item.content, "utf8") <= (item.type === "text" ? 2048 : 4096)));
+messages = buildStandardPublicationMessages(standard, { ...version, fields: { remark: "超长参数😀\n".repeat(1500) } }, category, {});
+assert(messages.length > 2); assert(messages.every(item => Buffer.byteLength(item.content, "utf8") <= (item.type === "text" ? 2048 : 4096)));
+assert(messages.slice(1).every(item => item.content.includes("| 属性 | 标准内容 |")));
+assert.equal(messages.slice(1).map(item => item.content).join("").split("超长参数😀").length - 1, 1500);
+const sanitary = buildStandardPublicationMessages({ ...standard, categoryKey: "sanitary_damper" }, { ...version, fields: { part_type: "盖" } }, { fields: [{ key: "part_type", label: "产品部位" }] }, { directPublish: true, reviewerName: "管理员" });
+content = sanitary.map(item => item.content).join("");assert(!content.includes("客户料号"));assert(!content.includes("项目代号"));assert(content.includes("管理员直接发布"));assert(content.includes("发布人"));
+console.log("Native publication tables: complete attributes, escaping, repeated headers, byte bounds, long values and direct publication passed.");

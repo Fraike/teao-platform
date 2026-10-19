@@ -7,17 +7,19 @@ import { api, clearToken } from "../lib/api";
 import { getSessionExpiryReason } from "../lib/authSession";
 import { useTabStore } from "../lib/tabStore";
 import { LOGIN_AUTOCOMPLETE } from "../lib/loginConfig";
-import type { AuthSessionMode, LoginRequest } from "../types/auth";
+import type { AuthSessionMode, LoginRequest, PasswordRecoveryRequest } from "../types/auth";
 import styles from "./AuthPage.module.css";
 
 const { Title, Text } = Typography;
 
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [loginForm] = Form.useForm<LoginRequest>();
   const [loginError, setLoginError] = useState("");
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [adminRecovery, setAdminRecovery] = useState(false);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
-  const [recoveryForm] = Form.useForm();
+  const [recoveryForm] = Form.useForm<PasswordRecoveryRequest & { recoveryCode?: string; confirmPassword?: string }>();
   const { message } = App.useApp();
   const login = useAuthStore((s) => s.login);
   const user = useAuthStore((s) => s.user);
@@ -55,16 +57,18 @@ export function LoginPage() {
     }
   };
 
-  const recoverAdminPassword = async () => {
-    const values = await recoveryForm.validateFields();
-    if (values.newPassword !== values.confirmPassword) {
+  const submitRecovery = async () => {
+    const values = await recoveryForm.validateFields().catch(() => null);
+    if (!values) return;
+    if (adminRecovery && values.newPassword !== values.confirmPassword) {
       recoveryForm.setFields([{ name: "confirmPassword", errors: ["两次输入的密码不一致"] }]);
       return;
     }
     setRecoveryLoading(true);
     try {
-      await api.post("/api/auth/admin-recover-password", values);
-      message.success("密码已重置，请使用新密码登录");
+      await api.post(adminRecovery ? "/api/auth/admin-recover-password" : "/api/auth/recover-password",
+        adminRecovery ? { recoveryCode: values.recoveryCode, newPassword: values.newPassword } : { name: values.name, newPassword: values.newPassword });
+      message.success(adminRecovery ? "密码已重置，请使用新密码登录" : "申请已提交，管理员审核通过后请使用新密码登录");
       recoveryForm.resetFields();
       setRecoveryOpen(false);
     } catch (err) {
@@ -91,6 +95,15 @@ export function LoginPage() {
         </div>
 
         <Form
+          name="login"
+          form={loginForm}
+          method="post"
+          action="/login"
+          onSubmitCapture={(event) => {
+            // 密码管理器可能只填写原生输入框，没有触发 React 的 change 事件。
+            const values = new FormData(event.currentTarget);
+            loginForm.setFieldsValue({ username: String(values.get("username") ?? ""), password: String(values.get("password") ?? "") });
+          }}
           onFinish={onFinish}
           size="large"
           autoComplete={LOGIN_AUTOCOMPLETE.form}
@@ -100,7 +113,7 @@ export function LoginPage() {
             <Alert
               type="warning"
               showIcon
-              message={expiredMode === "remember" ? "超过15天未使用，请重新登录" : "登录已过期（超过12小时），请重新登录"}
+              message="登录有效期已满15天，请重新登录"
               className={styles.alert}
             />
           )}
@@ -108,10 +121,10 @@ export function LoginPage() {
             <Alert type="error" showIcon message={loginError} className={styles.alert} closable onClose={() => setLoginError("")} />
           )}
           <Form.Item name="username" rules={[{ required: true, message: "请输入用户名" }]}>
-            <Input name="username" autoComplete={LOGIN_AUTOCOMPLETE.username} prefix={<UserOutlined />} placeholder="用户名" />
+            <Input name="username" aria-label="用户名" autoComplete={LOGIN_AUTOCOMPLETE.username} autoCapitalize="none" spellCheck={false} prefix={<UserOutlined />} placeholder="用户名" />
           </Form.Item>
           <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
-            <Input.Password name="password" autoComplete={LOGIN_AUTOCOMPLETE.password} prefix={<LockOutlined />} placeholder="密码" />
+            <Input.Password name="password" aria-label="密码" autoComplete={LOGIN_AUTOCOMPLETE.password} prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
           <Form.Item name="rememberLogin" valuePropName="checked" className={styles.rememberItem}>
             <Checkbox>15天内免登录</Checkbox>
@@ -123,21 +136,25 @@ export function LoginPage() {
           </Form.Item>
         </Form>
         <div className={styles.footer}>
-          <Button type="link" size="small" onClick={() => setRecoveryOpen(true)}>
-            管理员找回密码
+          <Button type="link" size="small" onClick={() => { setAdminRecovery(false); recoveryForm.resetFields(); setRecoveryOpen(true); }}>
+            忘记密码
           </Button>
           <Text type="secondary" className={styles.footerText}>
             没有账号？<Link to="/register">申请注册</Link>
           </Text>
         </div>
       </Card>
-      <Modal title="管理员找回密码" open={recoveryOpen} onCancel={() => setRecoveryOpen(false)} onOk={recoverAdminPassword} confirmLoading={recoveryLoading} okText="重置密码">
+      <Modal title={adminRecovery ? "管理员找回密码" : "找回密码"} open={recoveryOpen} onCancel={() => { if (!recoveryLoading) setRecoveryOpen(false); }} onOk={submitRecovery} confirmLoading={recoveryLoading} okText={adminRecovery ? "重置密码" : "提交申请"} cancelButtonProps={{ disabled: recoveryLoading }} maskClosable={!recoveryLoading}>
+        {!adminRecovery && <Alert className={styles.alert} type="info" showIcon message="填写注册时的真实姓名和新密码，管理员审核通过后生效。" />}
         <Form form={recoveryForm} layout="vertical">
-          <Form.Item name="username" label="管理员账号" rules={[{ required: true, message: "请输入管理员账号" }]}><Input /></Form.Item>
-          <Form.Item name="recoveryCode" label="管理员恢复码" rules={[{ required: true, message: "请输入恢复码" }]}><Input.Password autoComplete="off" /></Form.Item>
-          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 6, pattern: /^(?=.*[a-zA-Z])(?=.*\d)/, message: "至少6位，且包含字母和数字" }]}><Input.Password autoComplete="new-password" /></Form.Item>
-          <Form.Item name="confirmPassword" label="确认新密码" rules={[{ required: true, message: "请确认新密码" }]}><Input.Password autoComplete="new-password" /></Form.Item>
+          {!adminRecovery && <Form.Item name="name" label="真实姓名" rules={[{ required: true, whitespace: true, message: "请输入注册时的真实姓名" }]}><Input maxLength={100} autoComplete="name" placeholder="注册时填写的真实姓名" /></Form.Item>}
+          {adminRecovery && <Form.Item name="recoveryCode" label="管理员恢复码" rules={[{ required: true, message: "请输入恢复码" }]}><Input.Password autoComplete="off" /></Form.Item>}
+          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 6, max: 128, pattern: /^(?=.*[a-zA-Z])(?=.*\d)/, message: "6-128位，且包含字母和数字" }]}><Input.Password maxLength={128} autoComplete="new-password" /></Form.Item>
+          {adminRecovery && <Form.Item name="confirmPassword" label="确认新密码" rules={[{ required: true, message: "请确认新密码" }]}><Input.Password autoComplete="new-password" /></Form.Item>}
         </Form>
+        <Button type="link" size="small" disabled={recoveryLoading} onClick={() => { recoveryForm.resetFields(); setAdminRecovery(value => !value); }}>
+          {adminRecovery ? "普通用户找回密码" : "管理员找回密码"}
+        </Button>
       </Modal>
     </div>
   );

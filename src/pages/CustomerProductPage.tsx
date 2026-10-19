@@ -5,6 +5,7 @@ import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
 import { getCache, setCache } from "../lib/kingdeeCache";
 import { ResponsiveTable } from "../components/ResponsiveTable";
+import styles from "./DataTablePage.module.css";
 import { createCustomerProductSearchCoordinator } from "../lib/customerProductSearch";
 
 const { Title } = Typography;
@@ -92,7 +93,7 @@ export function CustomerProductPage() {
   ];
 
   return (
-    <div style={{ padding: "16px 16px 16px 8px" }}>
+    <div className={styles.customerProductContainer}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <Title level={4} style={{ margin: 0 }}>客户商品资料</Title>
         <Space>
@@ -133,6 +134,7 @@ export function CustomerProductPage() {
 
       <Spin spinning={loading}>
         <ResponsiveTable
+          fitViewport
           columns={columns}
           dataSource={rows}
           pagination={{ pageSize: PAGE_SIZE, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}

@@ -5,7 +5,14 @@ export interface User {
   role: "admin" | "user";
   status: "active" | "pending";
   permissions: string[];
+  wecomUserid?: string;
   createdAt?: string;
+  passwordResetRequest?: { id: string; requestedAt: string };
+}
+
+export interface PasswordRecoveryRequest {
+  name: string;
+  newPassword: string;
 }
 
 export type AuthSessionMode = "standard" | "remember";

@@ -1,21 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
-import { Button, Tag, message, Popconfirm, Typography, Switch, Modal, Form, Input } from "antd";
+import { Button, Tag, message, Popconfirm, Typography, Tooltip, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
 import type { User } from "../types/auth";
 import styles from "./AdminPage.module.css";
 import { ResponsiveTable } from "../components/ResponsiveTable";
+import { UserPermissionDrawer } from "../components/admin/UserPermissionDrawer";
+import { summarizeUserPermissions } from "../lib/userPermissions";
 
 const { Title } = Typography;
-
-const PERMISSION_OPTIONS = [
-  { key: "business", label: "业务" },
-  { key: "production", label: "装配" },
-  { key: "production_import", label: "生产日报导入（可全量覆盖）" },
-  { key: "hr", label: "人事" },
-  { key: "tools", label: "工具" },
-  { key: "basic_data", label: "基础资料" },
-];
 
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -23,6 +16,9 @@ export function AdminPage() {
   const [resetTarget, setResetTarget] = useState<User | null>(null);
   const [resetting, setResetting] = useState(false);
   const [resetForm] = Form.useForm<{ newPassword: string; confirmPassword: string }>();
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [permissionTargetId, setPermissionTargetId] = useState<string | null>(null);
+  const permissionUser = users.find(user => user.id === permissionTargetId) ?? null;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -51,6 +47,21 @@ export function AdminPage() {
     }
   };
 
+  const handleRecoveryReview = async (record: User, approve: boolean) => {
+    if (!record.passwordResetRequest) return;
+    setReviewingId(record.id);
+    try {
+      await api.post(`/api/admin/users/${record.id}/password-recovery/review`, { requestId: record.passwordResetRequest.id, approve });
+      message.success(approve ? "已通过，新密码已生效" : "已驳回，原密码保持有效");
+      await fetchUsers();
+    } catch (err) {
+      message.error((err as Error).message);
+      await fetchUsers();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   const handleReject = async (id: string) => {
     try {
       await api.post(`/api/admin/users/${id}/reject`);
@@ -62,8 +73,13 @@ export function AdminPage() {
   };
 
   const handleTogglePermission = async (id: string, permission: string, enabled: boolean) => {
+    const result = await api.put<{ ok: boolean; permissions: string[] }>(`/api/admin/users/${id}/permissions`, { permission, enabled });
+    setUsers(current => current.map(user => user.id === id ? { ...user, permissions: result.permissions } : user));
+  };
+
+  const handleUpdateWecom = async (id: string, value: string) => {
     try {
-      await api.put(`/api/admin/users/${id}/permissions`, { permission, enabled });
+      await api.put(`/api/admin/users/${id}/wecom`, { wecomUserid: value.trim() });
       fetchUsers();
     } catch (err) {
       message.error((err as Error).message);
@@ -118,27 +134,60 @@ export function AdminPage() {
       ),
     },
     {
-      title: "模块权限",
+      title: "企业微信账号",
+      dataIndex: "wecomUserid",
+      key: "wecomUserid",
+      width: 180,
+      render: (_: React.Key, record: User) => (
+        <Input
+          key={`${record.id}-${record.wecomUserid || ""}`}
+          defaultValue={record.wecomUserid || ""}
+          placeholder="用于审核@提醒"
+          size="small"
+          onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
+          onBlur={(e) => {
+            const value = e.target.value.trim();
+            if (value !== (record.wecomUserid || "")) handleUpdateWecom(record.id, value);
+          }}
+        />
+      ),
+    },
+    {
+      title: "权限配置",
       key: "permissions",
-      width: 260,
+      width: 230,
       render: (_: React.Key, record: User) => {
         if (record.role === "admin") return <Tag color="red">全部权限</Tag>;
         if (record.status !== "active") return <Tag>待审核</Tag>;
+        const summary = summarizeUserPermissions(record.permissions ?? []);
         return (
           <div className={styles.permissionRow}>
-            {PERMISSION_OPTIONS.map((p) => (
-              <span key={p.key} className={styles.permissionItem}>
-                <Switch
-                  checked={record.permissions?.includes(p.key)}
-                  onChange={(checked) => handleTogglePermission(record.id, p.key, checked)}
-                  size="small"
-                />
-                {p.label}
-              </span>
-            ))}
+            {summary.map(section => <Tooltip key={section.key} title={section.labels.join("、") || "未配置"}>
+              <Tag color={section.key === "pages" ? "blue" : "gold"}>{section.key === "pages" ? "页面" : "操作"} {section.labels.length}</Tag>
+            </Tooltip>)}
+            <Button type="link" size="small" onClick={() => setPermissionTargetId(record.id)}>配置权限</Button>
           </div>
         );
       },
+    },
+    {
+      title: "密码找回申请",
+      key: "passwordRecovery",
+      width: 210,
+      render: (_: React.Key, record: User) => record.passwordResetRequest ? (
+        <div className={styles.recoveryCell}>
+          <Tag color="orange">待审核</Tag>
+          <span>{new Date(record.passwordResetRequest.requestedAt).toLocaleString("zh-CN", { hour12: false })}</span>
+          <div className={styles.actionRow}>
+            <Popconfirm title={`确认已核实 ${record.name}（${record.username}）本人申请？`} description="通过后申请中的新密码生效，旧登录会话失效。" okText="确认通过" cancelText="取消" onConfirm={() => handleRecoveryReview(record, true)}>
+              <Button size="small" type="primary" disabled={reviewingId !== null}>通过</Button>
+            </Popconfirm>
+            <Popconfirm title="驳回此密码找回申请？原密码继续有效。" okText="确认驳回" cancelText="取消" onConfirm={() => handleRecoveryReview(record, false)}>
+              <Button size="small" danger disabled={reviewingId !== null}>驳回</Button>
+            </Popconfirm>
+          </div>
+        </div>
+      ) : "—",
     },
     {
       title: "操作",
@@ -179,15 +228,24 @@ export function AdminPage() {
 
   return (
     <div className={styles.container}>
-      <Title level={4} style={{ marginBottom: 16 }}>用户管理</Title>
+      <div className={styles.header}>
+        <Title level={4}>用户管理</Title>
+        {users.some(user => user.passwordResetRequest) && <Tag color="orange">{users.filter(user => user.passwordResetRequest).length} 条密码找回待审核</Tag>}
+        <Button size="small" loading={loading} onClick={() => void fetchUsers()}>刷新</Button>
+      </div>
       <ResponsiveTable
+        fitViewport
         dataSource={users}
         columns={columns}
         rowKey="id"
         loading={loading}
         pagination={false}
-        minWidth={960}
+        minWidth={1170}
       />
+      <UserPermissionDrawer key={permissionUser?.id ?? "closed"} open={permissionUser !== null} user={permissionUser}
+        onClose={() => setPermissionTargetId(null)} onChange={async (permission, enabled) => {
+          if (permissionUser) await handleTogglePermission(permissionUser.id, permission, enabled);
+        }} />
       <Modal
         title={`重置密码：${resetTarget?.name || ""}`}
         open={!!resetTarget}

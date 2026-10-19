@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'password-recovery-routes-'));
+process.env.NODE_ENV='production';
+process.env.JWT_SECRET='recovery-route-test-secret-at-least-32-characters';
+process.env.INITIAL_ADMIN_PASSWORD='InitialAdmin2026';
+process.env.ADMIN_RECOVERY_CODE='recovery-route-code-at-least-32-characters';
+const require=createRequire(new URL('../server/package.json',import.meta.url));
+const s=await import('../server/services/users.js');
+await s.initDefaultAdmin();
+await s.registerUser({name:'张同事',username:'worker',password:'Original2026'});
+const worker=s.listUsers().find(u=>u.username==='worker');await s.approveUser(worker.id);
+const adminLogin=await s.loginUser({username:'admin',password:'InitialAdmin2026'});
+const workerLogin=await s.loginUser({username:'worker',password:'Original2026'});
+const {registerAuthRoutes}=await import('../server/routes/auth.js');
+const {registerAdminRoutes}=await import('../server/routes/admin.js');
+const {registerNotificationRoutes}=await import('../server/routes/notifications.js');
+const app=require('express')();app.use(require('express').json());registerAuthRoutes(app);registerAdminRoutes(app);registerNotificationRoutes(app);
+const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+const call=async(url,body,token)=>{
+ const response=await fetch(`http://127.0.0.1:${server.address().port}${url}`,{method:body?'POST':'GET',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});
+ return {status:response.status,body:await response.json()};
+};
+try{
+ const requested=await call('/api/auth/recover-password',{name:'张同事',newPassword:'Requested2026'});assert.equal(requested.status,200);
+ assert.equal((await call('/api/auth/login',{username:'worker',password:'Requested2026'})).status,401);
+ assert.equal((await call('/api/admin/users',undefined,workerLogin.token)).status,403);
+ const list=await call('/api/admin/users',undefined,adminLogin.token);const request=list.body.find(u=>u.id===worker.id).passwordResetRequest;
+ assert(!JSON.stringify(list.body).includes('passwordHash'));assert(!JSON.stringify(list.body).includes('Requested2026'));
+ const notices=await call('/api/notifications',undefined,adminLogin.token);assert(notices.body.data.some(n=>n.type==='password_recovery'&&n.link==='/admin'));
+ const regular=await call('/api/notifications',undefined,workerLogin.token);assert(!regular.body.data.some(n=>n.type==='password_recovery'));
+ const url=`/api/admin/users/${worker.id}/password-recovery/review`;
+ assert.equal((await call(url,{requestId:request.id,approve:true},workerLogin.token)).status,403);
+ assert.equal((await call(url,{requestId:request.id,approve:'true'},adminLogin.token)).status,400);
+ assert.equal((await call(url,{requestId:request.id,approve:true},adminLogin.token)).status,200);
+ assert.equal((await call('/api/auth/me',undefined,workerLogin.token)).status,401);
+ assert.equal((await call('/api/auth/login',{username:'worker',password:'Requested2026'})).status,200);
+ assert.equal((await call('/api/notifications',undefined,adminLogin.token)).body.data.some(n=>n.type==='password_recovery'),false);
+ assert.equal((await call('/api/auth/recover-password',{name:'管理员',newPassword:'Takeover2026'})).status,400);
+ assert.equal((await call('/api/auth/admin-recover-password',{recoveryCode:process.env.ADMIN_RECOVERY_CODE,newPassword:'AdminChanged2026'})).status,200);
+ for(let i=0;i<4;i++) await call('/api/auth/recover-password',{name:'张同事',newPassword:'Requested2026'});
+ assert.equal((await call('/api/auth/recover-password',{name:'张同事',newPassword:'Requested2026'})).status,429);
+ console.log('public recovery, admin-only review, notification privacy, rate limit and sole-admin recovery passed');
+}finally{
+ await new Promise(resolve=>server.close(resolve));
+ const {closeDB}=await import('../server/services/standard-store.js');closeDB();
+}

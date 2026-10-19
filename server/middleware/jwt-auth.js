@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { hasProductionImportAccess, isTokenSessionValid } from "../services/users.js";
+import { hasProductionImportAccess, getTokenSessionUser } from "../services/users.js";
 
 export function jwtAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -9,10 +9,11 @@ export function jwtAuth(req, res, next) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    if (!isTokenSessionValid(payload)) {
+    const user = getTokenSessionUser(payload);
+    if (!user) {
       return res.status(401).json({ error: "登录状态已失效，请重新登录" });
     }
-    req.user = payload;
+    req.user = { ...payload, ...user };
     next();
   } catch {
     return res.status(401).json({ error: "登录已过期，请重新登录" });

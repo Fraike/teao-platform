@@ -40,6 +40,7 @@ try {
           return new Response(JSON.stringify({ ok: true, stale: state.productsFail, refreshed: !state.productsFail,
             fetchedAt: "2026-10-09T00:00:00.000Z",
             data: { finishedProducts: [{ id: "new-product", name: "新成品", number: "SP2" }],
+              unclassifiedMaterials: [{ id: "missing", number: "SP0201-A", name: "RD-T023-60" }],
               plasticParts: [{ id: "new-part", name: "新配件", number: "B2" }] } }), { status: 200 });
         }
         if (String(url).startsWith("/api/kingdee/customers?refresh=1")) {
@@ -54,7 +55,8 @@ try {
       assert.equal(result.products.ok, !state.productsFail);
       assert.equal(result.customers.ok, !state.customersFail);
       const display = reference.formatKingdeeRefreshMessage(result);
-      assert.equal(display.level, state.level);
+      assert.equal(display.level, !state.productsFail ? "warning" : state.level);
+      if (!state.productsFail) assert.match(display.content, /SP0201-A/, "API未分类信息必须传递至更新结果");
       assert.match(display.content, state.productsFail ? /商品更新失败/ : /成品 1 条/);
       assert.match(display.content, state.customersFail ? /客户更新失败/ : /客户 2 条/);
       if (!state.productsFail || !state.customersFail) {
@@ -73,6 +75,16 @@ try {
       assert.equal((await reference.getCustomerOptions()).at(-1).value,
         state.customersFail ? "旧客户" : "新增客户");
     }
+
+    const warning = reference.formatKingdeeRefreshMessage({
+      products: { ok: true, finishedCount: 632, plasticCount: 20, fetchedAt: null,
+        unclassifiedMaterials: [{ id: "missing", number: "SP0201-A", name: "RD-T023-60" }] },
+      customers: { ok: true, count: 2, fetchedAt: null },
+    });
+    assert.equal(warning.level, "warning");
+    assert.match(warning.content, /SP0201-A/);
+    assert.match(warning.content, /未分类/);
+    assert.match(warning.content, /金蝶/);
 
     setCache("production_finished_products_v4", oldFinished);
     setCache("production_customers", oldCustomers);

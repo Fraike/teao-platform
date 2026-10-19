@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 const RECOVERY = {
-  assembly: { table: "assembly_records", firstAuditId: 9499, lastAuditId: 16986, expected: 3090 },
-  injection: { table: "injection_records", firstAuditId: 5788, lastAuditId: 13275, expected: 4037 },
+  assembly: { table: "assembly_records", firstAuditId: 9499, lastAuditId: 13275, expected: 3090 },
+  injection: { table: "injection_records", firstAuditId: 5788, lastAuditId: 13218, expected: 4037 },
 };
 
 function columnsFor(db, table) {
@@ -65,13 +66,49 @@ export function rebuildPreImportRows(db, department, plans = RECOVERY) {
   return [...rows.values()].sort((a, b) => a.id - b.id);
 }
 
+function postImportRows(db, expectedCurrent, plans) {
+  const preserve = expectedCurrent.preservePostImport;
+  const rows = { assembly: [], injection: [] };
+  if (!preserve) return rows;
+  const { firstAuditId, count } = preserve;
+  if (!Number.isSafeInteger(firstAuditId) || !Number.isSafeInteger(count) || count < 1 ||
+      firstAuditId + count - 1 !== expectedCurrent.lastAuditId) {
+    throw new Error("新增记录审计范围与预期不符，禁止恢复");
+  }
+  const logs = db.prepare("SELECT * FROM audit_log WHERE id BETWEEN ? AND ? ORDER BY id")
+    .all(firstAuditId, expectedCurrent.lastAuditId);
+  if (logs.length !== count) throw new Error("新增记录审计存在缺失，禁止恢复");
+  for (const [index, log] of logs.entries()) {
+    if (log.id !== firstAuditId + index || log.action !== "INSERT" || log.field_name !== "*" || !plans[log.record_type]) {
+      throw new Error(`新增记录审计含非新增操作：${log.id}`);
+    }
+    const snapshot = JSON.parse(log.new_value);
+    const current = db.prepare(`SELECT * FROM ${plans[log.record_type].table} WHERE id = ?`).get(log.record_id);
+    if (snapshot.id !== log.record_id || !current || !isDeepStrictEqual(snapshot, current)) {
+      throw new Error(`新增记录已变化或缺失：${log.id}`);
+    }
+    rows[log.record_type].push(current);
+  }
+  return rows;
+}
+
 export function restorePreImportRowsOnCopy(db, expectedCurrent, plans = RECOVERY) {
   const firstAuditId = Math.min(...Object.values(plans).map((plan) => plan.firstAuditId));
   const lastAuditId = Math.max(...Object.values(plans).map((plan) => plan.lastAuditId));
   const auditRange = db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE id BETWEEN ? AND ?").get(firstAuditId, lastAuditId).count;
   if (auditRange !== lastAuditId - firstAuditId + 1) throw new Error("审计范围存在缺失，禁止恢复");
+  const preserved = postImportRows(db, expectedCurrent, plans);
   const assembly = rebuildPreImportRows(db, "assembly", plans);
   const injection = rebuildPreImportRows(db, "injection", plans);
+  for (const [department, rows] of [["assembly", assembly], ["injection", injection]]) {
+    const ids = new Set(rows.map((row) => row.id));
+    for (const row of preserved[department]) {
+      if (ids.has(row.id)) throw new Error(`新增记录 ID 与恢复记录冲突：${row.id}`);
+      ids.add(row.id);
+      rows.push(row);
+    }
+    rows.sort((a, b) => a.id - b.id);
+  }
   const actual = Object.fromEntries(Object.values(plans).map(({ table }) => [table, db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count]));
   if (actual.assembly_records !== expectedCurrent.assembly || actual.injection_records !== expectedCurrent.injection) {
     throw new Error("当前日报条数与预期不同，禁止恢复");
@@ -104,11 +141,11 @@ export function restorePreImportRowsOnCopy(db, expectedCurrent, plans = RECOVERY
       const insert = db.prepare(`INSERT INTO ${table} (${names.join(",")}) VALUES (${names.map((name) => `@${name}`).join(",")})`);
       db.prepare(`DELETE FROM ${table}`).run();
       for (const row of rows) insert.run(row);
-      if (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count !== plans[department].expected) throw new Error("恢复校验失败");
+      if (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count !== rows.length) throw new Error("恢复校验失败");
     }
     db.prepare(`INSERT INTO audit_log (record_type, record_id, action, field_name, old_value, new_value, changed_by, changed_at)
       VALUES ('recovery', 0, 'RESTORE', '*', ?, ?, 'system', ?)`)
-      .run(JSON.stringify(actual), JSON.stringify({ assembly: 3090, injection: 4037 }), new Date().toISOString());
+      .run(JSON.stringify(actual), JSON.stringify({ assembly: assembly.length, injection: injection.length }), new Date().toISOString());
   });
   restore();
   return { assembly: assembly.length, injection: injection.length };

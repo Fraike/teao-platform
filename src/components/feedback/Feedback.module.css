@@ -1,0 +1,16 @@
+.entry { flex-shrink: 0; padding: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.entry .entryButton { width: 100%; display: flex; justify-content: flex-start; align-items: center; color: #cbd5e1; }
+.entry .entryButton:hover { color: #fff !important; background: rgba(255, 255, 255, 0.08) !important; }
+.entry .collapsed { justify-content: center; }
+.context { padding: 10px 12px; margin-bottom: 20px; background: #f5f7fa; border-radius: 6px; color: #334155; overflow-wrap: anywhere; }
+.context span { color: #64748b; margin-left: 8px; font-size: 12px; }
+.listToolbar { margin-bottom: 12px; }
+.statusFilter { min-width: 130px; }
+.section { margin-top: 24px; }
+.section h4 { margin: 0 0 12px; font-size: 14px; }
+.description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.screenshots { display: flex; flex-wrap: wrap; gap: 10px; }
+.screenshots :global(.ant-image) { width: 140px; }
+.screenshots :global(.ant-image-img) { height: 100px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; }
+.reply { margin: 12px 0; }
+.handler { margin-top: 12px; color: #64748b; font-size: 12px; }

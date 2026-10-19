@@ -1,10 +1,12 @@
 import { readConfig, onProductionConfigChange, formatShanghaiDate, isRestDay, getLastWorkingDay } from "../config.js";
 import { sendProductionReport } from "./production-report-control.js";
+import { isReleaseMaintenance } from "./release-maintenance.js";
 
 export function createProductionScheduler(cron, send = sendProductionReport, todayDate = formatShanghaiDate) {
   let task = null;
   let unsubscribe = null;
   async function callback() {
+    if (isReleaseMaintenance()) return;
     try {
       const config = readConfig();
       const today = todayDate();

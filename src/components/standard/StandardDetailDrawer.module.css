@@ -1,0 +1,28 @@
+.reviewComment {
+  margin-top: 16px;
+}
+
+.changesTable {
+  margin-bottom: 8px;
+}
+
+.reviewerSelect { width: 170px; }
+
+.reviewTask {
+  margin: 12px 0 16px;
+}
+
+.reviewFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0;
+}
+
+.testHistory {
+  margin-top: 16px;
+}
+
+.historyText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -13,18 +13,21 @@ import {
   SortAscendingOutlined, SortDescendingOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { api, getToken } from "../lib/api";
+import { createProductionSaveQueue } from "../lib/productionSaveQueue";
+import { api } from "../lib/api";
 import { useAuthStore } from "../lib/authStore";
 import type { ProductionRecord, DailyGroup, ProductionQueryResponse, AuditLog } from "../types/production";
 import { PROCESS_FIELDS } from "../types/production";
 import { EntryDrawer } from "../components/production/EntryDrawer";
 import { EditableCell } from "../components/production/EditableCell";
 import { ProductionImportModal } from "../components/production/ProductionImportModal";
-import { ResponsiveTable } from "../components/ResponsiveTable";
+import { ProductionDateTable } from "../components/productionDateTable";
+import { useProductionHistory } from "../lib/productionHistory";
+import { buildAssemblySummary, replaceProductionRecord } from "../lib/productionGroups";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
-import { sortRecordsByOrderQty, splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
+import { splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
 import { KingdeeDataRefreshButton } from "../components/production/KingdeeDataRefreshButton";
-import { getProductionDailyTableSticky, productionDailyPagination } from "../lib/productionTable";
+import { getProductionDailyTableSticky } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
 
 const { RangePicker } = DatePicker;
@@ -78,6 +81,7 @@ const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
 ];
 
 export function ProductionEntryPage() {
+  const [saveQueue] = useState(() => createProductionSaveQueue());
   const currentUser = useAuthStore((state) => state.user);
   const canImport = currentUser?.role === "admin" || (currentUser?.permissions.includes("production") && currentUser.permissions.includes("production_import"));
   // ---- 所有筛选条件使用本地状态，点击"搜索"才提交 ----
@@ -108,13 +112,12 @@ export function ProductionEntryPage() {
 
   const [lines, setLines] = useState<string[]>([]);
   const [orderQtySort, setOrderQtySort] = useState<OrderQtySort>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyData, setHistoryData] = useState<AuditLog[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const historyCacheRef = useRef(new Map<number, AuditLog[]>());
-  const dailyTableSticky = contentElement
+  const { open: historyOpen, data: historyData, loading: historyLoading,
+    show: showHistory, close: closeHistory, invalidate: invalidateHistory,
+  } = useProductionHistory<AuditLog>("/api/production/entries");
+  const dailyTableSticky = useMemo(() => contentElement
     ? getProductionDailyTableSticky(() => contentElement)
-    : undefined;
+    : undefined, [contentElement]);
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
 
@@ -199,37 +202,25 @@ export function ProductionEntryPage() {
 
   const cellSave = useCallback(async (rec: ProductionRecord, field: keyof ProductionRecord, val: string | number) => {
     try {
-      await api.put(`/api/production/entries/${rec.id}`, { [field]: val });
-      historyCacheRef.current.delete(rec.id);
-      setGroups((prev) => prev.map((g) => ({
-        ...g, records: g.records.map((r) => r.id === rec.id ? { ...r, [field]: val } : r),
-      })));
+      await saveQueue.run(rec.id, async () => {
+        const response = await api.put<{ ok: boolean; data: ProductionRecord }>(`/api/production/entries/${rec.id}`, { [field]: val });
+        invalidateHistory(rec.id);
+        setGroups((current) => replaceProductionRecord(current, response.data, buildAssemblySummary));
+      });
     } catch { message.error("更新失败"); }
-  }, []);
+  }, [saveQueue, invalidateHistory]);
 
   const add = useCallback((date?: string) => { setEditingRecord(null); setCopyFromRecord(null); setDefaultDate(date || fDateTo); setDrawerOpen(true); }, [fDateTo]);
   const edit = useCallback((rec: ProductionRecord) => { setEditingRecord(rec); setCopyFromRecord(null); setDefaultDate(""); setDrawerOpen(true); }, []);
   const copy = useCallback((rec: ProductionRecord) => { setEditingRecord(null); setCopyFromRecord(rec); setDefaultDate(""); setDrawerOpen(true); }, []);
   const del = useCallback(async (id: number) => {
-    try { await api.delete(`/api/production/entries/${id}`); historyCacheRef.current.delete(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
+    try { await api.delete(`/api/production/entries/${id}`); invalidateHistory(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
     catch { message.error("删除失败"); }
-  }, [fetchData]);
+  }, [fetchData, invalidateHistory]);
   const onDrawerClose = (saved: boolean) => {
     setDrawerOpen(false); setEditingRecord(null); setCopyFromRecord(null);
-    if (saved) { historyCacheRef.current.clear(); offsetRef.current = 0; fetchData(false); }
+    if (saved) { invalidateHistory(); offsetRef.current = 0; fetchData(false); }
   };
-  const showHistory = useCallback(async (id: number) => {
-    setHistoryOpen(true); setHistoryLoading(true); setHistoryData([]);
-    const cached = historyCacheRef.current.get(id);
-    if (cached) { setHistoryData(cached); setHistoryLoading(false); return; }
-    try {
-      const tk = getToken();
-      const r = await fetch(`/api/production/entries/${id}/history`, { headers: tk ? { Authorization: `Bearer ${tk}` } : {} });
-      const d = await r.json();
-      if (d.ok) { historyCacheRef.current.set(id, d.data); setHistoryData(d.data); }
-    } catch { message.error("加载失败"); }
-    finally { setHistoryLoading(false); }
-  }, []);
   const toggleOrderQtySort = useCallback(() => {
     setOrderQtySort((current) => current === null ? "desc" : current === "desc" ? "asc" : null);
   }, []);
@@ -245,9 +236,7 @@ export function ProductionEntryPage() {
     filler: "填表人", remark: "备注",
   };
 
-  const rowCls = (_: unknown, i: number) => i % 2 === 0 ? "table-row-even" : "table-row-odd";
-
-  const columns = useMemo<ColumnsType<ProductionRecord & { key: number }>>(() => [
+  const columns = useMemo<ColumnsType<ProductionRecord>>(() => [
     { title: "产线", dataIndex: "line", key: "ln", width: 42, fixed: "left",
       render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "dt", width: 76, fixed: "left",
@@ -301,7 +290,7 @@ export function ProductionEntryPage() {
           onSave={(v) => cellSave(rec, key as keyof ProductionRecord, v)}
           format={(v) => <StaffTags text={v as string} />} />
       ),
-    })) as ColumnsType<ProductionRecord & { key: number }>],
+    })) as ColumnsType<ProductionRecord>],
     { title: "填表人", dataIndex: "filler", key: "fl", width: 56,
       render: (v: string) => v ? <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> : "-" },
     { title: "备注", dataIndex: "remark", key: "rm", width: 80, ellipsis: true,
@@ -352,7 +341,7 @@ export function ProductionEntryPage() {
           <KingdeeDataRefreshButton />
           <Tooltip title="导出 Excel"><Button size="small" icon={<DownloadOutlined />} onClick={exportExcel} loading={exporting} /></Tooltip>
           {canImport && <Button size="small" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>}
-          <Button size="small" icon={<ReloadOutlined />} onClick={() => { offsetRef.current = 0; fetchData(false); }} />
+          <Button size="small" icon={<ReloadOutlined />} onClick={() => { invalidateHistory(); offsetRef.current = 0; fetchData(false); }} />
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => add()}>新增录入</Button>
         </div>
       </div>
@@ -389,13 +378,8 @@ export function ProductionEntryPage() {
                   }
                   size="small"
                 >
-                  <ResponsiveTable
-                    columns={columns}
-                    dataSource={sortRecordsByOrderQty(group.records, orderQtySort).map((record) => ({ ...record, key: record.id }))}
-                    pagination={productionDailyPagination} size="small" minWidth={2050} bordered
-                    rowClassName={rowCls} locale={{ emptyText: "暂无数据" }}
-                    sticky={dailyTableSticky}
-                  />
+                  <ProductionDateTable records={group.records} columns={columns} orderQtySort={orderQtySort}
+                    minWidth={2050} sticky={dailyTableSticky} />
                 </Card>
               ))}
               {hasMore && (
@@ -421,12 +405,12 @@ export function ProductionEntryPage() {
           setFProduct("");
           setFCustomer("");
           setFSearch("");
-          historyCacheRef.current.clear();
+          invalidateHistory();
           offsetRef.current = 0;
         }}
       />
 
-      <Modal title="修改历史" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={700}>
+      <Modal title="修改历史" open={historyOpen} onCancel={closeHistory} footer={null} width={700}>
         <Spin spinning={historyLoading}>
           {historyData.length === 0 && !historyLoading ? (
             <div style={{ color: "#999", textAlign: "center", padding: 20 }}>暂无修改记录</div>

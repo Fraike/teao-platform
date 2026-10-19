@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync} from 'node:fs';import os from 'node:os';import path from 'node:path';
+process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'standard-query-'));
+const s=await import('../server/services/standard-store.js');s.initDB();
+const a={id:'a',name:'甲'},b={id:'b',name:'乙',role:'admin'};
+const input={serialNo:'SP-1',categoryKey:'gear_damper',customer:'客户%',model:'M1',fields:{torque_standard:'12-18'}};
+const exp=d=>({versionId:d.versions[0].id,revision:d.versions[0].revision});
+try{
+ let first=s.createStandard(input,a);first=s.submitStandard(first.id,a,exp(first));first=s.reviewStandard(first.id,{approve:true,...exp(first)},b);
+ const second=s.createStandard({...input,serialNo:'SP-2',customer:'其他客户'},a);
+ first=s.updateStandard(first.id,{...input,customer:'未发布秘密',...exp(first)},a);first=s.submitStandard(first.id,a,exp(first));
+ const page=s.listStandardPage({onlyPublished:true,page:1,pageSize:1,customer:'客户%'});
+ assert.equal(page.total,1);assert.equal(page.data[0].customer,'客户%');assert.equal(page.data[0].hasPending,false);
+ assert.equal(s.listStandardPage({onlyPublished:true,customer:'秘密'}).total,0);
+ page.data[0].customer='cache poisoning';assert.equal(s.listStandardPage({onlyPublished:true,page:1,pageSize:1,customer:'客户%'}).data[0].customer,'客户%');
+ const summary=s.getStandard(first.id,{onlyPublished:true,includeHistory:false});assert.equal(summary.versions.length,1);assert.equal(summary.changes.length,0);
+ const history=s.getStandardHistory(first.id,{onlyPublished:true,section:'versions',pageSize:1});assert.equal(history.total,1);assert.equal(history.data[0].status,'published');
+ assert.ok(!s.getStandardHistory(first.id,{onlyPublished:true,section:'changes'}).data.some(change=>change.description.includes('秘密')));
+ assert.throws(()=>s.getStandardHistory(first.id,{section:'invalid'}),e=>e.status===400);
+ const insertComment=s.getDB().prepare('INSERT INTO product_standard_excel_comments(id,standard_id,version_id,source_cell,field_key,field_label,author,text) VALUES(?,?,?,?,?,?,?,?)');
+ insertComment.run('secret-comment',first.id,first.versions[0].id,'A1','model','型号','甲','秘密批注');
+ insertComment.run('public-comment',first.id,summary.versions[0].id,'A2','model','型号','甲','公开批注');
+ const comments=s.getStandardHistory(first.id,{onlyPublished:true,section:'comments'});assert.equal(comments.total,1);assert.equal(comments.data[0].text,'公开批注');
+ assert.equal(s.listStandardPage({page:2,pageSize:1}).data[0].id,second.id);
+ assert.equal(s.listStandardPage({page:1,pageSize:999}).pageSize,200);
+ assert.equal(s.listStandardPage({status:'pending_review',vehicleModel:'no'}).total,0);
+ const notifications=s.listPendingStandardNotifications(b);assert.equal(notifications.total,1);assert.equal(notifications.items[0].id,first.id);
+ assert.equal(s.listPendingStandardNotifications(a).total,0);
+ const stamp=s.getStandardQueryVersion();s.createStandard({...input,serialNo:'SP-3'},b);assert.notEqual(s.getStandardQueryVersion(),stamp);
+ assert.throws(()=>s.listStandardPage({page:'bad'}),e=>e.status===400);
+ console.log('standard SQL pagination, view permissions, filters, notifications and invalidation passed');
+}finally{s.closeDB();}

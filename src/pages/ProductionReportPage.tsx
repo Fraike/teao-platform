@@ -281,7 +281,7 @@ export function ProductionReportPage() {
                 <Col xs={12} sm={4}><Statistic title="不良数" value={asm?.totalDefects || 0} suffix="PCS" className={asm && asm.totalDefects > 0 ? styles.defectTotal : styles.goodTotal} /></Col>
                 <Col xs={12} sm={4}><Statistic title={`最新欠数${asm?.backorderAsOf ? `（${asm.backorderAsOf}）` : ""}`} value={asm?.latestBackorder || 0} suffix="PCS" className={styles.backorderTotal} /></Col>
               </Row></Card>
-              <ResponsiveTable<ProductionReportProduct> columns={assemblyColumns} dataSource={records.assembly?.records || []} rowKey="id" loading={recordsLoading && activeTab === "assembly"} pagination={{ current: records.assembly?.page || 1, pageSize: PAGE_SIZE, total: records.assembly?.total || 0, showSizeChanger: false, onChange: (page) => void fetchRecords("assembly", page) }} size="small" minWidth={1400} bordered />
+              <ResponsiveTable<ProductionReportProduct> bottomScrollbar={false} columns={assemblyColumns} dataSource={records.assembly?.records || []} rowKey="id" loading={recordsLoading && activeTab === "assembly"} pagination={{ current: records.assembly?.page || 1, pageSize: PAGE_SIZE, total: records.assembly?.total || 0, showSizeChanger: false, onChange: (page) => void fetchRecords("assembly", page) }} size="small" minWidth={1400} bordered />
             </Tabs.TabPane>
             <Tabs.TabPane tab={`注塑部（${inj?.machines || 0} 台机台 / ${inj?.machineShifts || 0} 个班次）`} key="injection">
               <Card size="small" className={styles.departmentSummary}><Row gutter={[16, 8]}>
@@ -290,7 +290,7 @@ export function ProductionReportPage() {
                 <Col xs={12} sm={6}><Statistic title="合格率" value={formatReportRate(inj?.avgQualifiedRate)} className={rateClass(inj?.avgQualifiedRate)} /></Col>
                 <Col xs={12} sm={6}><Statistic title="不良数" value={inj?.totalDefects || 0} suffix="PCS" className={inj && inj.totalDefects > 0 ? styles.defectTotal : styles.goodTotal} /></Col>
               </Row></Card>
-              <ResponsiveTable<ProductionReportProduct> columns={injectionColumns} dataSource={records.injection?.records || []} rowKey="id" loading={recordsLoading && activeTab === "injection"} pagination={{ current: records.injection?.page || 1, pageSize: PAGE_SIZE, total: records.injection?.total || 0, showSizeChanger: false, onChange: (page) => void fetchRecords("injection", page) }} size="small" minWidth={1350} bordered />
+              <ResponsiveTable<ProductionReportProduct> bottomScrollbar={false} columns={injectionColumns} dataSource={records.injection?.records || []} rowKey="id" loading={recordsLoading && activeTab === "injection"} pagination={{ current: records.injection?.page || 1, pageSize: PAGE_SIZE, total: records.injection?.total || 0, showSizeChanger: false, onChange: (page) => void fetchRecords("injection", page) }} size="small" minWidth={1350} bordered />
             </Tabs.TabPane>
           </Tabs>
         </> : <Card className={styles.emptyCard}><div className={styles.emptyText}>{loading ? "正在获取生产汇总数据..." : `${rangeLabel} 暂无生产数据`}</div>{!loading && <Button type="primary" icon={<ReloadOutlined />} onClick={refresh}>刷新数据</Button>}</Card>}

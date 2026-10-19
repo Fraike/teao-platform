@@ -87,6 +87,12 @@ echo ""
 echo -e "${CYAN}============================================${NC}"
 echo -e "${GREEN}✅ 所有服务已启动！${NC}"
 echo -e "${CYAN}  前端: http://localhost:5173${NC}"
+if command -v ipconfig >/dev/null 2>&1; then
+  LAN_ADDRESS=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+  if [ -n "$LAN_ADDRESS" ]; then
+    echo -e "${CYAN}  同一局域网访问: http://${LAN_ADDRESS}:5173${NC}"
+  fi
+fi
 echo -e "${CYAN}  后端: http://127.0.0.1:3899${NC}"
 echo -e "${YELLOW}  按 Ctrl+C 停止所有服务${NC}"
 echo -e "${CYAN}============================================${NC}"

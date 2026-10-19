@@ -1,0 +1,8 @@
+.body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.fieldGroup { margin: 0; }
+.groupTitle { margin: 12px 0; padding: 7px 10px; background: #f5f7fa; border-radius: 4px; font-size: 14px; color: #334155; }

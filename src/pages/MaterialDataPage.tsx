@@ -311,13 +311,13 @@ export function MaterialDataPage() {
           ) : (
             <div className={styles.tableWrap}>
               <ResponsiveTable
+                fitViewport
                 columns={columns}
                 dataSource={filteredMaterials}
                 rowKey="id"
                 loading={loading}
                 size="small"
                 minWidth={1000}
-                scroll={{ y: "calc(100vh - 280px)" }}
                 pagination={{
                   defaultPageSize: 50,
                   showSizeChanger: true,

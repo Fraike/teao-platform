@@ -16,6 +16,6 @@ assert.ok(adminTitles.includes("技术资料（流程查阅）"));
 assert.ok(adminTitles.includes("用户管理"));
 
 const productionTitles = getVisibleNavigationItems(productionUser).map((item) => item.title);
-assert.deepEqual(productionTitles, ["生产日报汇总", "装配部生产日报", "注塑部生产日报"]);
+assert.deepEqual(productionTitles, ["生产日报汇总", "装配部生产日报", "注塑部生产日报", "产品标准"]);
 
 console.log("Navigation tests passed.");

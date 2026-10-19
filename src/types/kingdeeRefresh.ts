@@ -1,5 +1,11 @@
+export interface UnclassifiedKingdeeMaterial {
+  id: string;
+  number: string;
+  name: string;
+}
+
 export type KingdeeProductRefresh =
-  | { ok: true; finishedCount: number; plasticCount: number; fetchedAt: string | null }
+  | { ok: true; finishedCount: number; plasticCount: number; fetchedAt: string | null; unclassifiedMaterials?: UnclassifiedKingdeeMaterial[] }
   | { ok: false; error: string };
 
 export type KingdeeCustomerRefresh =

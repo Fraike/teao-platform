@@ -1,28 +1,22 @@
 import { clearAuthSession, getAuthSessionMode, getSessionExpiryReason, markAuthTokenRefreshed } from "./authSession.ts";
-
-const TOKEN_KEY = "auth_token";
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
+import { getToken, setToken, removeStoredToken } from "./authToken.ts";
+export { getToken, setToken } from "./authToken.ts";
 
 export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  removeStoredToken();
   clearAuthSession();
 }
 
 export class ApiError extends Error {
   status: number;
   code?: string;
-  constructor(message: string, status: number, code?: string) {
+  retryAt?: string;
+  constructor(message: string, status: number, code?: string, retryAt?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.retryAt = retryAt;
   }
 }
 
@@ -89,7 +83,7 @@ async function request<T>(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new ApiError(data.error || `请求失败 (${res.status})`, res.status, typeof data.code === "string" ? data.code : undefined);
+    throw new ApiError(data.error || `请求失败 (${res.status})`, res.status, typeof data.code === "string" ? data.code : undefined, typeof data.retryAt === "string" ? data.retryAt : undefined);
   }
   return data as T;
 }

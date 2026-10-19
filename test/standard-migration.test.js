@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'standard-migration-'));
+const s=await import('../server/services/standard-store.js');
+s.initDB();
+const d=s.getDB();
+// Simulate an old unlinked audit record: it must remain internal, never leak through public history.
+const standard=s.createStandard({serialNo:'SP-legacy',customer:'客户',model:'RD-T001',categoryKey:'gear_damper',fields:{}},{id:'a',name:'甲'});
+d.prepare("UPDATE product_standard_changes SET version_id = ''").run();
+const expected=()=>({versionId:s.getStandard(standard.id).versions[0].id,revision:s.getStandard(standard.id).versions[0].revision});
+s.submitStandard(standard.id,{id:'a',name:'甲'},expected());
+s.reviewStandard(standard.id,{approve:true,...expected()},{id:'b',name:'乙'});
+assert.equal(s.getStandard(standard.id).changes.length,3);
+assert.equal(s.getStandard(standard.id,{onlyPublished:true}).changes.length,2);
+s.initDB();assert.equal(s.getStandard(standard.id).versions[0].revision,3);
+s.updateStandard(standard.id, {fields: {}, ...expected()}, {id:'a',name:'甲'});
+s.submitStandard(standard.id,{id:'a',name:'甲'},expected());
+d.prepare("UPDATE product_standard_versions SET submitted_by_id = '' WHERE status = 'pending_review'").run();
+assert.throws(()=>s.reviewStandard(standard.id,{approve:true,...expected()},{id:'a',name:'改名'}),e=>e.status===409);
+s.submitStandard(standard.id,{id:'a',name:'改名'},expected());
+assert.throws(()=>s.reviewStandard(standard.id,{approve:true,...expected()},{id:'a',name:'改名'}),/自己/);
+s.reviewStandard(standard.id,{approve:true,...expected()},{id:'b',name:'乙'});
+s.closeDB();console.log('standard migration safety passed');

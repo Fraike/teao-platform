@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       "/api/auth/login",
       req
     );
-    setToken(data.token);
+    setToken(data.token, req.rememberLogin === true);
     startAuthSession(req.rememberLogin === true);
     useTabStore.getState().resetForAuthentication();
     set({ user: data.user });
@@ -81,7 +81,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   changeAdminPassword: async (currentPassword, newPassword) => {
     const data = await api.post<{ token: string }>("/api/auth/change-password", { currentPassword, newPassword });
-    setToken(data.token);
+    setToken(data.token, getAuthSessionMode() === "remember");
     markAuthTokenRefreshed();
   },
 }));

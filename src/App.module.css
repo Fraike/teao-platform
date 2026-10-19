@@ -1,5 +1,7 @@
 .sider {
   background: #001529 !important;
+  /* 宽度动画会让整页大表格逐帧重排；侧栏尺寸直接切换。 */
+  transition-property: background-color;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -85,4 +87,66 @@
   display: block;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.headerUserArea {
+  flex-shrink: 0;
+}
+
+.rootLayout,
+.mainLayout {
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+}
+
+.rootLayout {
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  flex: 0 0 56px;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 16px;
+  line-height: normal;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.content {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #f5f5f5;
+}
+
+.pageViewport {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pageViewport > :first-child {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.footer {
+  flex: 0 0 auto;
+  padding: 4px 16px;
+  color: #999;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.footerLink {
+  color: #999;
+  text-decoration: none;
 }

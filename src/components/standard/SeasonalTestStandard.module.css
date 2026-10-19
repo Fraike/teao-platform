@@ -1,0 +1,41 @@
+.seasons {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.season {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.label {
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.value {
+  min-width: 0;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #f1f4f8;
+  color: #334155;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.range {
+  white-space: nowrap;
+}
+
+.winter {
+  color: #0958d9;
+  flex-shrink: 0;
+}

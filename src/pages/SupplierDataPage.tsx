@@ -124,12 +124,12 @@ export function SupplierDataPage() {
           <Empty description="没有匹配的供应商" />
         ) : (
           <ResponsiveTable
+            fitViewport
             columns={columns}
             dataSource={filtered}
             rowKey="id"
             size="small"
             minWidth={1000}
-            scroll={{ y: "calc(100vh - 340px)" }}
             pagination={{
               defaultPageSize: 50,
               showSizeChanger: true,

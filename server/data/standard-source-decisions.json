@@ -1,0 +1,27 @@
+{
+  "sourceHash": "f6267272947847810a542d7124f908bc03629ec243c6a65bf44719d34db89723",
+  "sheet": "客户阻力值标准一览表-最新",
+  "decisions": [
+    {
+      "serialNo": "SP0103-A",
+      "customer": "芜湖中生▲",
+      "model": "RD-T020-800",
+      "categoryKey": "gear_damper",
+      "status": "obsolete",
+      "evidence": "此行作废，放筒型阻尼器行内",
+      "confirmation": "用户确认停用、保留历史（2026-10-13）"
+    },
+    {
+      "serialNo": "SP0103-A",
+      "customer": "芜湖中生▲",
+      "model": "RD-T020-800",
+      "categoryKey": "gear_damper",
+      "status": "obsolete",
+      "evidence": "此行作废，放筒型阻尼器行内",
+      "confirmation": "用户确认新版正式基线沿用停用决定（2026-10-19）",
+      "sourceHash": "b23fbed1f4d9812281fab5a30b261910678ec8faaf870313acabaf70dfbb2cb0",
+      "sourceSheet": "客户阻力值标准一览表-最新",
+      "sourceRow": 196
+    }
+  ]
+}

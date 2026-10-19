@@ -2,6 +2,11 @@ name: Deploy to Server
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: '输入 release 确认发布代码；不执行数据迁移'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,7 +17,9 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'release'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v6
 
@@ -29,51 +36,31 @@ jobs:
 
       - run: npm test
 
+      - run: node --test test/release-safety.test.js test/sanitary-migration-cli.test.js
+
       - run: npm run build
 
-      - name: Deploy static files
-        uses: easingthemes/ssh-deploy@v6.0.3
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i"
-          EXCLUDE: "/data/, /server/"
-          REMOTE_HOST: 8.134.18.9
-          REMOTE_USER: root
-          SOURCE: "dist/"
-          TARGET: "/var/www/teao-platform/"
+      - name: Package reviewed release (no runtime data)
+        run: |
+          node server/scripts/release-package.js "$GITHUB_WORKSPACE" "$RUNNER_TEMP/teao-release"
+          mkdir -p release-upload
+          tar -czf release-upload/release.tar.gz -C "$RUNNER_TEMP/teao-release" .
 
-      - name: Deploy API server
+      - name: Stage and release static + API together
         uses: easingthemes/ssh-deploy@v6.0.3
         with:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          ARGS: "-rlgoDzvc -i"
-          EXCLUDE: "production-config.json, .env, .env.*, node_modules/"
+          ARGS: "-rlgoDz -i"
           REMOTE_HOST: 8.134.18.9
           REMOTE_USER: root
-          SOURCE: "server/"
-          TARGET: "/var/www/teao-platform/server/"
+          SOURCE: "release-upload/"
+          TARGET: "/var/lib/teao-platform/incoming/${{ github.run_id }}-${{ github.run_attempt }}/"
           SCRIPT_AFTER: |
-            install -d -m 700 /etc/teao-platform
-            test -s /etc/teao-platform/teao-api.env
-            chmod 600 /etc/teao-platform/teao-api.env
-            for key in JWT_SECRET DATA_DIR KINGDEE_CLIENT_ID KINGDEE_CLIENT_SECRET INITIAL_ADMIN_PASSWORD ADMIN_RECOVERY_CODE; do
-              grep -q "^${key}=." /etc/teao-platform/teao-api.env
-            done
-            cd /var/www/teao-platform/server && npm install --production
-            cp -f /var/www/teao-platform/server/teao-api.service /etc/systemd/system/teao-api.service
-            systemctl daemon-reload
-            systemctl enable teao-api
-            systemctl restart teao-api
-            # Gzip compression
-            cat > /etc/nginx/conf.d/gzip.conf << 'GZIP'
-            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml application/wasm;
-            gzip_vary on;
-            gzip_comp_level 5;
-            gzip_min_length 1000;
-            gzip_proxied any;
-            GZIP
-            # Setup nginx proxy if not already configured
-            grep -q "location /api/" /etc/nginx/sites-available/teao-platform || {
-              sed -i 's|location / {|location /api/ {\n        proxy_pass http://127.0.0.1:3899;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n    location / {|' /etc/nginx/sites-available/teao-platform
-            }
-            nginx -t && systemctl reload nginx
+            set -eu
+            stage=/var/lib/teao-platform/incoming/${{ github.run_id }}-${{ github.run_attempt }}/stage
+            mkdir -m 700 "$stage"
+            tar --no-same-owner --no-same-permissions -xzf "$(dirname "$stage")/release.tar.gz" -C "$stage"
+            test "$(/usr/bin/node -p 'process.versions.node.split(".")[0]')" = 24
+            /usr/bin/node "$stage/server/scripts/release-deploy.js" --stage "$stage" > "$(dirname "$stage")/preview.json"
+            fingerprint=$(/usr/bin/node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1])).fingerprint)' "$(dirname "$stage")/preview.json")
+            /usr/bin/node "$stage/server/scripts/release-deploy.js" --stage "$stage" --apply --confirm "$fingerprint"
