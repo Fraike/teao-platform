@@ -48,6 +48,13 @@
   flex-shrink: 0;
 }
 
+.standardCount {
+  flex-shrink: 0;
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .timeBadge {
   padding: 1px 6px;
   border-radius: 4px;
@@ -204,11 +211,7 @@
   background: #f5f5f5;
 }
 
-.importButton {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-left: auto;
-}
+
 
 .tableWrap :global(.ant-table-tbody > tr > td.ant-table-cell) {
   transition: none;

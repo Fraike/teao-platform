@@ -71,13 +71,13 @@ test("real cron with patched uuid preserves production and standard reminder lif
     reminders.start(reminderCron);
     reminders.start(reminderCron);
     assert.equal(reminderCron.tasks.length, 1, "repeated start creates one reminder task");
-    assert.equal(checks, 1, "reminder performs one explicit initial check");
+    assert.equal(checks, 0, "reminder must not catch up immediately on startup");
     await reminderCron.tasks[0].now();
-    assert.equal(checks, 2, "scheduled reminder callback remains callable");
+    assert.equal(checks, 1, "scheduled reminder callback remains callable");
     reminders.stop();
     reminders.start(reminderCron);
     assert.equal(reminderCron.tasks.length, 2, "reminder restarts after stop");
-    assert.equal(checks, 3);
+    assert.equal(checks, 1, "restart does not run an extra check");
     assert.equal(new Set([...productionCron.tasks, ...reminderCron.tasks].map(task => task.options.name)).size,
       productionCron.tasks.length + reminderCron.tasks.length, "uuid v4 task names remain unique");
   } finally {

@@ -9,7 +9,7 @@ const record=async(url,content,mentions=[],type='text')=>{calls.push({url,conten
 mock.module('../server/services/wecom.js',{namedExports:{sendWecomText:record,sendWecomMessage:async(url,content)=>record(url,content,[],'markdown_v2')}});
 mock.module('../server/services/users.js',{namedExports:{listReviewers:()=>[],findUserByName:()=>null,getUserById:()=>({wecomUserid:submitterBound?'submitter-id':''})}});
 mock.module('../server/services/standard-store.js',{namedExports:{getDB:()=>db,listCategories:()=>[{key:'gear_damper',fields:[{key:'test_standard',label:'测试标准'},{key:'gear_spec',label:'齿轮规格'}]}]}});
-const {notifyReviewDone}=await import('../server/services/standard-notify.js');
+const {notifyReviewDone,notifyReviewRequested,notifyRetirementRequested}=await import('../server/services/standard-notify.js');
 const {initPublicationOutbox}=await import('../server/services/standard-publication-outbox.js');initPublicationOutbox(db);
 beforeEach(()=>db.exec('DELETE FROM standard_publication_outbox'));
 const standard={serialNo:'SP-TEST',categoryKey:'gear_damper',categoryName:'齿形阻尼器',versions:[{id:'v1',status:'published',versionNo:2,customer:'客户▲*',model:'RD-T001',customerPartNo:'CP-001',vehicleModel:'项目A',standardType:'formal',submittedBy:'甲',submittedById:'a',publishedAt:'2026-10-15T00:00:00Z',fields:{test_standard:'12-18',gear_spec:'齿轮A\n齿轮B',extra:'不能遗漏的扩展字段'}}],sourceComments:[{versionId:'v1',fieldLabel:'测试标准',author:'工程',text:'原始变更批注'}]};
@@ -41,4 +41,16 @@ test('rejection is private-targeted and delivery errors do not undo approval',as
  webhook='';assert.equal((await notifyReviewDone(standard,{approve:true})).status,'not_configured');webhook='https://example.invalid/mock';
  const fresh=structuredClone(standard);fresh.versions[0].id='fresh-failure';
  failure=Object.assign(new Error('结果不确定'),{code:'SEND_RESULT_UNCERTAIN'});assert.equal((await notifyReviewDone(fresh,{approve:true})).status,'unknown');failure=null;
+});
+
+test('pending review notices name both the submitter and selected reviewer',async()=>{
+ calls=[];failure=null;webhook='https://example.invalid/mock';submitterBound=true;
+ const data=structuredClone(standard);data.versions[0].assignedReviewerId='reviewer';data.versions[0].assignedReviewerName='审核人乙';
+ await notifyReviewRequested(data,{id:'a',name:'提交人甲'});
+ assert(calls[0].content.includes('提交人：提交人甲'));assert(calls[0].content.includes('指定审核人：审核人乙'));assert.equal(calls[0].mentions.length,1);
+ calls=[];
+ await notifyRetirementRequested(data,{versionId:'v1',reviewerId:'reviewer',reviewerName:'审核人乙',applicantName:'提交人甲',reason:'停用原因'.repeat(400)});
+ assert(calls.map(c=>c.content).join('').includes('指定审核人：审核人乙'));
+ assert(calls.map(c=>c.content).join('').includes('申请人：提交人甲'));
+ assert(calls.every(c=>Buffer.byteLength(c.content,'utf8')<=2048));assert(calls.slice(1).every(c=>c.mentions.length===0));
 });

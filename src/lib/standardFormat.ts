@@ -1,4 +1,11 @@
-import type { StandardListItem, StandardPublicationNotice, StandardStatus } from "../types/standard";
+import type { StandardListItem, StandardPublicationNotice, StandardStatus, StandardType } from "../types/standard";
+
+import { STANDARD_TYPE_LABELS } from "../types/standard.ts";
+
+export function standardTypeDisplayLabel(type: StandardType, status: StandardStatus): string {
+  if (status !== "published") return type === "formal" ? "常规" : type === "temporary" ? "临时" : "新增待定";
+  return STANDARD_TYPE_LABELS[type];
+}
 
 export const STANDARD_CATEGORY_NOTES: Readonly<Record<string, string>> = {
   gear_damper: "T = 双向；V = 单向；CW-R = 顺时针；CCW-L = 逆时针；▲汽车客户：20转/分钟（特殊除外）",
@@ -18,6 +25,7 @@ export function standardStatusColor(status: StandardStatus): string {
       return "green";
     case "pending_review":
       return "gold";
+    case "deleted":
     case "archived":
     case "obsolete":
       return "default";

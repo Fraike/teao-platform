@@ -1,4 +1,4 @@
-export type StandardStatus = "draft" | "pending_review" | "published" | "archived" | "obsolete";
+export type StandardStatus = "draft" | "pending_review" | "published" | "archived" | "obsolete" | "deleted";
 export type StandardType = "formal" | "temporary" | "new_pending";
 
 export interface StandardCategoryField {
@@ -51,12 +51,16 @@ export interface StandardVersion {
 }
 
 export interface StandardListItem {
+  retirementRequest?: StandardRetirementRequest | null;
+  createdById: string;
   publishedAt?: string;
   reviewedAt?: string;
   hasPreviousPublication?: boolean;
   assignedReviewerId?: string;
   submittedById?: string;
   id: string;
+  versionId: string;
+  revision: number;
   serialNo: string;
   categoryKey: string;
   categoryName: string;
@@ -72,6 +76,19 @@ export interface StandardListItem {
   updatedAt: string;
   updatedBy: string;
   reviewComment: string;
+}
+
+export type StandardRetireTarget = Pick<StandardListItem, "id" | "serialNo" | "versionNo" | "versionId" | "revision">;
+export type StandardPendingActionTarget = StandardRetireTarget & { versionId: string; revision: number; action: "reject" | "delete" };
+export type StandardDraftAction = "withdraw" | "discard-draft";
+export type StandardDraftActionTarget = Pick<StandardListItem, "id" | "serialNo" | "versionId" | "revision">;
+export interface StandardDraftActionResponse { ok: boolean; data: StandardDetail | null; }
+
+export interface StandardRetirementRequest {
+  id: string; versionId: string; versionRevision: number; applicantId: string; applicantName: string;
+  reviewerId: string; reviewerName: string; reason: string; revision: number;
+  status: "pending" | "approved" | "rejected" | "invalidated";
+  createdAt?: string; reviewedAt?: string; reviewedBy?: string; reviewComment?: string;
 }
 
 export type StandardPublicationNotice = "new" | "changed" | null;
@@ -194,6 +211,7 @@ export const STANDARD_STATUS_LABELS: Record<StandardStatus, string> = {
   pending_review: "待审核",
   published: "已发布",
   archived: "已归档",
+  deleted: "已删除（归档）",
   obsolete: "已停用",
 };
 
@@ -204,6 +222,8 @@ export interface StandardRowSelectionStore {
 }
 
 export interface StandardPageResponse {
+  overallTotal: number;
+  canRetire?: boolean;
   canImport?: boolean;
   canEdit?: boolean;
   canReview?: boolean;

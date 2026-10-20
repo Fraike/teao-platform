@@ -144,11 +144,12 @@ export function buildWecomContent(date, assembly, injection) {
   const sortedAssembly = [...assembly.records].sort((a, b) => extractNum(a.line) - extractNum(b.line));
   lines.push("### 装配部");
   if (assembly.rawCount === 0) lines.push("> ⚠️ 装配部：无记录，待补充。");
-  lines.push("| 产线 | 品名 | 产量 | 不良 |");
-  lines.push("|------|------|------|------|");
+  const cell = (value) => String(value ?? "").replace(/\|/g, "｜").replace(/[\r\n]+/g, " ").trim() || "—";
+  lines.push("| 产线 | 客户名称 | 品名 | 产量 | 不良 |");
+  lines.push("|------|------|------|------|------|");
   for (const line of sortedAssembly) {
     for (const p of line.products) {
-      lines.push(`| ${line.line} | ${p.name} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
+      lines.push(`| ${cell(line.line)} | ${cell(p.customer === "-" ? "" : p.customer)} | ${cell(p.name)} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
     }
   }
   lines.push("");

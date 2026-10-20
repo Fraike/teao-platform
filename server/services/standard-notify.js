@@ -41,12 +41,31 @@ export async function notifyReviewRequested(standard, submitterName) {
     .filter((r) => r.id !== submitterName.id)
     .map((r) => r.wecomUserid)
     .filter(Boolean);
-  const content = `【产品标准待审核】序号 ${info.serialNo}「${info.customer} ${info.model}」已提交审核，提交人：${submitterName.name}，请及时处理。`;
-  try {
-    await sendWecomText(webhook, content, mentions);
-  } catch (err) {
-    console.error("[standards-notify] 提交审核提醒发送失败：", err.message);
-  }
+  const reviewerName = standard?.versions?.[0]?.assignedReviewerName || (info.reviewerId && getUserById(info.reviewerId)?.name) || "未指定（历史任务）";
+  const content = `【产品标准待审核】序号 ${info.serialNo}「${info.customer} ${info.model}」已提交审核，提交人：${submitterName.name}，指定审核人：${reviewerName}，请及时处理。`;
+  const parts = splitStandardPublication(content,1800);
+  return withPublicationQueue(webhook,async () => {
+    try {
+      for (const [index,part] of parts.entries()) await sendWecomText(webhook,part,index===0?mentions:[]);
+    } catch (err) {
+      console.error("[standards-notify] 提交审核提醒发送失败：", err.message);
+    }
+  });
+}
+
+export async function notifyRetirementRequested(standard, request) {
+  const webhook = resolveWebhook();
+  if (!webhook) return { status: "not_configured" };
+  const reviewer = getUserById(request.reviewerId);
+  const version = standard.versions.find(v => v.id === request.versionId);
+  const content = `【申请停用 · 待审核】\n标准：${standard.serialNo} · ${version?.customer || ""} · ${version?.model || ""}\n申请人：${request.applicantName}\n指定审核人：${request.reviewerName}\n停用原因：${request.reason}\n请进入产品标准页面处理停用申请；审核通过前，当前标准继续生效。`;
+  const parts = splitStandardPublication(content,1800);
+  return withPublicationQueue(webhook,async () => {
+    try {
+      for (const [index,part] of parts.entries()) await sendWecomText(webhook,part,index===0 && reviewer?.wecomUserid ? [reviewer.wecomUserid] : []);
+      return {status:"sent",mentionedReviewer:Boolean(reviewer?.wecomUserid)};
+    } catch(error) {return {status:error.code==="SEND_REJECTED"?"failed":"unknown"};}
+  });
 }
 
 // 审核结果：提醒提交人

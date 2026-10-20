@@ -1,17 +1,22 @@
 import { groupStandardFields, activeStandardFields } from "../../lib/standardFieldGroups";
 import { SeasonalTestStandard } from "./SeasonalTestStandard";
-import { StandardTestHistory } from "./StandardTestHistory";
+import { StandardDraftActionButton } from "./StandardDraftActionButton";
+import { getStandardDraftAction } from "../../lib/standardDraftActions";
+import { StandardPendingActionModal } from "./StandardPendingActionModal";
+import { StopOutlined } from "@ant-design/icons";
+import { StandardRetirementPanel } from "./StandardRetirementPanel";
+import { StandardRetireModal } from "./StandardRetireModal";
 import { GearSpecification } from "./GearSpecification";
 import { useEffect, useMemo, useState } from "react";
 import { Drawer, Descriptions, Tag, Space, Button, Input, message, Popconfirm, Empty, Spin, Alert, Table, Select } from "antd";
 import { useAuthStore } from "../../lib/authStore";
 import { standardVersionDiff } from "../../lib/standardVersionDiff";
 import { api } from "../../lib/api";
-import { standardStatusColor as statusColor } from "../../lib/standardFormat";
+import { standardStatusColor as statusColor, standardTypeDisplayLabel } from "../../lib/standardFormat";
 import { CustomerName } from "./CustomerName";
 import { PublicationDeliveryPanel } from "./PublicationDeliveryPanel";
-import type { StandardCategory, StandardDetail, StandardVersion, StandardReviewResponse } from "../../types/standard";
-import { STANDARD_STATUS_LABELS, STANDARD_TYPE_LABELS, STANDARD_TYPE_COLORS } from "../../types/standard";
+import type { StandardCategory, StandardDetail, StandardVersion, StandardReviewResponse, StandardPendingActionTarget } from "../../types/standard";
+import { STANDARD_STATUS_LABELS, STANDARD_TYPE_COLORS } from "../../types/standard";
 import styles from "./StandardDetailDrawer.module.css";
 
 interface StandardDetailDrawerProps {
@@ -20,9 +25,10 @@ interface StandardDetailDrawerProps {
   categories: StandardCategory[];
   canEdit: boolean;
   allowDirectEdit?: boolean;
+  canRetire?: boolean;
   canReview: boolean;
   onClose: () => void;
-  onChanged: (detail: StandardDetail) => void;
+  onChanged: (detail: StandardDetail | null) => void;
   onEdit: (detail: StandardDetail) => void;
 }
 
@@ -32,31 +38,37 @@ export function StandardDetailDrawer({
   categories,
   canEdit,
   allowDirectEdit = false,
+  canRetire: retirePermission,
   canReview,
   onClose,
   onChanged,
   onEdit,
 }: StandardDetailDrawerProps) {
   const user = useAuthStore(s => s.user);
+  const canRetire = retirePermission ?? (user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_retire")));
   const [detail, setDetail] = useState<StandardDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewers, setReviewers] = useState<{id:string;name:string}[]>([]);
   const [reviewerId, setReviewerId] = useState<string>();
   const [acting, setActing] = useState(false);
+  const [pendingAction, setPendingAction] = useState<StandardPendingActionTarget | null>(null);
+  const [retireOpen, setRetireOpen] = useState(false);
+  const [retirementRefresh, setRetirementRefresh] = useState(0);
+  const [hasRetirementRequest, setHasRetirementRequest] = useState(false);
 
   useEffect(() => {
     if (!open || !standardId) return;
     let disposed = false;
-    queueMicrotask(() => { if (!disposed) { setDetail(null); setReviewComment(""); setLoading(true); } });
+    queueMicrotask(() => { if (!disposed) { setDetail(null); setRetireOpen(false); setRetirementRefresh(0); setHasRetirementRequest(false); setPendingAction(null); setReviewComment(""); setLoading(true); } });
     Promise.all([
-      api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true`),
+      api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true${user?.role === "admin" ? "&includeDeleted=true" : ""}`),
       api.get<{ok:boolean;data:{id:string;name:string}[]}>("/api/standards/reviewers"),
     ]).then(([res,list]) => { if (!disposed) { setDetail(res.data); setReviewers(list.data); setReviewerId(undefined); } })
       .catch((err) => { if (!disposed) message.error((err as Error).message || "加载详情失败"); })
       .finally(() => { if (!disposed) setLoading(false); });
     return () => { disposed = true; };
-  }, [open, standardId]);
+  }, [open, standardId, user?.role]);
 
   const category = useMemo(
     () => categories.find((c) => c.key === detail?.categoryKey),
@@ -69,6 +81,7 @@ export function StandardDetailDrawer({
     return (
       detail.versions.find((v) => v.status === "draft" || v.status === "pending_review") ||
       detail.versions.find((v) => v.status === "published") ||
+      detail.versions.find(v => v.status !== "deleted") ||
       detail.versions[0] ||
       null
     );
@@ -123,24 +136,17 @@ export function StandardDetailDrawer({
   };
 
   const legacyPending = current?.status === "pending_review" && !current.submittedById;
-  const retire = async () => {
-    if (!detail || !current || !reviewComment.trim()) return;
-    setActing(true);
-    try {
-      const res = await api.post<{ok:boolean;data:StandardDetail}>(`/api/standards/${detail.id}/retire`,{versionId:current.id,revision:current.revision,reason:reviewComment.trim()});
-      setDetail(res.data);onChanged(res.data);setReviewComment("");message.success("标准已停用，历史已保留");
-    } catch(error) {message.error((error as Error).message || "停用失败");}
-    finally {setActing(false);}
-  };
 
   const canSubmit = canEdit && (current?.status === "draft" || legacyPending);
   const isSubmitter = current?.submittedById ? current.submittedById === user?.id : current?.submittedBy === (user?.name || user?.username);
   const isDesignated = current?.assignedReviewerId ? current.assignedReviewerId === user?.id : canReview;
   const canReviewThis = isDesignated && !legacyPending && !isSubmitter && current?.status === "pending_review";
   const published = detail?.versions.find(v => v.status === "published") ?? null;
+  const draftAction = current ? getStandardDraftAction(current, user) : null;
   const differences = current ? standardVersionDiff(published, current, categories) : [];
 
   return (
+    <>
     <Drawer
       title={canReviewThis ? "审核产品标准" : "产品标准详情"}
       open={open}
@@ -152,7 +158,13 @@ export function StandardDetailDrawer({
           {canEdit && (current?.status === "draft" || current?.status === "published" || (allowDirectEdit && current?.status === "pending_review")) && (
             <Button onClick={() => detail && onEdit(detail)}>编辑</Button>
           )}
-          {canReview && current?.status === "published" && <Popconfirm title="停用此标准？" description="停用后不再作为当前生产标准，历史版本与批注仍保留。" onConfirm={retire} okText="停用" cancelText="取消"><Button danger loading={acting} disabled={!reviewComment.trim()}>停用标准</Button></Popconfirm>}
+          {(canRetire || canEdit) && published && <Button icon={<StopOutlined />} danger disabled={acting || current?.status !== "published" || (!canRetire && hasRetirementRequest)}
+            title={current?.status !== "published" ? "请先处理修订稿，再停用标准" : !canRetire && hasRetirementRequest ? "已有待审核的停用申请" : undefined}
+            onClick={() => setRetireOpen(true)}>{canRetire ? "直接停用" : "申请停用"}</Button>}
+          {draftAction && detail && current && <StandardDraftActionButton
+            key={`${current.id}:${current.revision}`} target={{ id: detail.id, serialNo: detail.serialNo, versionId: current.id, revision: current.revision }}
+            action={draftAction} hasPublished={Boolean(published)} disabled={acting}
+            onCompleted={updated => { setDetail(updated); setReviewerId(undefined); setReviewComment(""); onChanged(updated); if (!updated) onClose(); }} />}
           {canSubmit && (
             <><Select className={styles.reviewerSelect} placeholder="选择审核人" showSearch optionFilterProp="label" value={reviewerId} onChange={setReviewerId}
               options={reviewers.map(person=>({value:person.id,label:person.name}))} />
@@ -160,9 +172,13 @@ export function StandardDetailDrawer({
               {legacyPending ? "重新提交审核" : "提交审核"}
             </Button></>
           )}
+          {user?.role === "admin" && current?.status === "pending_review" && detail && <>
+            <Button danger disabled={acting} onClick={() => setPendingAction({ id: detail.id, serialNo: detail.serialNo, versionNo: current.versionNo, versionId: current.id, revision: current.revision, action: "reject" })}>管理员驳回</Button>
+            <Button danger disabled={acting} onClick={() => setPendingAction({ id: detail.id, serialNo: detail.serialNo, versionNo: current.versionNo, versionId: current.id, revision: current.revision, action: "delete" })}>删除待审内容</Button>
+          </>}
           {canReviewThis && (
             <>
-              <Popconfirm
+              {user?.role !== "admin" && <Popconfirm
                 title="驳回该标准？"
                 description="驳回后回到草稿状态，需填写驳回意见。"
                 onConfirm={() => review(false)}
@@ -173,7 +189,7 @@ export function StandardDetailDrawer({
                 <Button danger loading={acting} disabled={!reviewComment.trim()}>
                   驳回
                 </Button>
-              </Popconfirm>
+              </Popconfirm>}
               <Popconfirm title="确认通过并发布到企业微信群？" description="将发送完整标准内容并 @所有人，请先核对参数和变更。" okText="确认通过并发布" cancelText="继续核对" onConfirm={() => review(true)}>
                 <Button type="primary" size="large" loading={acting}>通过并发布到群</Button>
               </Popconfirm>
@@ -202,7 +218,7 @@ export function StandardDetailDrawer({
             <Descriptions.Item label="当前版本">V{current.versionNo}</Descriptions.Item>
             <Descriptions.Item label="标准性质">
               <Tag color={STANDARD_TYPE_COLORS[current.standardType]}>
-                {STANDARD_TYPE_LABELS[current.standardType]}
+                {standardTypeDisplayLabel(current.standardType,current.status)}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="状态">
@@ -224,7 +240,9 @@ export function StandardDetailDrawer({
               title={() => published ? `审核变更对比：V${published.versionNo} → V${current.versionNo}` : "新标准审核：首次发布"}
               columns={[{title:"字段",dataIndex:"label"},{title:"已发布值",dataIndex:"before"},{title:"待审核值",dataIndex:"after"}]} />
           )}
-          {canReview && current.status === "published" && <Input.TextArea className={styles.reviewComment} value={reviewComment} onChange={e=>setReviewComment(e.target.value)} placeholder="如需停用，请填写停用原因" autoSize={{minRows:1,maxRows:3}} />}
+          {current.status === "deleted" && <Alert type="warning" message="该待审内容已删除并归档，仅供历史追溯，不可用于生产。" />}
+          {(published || current.status === "obsolete") && <StandardRetirementPanel standardId={detail.id} versionKey={`${current.id}:${current.revision}:${retirementRefresh}`}
+            canRetire={canRetire} onPendingChange={setHasRetirementRequest} onChanged={updated => {setDetail(updated);onChanged(updated);}} />}
           {current.status === "obsolete" && <Alert type="warning" message="该标准已停用，仅供历史追溯，不可用于生产。" />}
           {user?.role === "admin" && current.status === "published" && <PublicationDeliveryPanel key={`${detail.id}:${current.id}`} standardId={detail.id} />}
           {canReviewThis && (
@@ -246,9 +264,15 @@ export function StandardDetailDrawer({
             }))}
           />)}
 
-          {open && activeStandardFields(category, current.fields).some(field => field.key === "test_standard") && <StandardTestHistory key={`${detail.id}:${current.id}:${current.revision}`} standardId={detail.id} />}
         </>
       )}
     </Drawer>
+    {open && user?.role === "admin" && pendingAction && <StandardPendingActionModal
+      key={`${pendingAction.id}:${pendingAction.action}`} target={pendingAction} onClose={() => setPendingAction(null)}
+      onCompleted={updated => { setDetail(updated); onChanged(updated); }} />}
+    {open && retireOpen && (canRetire || canEdit) && detail && current?.status === "published" && <StandardRetireModal
+      key={`${detail.id}:${canRetire}:${current.versionNo}`} direct={canRetire} target={{ id: detail.id, serialNo: detail.serialNo, versionNo: current.versionNo, versionId:current.id,revision:current.revision }}
+      onClose={() => setRetireOpen(false)} onRetired={updated => { setDetail(updated); if (!canRetire) setHasRetirementRequest(true); setRetirementRefresh(value => value + 1); onChanged(updated); }} />}
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { initializeRetirementSchema } from "./standard-retirement-schema.js";
 import { resolveStandardImportStatus } from "./standard-source-policy.js";
 import { listStandardPage, getStandardQueryVersion, listPendingStandardNotifications } from "./standard-query.js";
 export { listStandardPage, getStandardQueryVersion, listPendingStandardNotifications };
@@ -20,6 +21,7 @@ export const STANDARD_STATUS = {
   PUBLISHED: "published",
   ARCHIVED: "archived",
   OBSOLETE: "obsolete",
+  DELETED: "deleted",
 };
 
 export const STANDARD_TYPES = {
@@ -261,7 +263,7 @@ export function initDB() {
   ensureVehicleModelColumn(d);
 
   const additions = {
-    product_standard_versions: { revision: "INTEGER NOT NULL DEFAULT 1", created_by_id: "TEXT DEFAULT ''", updated_by_id: "TEXT DEFAULT ''", submitted_by_id: "TEXT DEFAULT ''", submitted_by: "TEXT DEFAULT ''", submitted_at: "TEXT", assigned_reviewer_id: "TEXT DEFAULT ''", assigned_reviewer_name: "TEXT DEFAULT ''", reviewed_by_id: "TEXT DEFAULT ''" },
+    product_standard_versions: { revision: "INTEGER NOT NULL DEFAULT 1", last_submitted_at: "TEXT", created_by_id: "TEXT DEFAULT ''", updated_by_id: "TEXT DEFAULT ''", submitted_by_id: "TEXT DEFAULT ''", submitted_by: "TEXT DEFAULT ''", submitted_at: "TEXT", assigned_reviewer_id: "TEXT DEFAULT ''", assigned_reviewer_name: "TEXT DEFAULT ''", reviewed_by_id: "TEXT DEFAULT ''" },
     product_standard_changes: { version_id: "TEXT DEFAULT ''", source_cell: "TEXT DEFAULT ''" },
   };
   for (const [table, columns] of Object.entries(additions)) {
@@ -288,6 +290,7 @@ export function initDB() {
     version_id TEXT PRIMARY KEY,source_hash TEXT NOT NULL,source_sheet TEXT NOT NULL,source_row INTEGER,
     imported_by_id TEXT NOT NULL,imported_at TEXT NOT NULL,initial_status TEXT NOT NULL
   )`);
+  initializeRetirementSchema(d);
   seedCategories();
   initPublicationOutbox(d);
 }
@@ -418,7 +421,7 @@ function findStandardById(d, id) {
 
 function latestVersion(d, standardId) {
   return d
-    .prepare("SELECT * FROM product_standard_versions WHERE standard_id = ? ORDER BY version_no DESC LIMIT 1")
+    .prepare("SELECT * FROM product_standard_versions WHERE standard_id = ? AND status!='deleted' ORDER BY version_no DESC LIMIT 1")
     .get(standardId);
 }
 
@@ -504,20 +507,22 @@ export function listStandards(options = {}) {
   return listStandardPage({ ...options, pageSize: null }).data;
 }
 
-export function getStandard(id, { onlyPublished = false, includeHistory = true, includeCurrentComments = false, reviewerId = "" } = {}) {
+export function getStandard(id, { onlyPublished = false, includeHistory = true, includeCurrentComments = false, reviewerId = "", includeDeleted = false } = {}) {
   const d = getDB();
   const standard = findStandardById(d, id);
   if (!standard) return null;
 
   const versions = d
-    .prepare(`SELECT * FROM product_standard_versions WHERE standard_id = @id ${includeHistory ? "" : "AND status!='archived'"} ${onlyPublished ? "AND (status IN ('published','archived','obsolete') OR (status='pending_review' AND @reviewerId!='' AND assigned_reviewer_id=@reviewerId))" : ""} ORDER BY version_no DESC`)
+    .prepare(`SELECT * FROM product_standard_versions WHERE standard_id = @id ${includeHistory ? "" : "AND status!='archived'"} ${includeDeleted && !onlyPublished ? "" : "AND status!='deleted'"} ${onlyPublished ? "AND (status IN ('published','archived','obsolete') OR (status='pending_review' AND @reviewerId!='' AND assigned_reviewer_id=@reviewerId))" : ""} ORDER BY version_no DESC`)
     .all({id:standard.id,reviewerId})
     .map(versionToRow);
 
   const visible = onlyPublished ? versions.filter(v => v.status === "published" || v.status === "archived" || v.status === "obsolete" || (reviewerId && v.status === "pending_review" && v.assignedReviewerId === reviewerId)) : versions;
   if (!visible.length) return null;
   const visibleIds = new Set(visible.map(v => v.id));
-  const current = ((!onlyPublished || reviewerId) && visible.find(v => v.status === STANDARD_STATUS.DRAFT || v.status === STANDARD_STATUS.PENDING_REVIEW)) || visible.find((v) => v.status === STANDARD_STATUS.PUBLISHED) || visible[0] || null;
+  const hiddenDeletedIds = !includeDeleted && !onlyPublished && includeHistory
+    ? new Set(d.prepare("SELECT id FROM product_standard_versions WHERE standard_id=? AND status='deleted'").all(id).map(row => row.id)) : new Set();
+  const current = ((!onlyPublished || reviewerId) && visible.find(v => v.status === STANDARD_STATUS.DRAFT || v.status === STANDARD_STATUS.PENDING_REVIEW)) || visible.find((v) => v.status === STANDARD_STATUS.PUBLISHED) || visible.find(v => v.status !== STANDARD_STATUS.DELETED) || visible[0] || null;
 
   return {
     id: standard.id,
@@ -527,23 +532,24 @@ export function getStandard(id, { onlyPublished = false, includeHistory = true, 
     standardType: current ? current.standardType : STANDARD_TYPES.FORMAL,
     versions: visible,
     sourceComments: includeHistory || includeCurrentComments ? d.prepare(`SELECT * FROM product_standard_excel_comments WHERE standard_id = ? ${includeHistory ? "" : "AND version_id = ?"} ORDER BY source_cell`).all(...(includeHistory ? [standard.id] : [standard.id, current.id]))
-      .filter(c => !onlyPublished || visibleIds.has(c.version_id))
+      .filter(c => (!onlyPublished || visibleIds.has(c.version_id)) && !hiddenDeletedIds.has(c.version_id))
       .map(c => ({id:c.id,versionId:c.version_id,sourceCell:c.source_cell,fieldKey:c.field_key,fieldLabel:c.field_label,author:c.author,text:c.text,changedAt:c.changed_at,sourceHash:c.source_hash})) : [],
-    changes: includeHistory ? listChangesOf(d, standard.id).filter(c => !onlyPublished || visibleIds.has(c.versionId)) : [],
+    changes: includeHistory ? listChangesOf(d, standard.id).filter(c => (!onlyPublished || visibleIds.has(c.versionId)) && !hiddenDeletedIds.has(c.versionId)) : [],
   };
 }
 
-export function getStandardHistory(id, { onlyPublished = false, reviewerId = "", section = "versions", page = 1, pageSize = 20, fieldKey = "" } = {}) {
+export function getStandardHistory(id, { onlyPublished = false, reviewerId = "", section = "versions", page = 1, pageSize = 20, fieldKey = "", includeDeleted = false } = {}) {
   if (!["versions", "changes", "comments"].includes(section)) throw httpError(400, "无效的历史分类");
   if (fieldKey && (fieldKey !== "test_standard" || section === "versions")) throw httpError(400, "无效的历史字段");
   page = Number(page); pageSize = Number(pageSize);
   if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1) throw httpError(400, "分页格式无效");
   pageSize = Math.min(50, pageSize);
-  if (!getStandard(id, { onlyPublished, reviewerId, includeHistory: false })) return null;
+  if (!getStandard(id, { onlyPublished, reviewerId, includeHistory: false, includeDeleted })) return null;
   const d = getDB();
   const table = {versions:"product_standard_versions",changes:"product_standard_changes",comments:"product_standard_excel_comments"}[section];
   const order = {versions:"r.version_no DESC,r.id DESC",changes:"r.sort_date DESC,r.seq DESC,r.id DESC",comments:"r.source_cell ASC,r.id ASC"}[section];
-  const visibility = onlyPublished ? (section === "versions" ? "AND (r.status IN ('published','archived','obsolete') OR (r.status='pending_review' AND @reviewerId!='' AND r.assigned_reviewer_id=@reviewerId))" : "AND EXISTS (SELECT 1 FROM product_standard_versions v WHERE v.id=r.version_id AND v.standard_id=r.standard_id AND (v.status IN ('published','archived','obsolete') OR (v.status='pending_review' AND @reviewerId!='' AND v.assigned_reviewer_id=@reviewerId)))") : "";
+  const visibility = onlyPublished ? (section === "versions" ? "AND (r.status IN ('published','archived','obsolete') OR (r.status='pending_review' AND @reviewerId!='' AND r.assigned_reviewer_id=@reviewerId))" : "AND EXISTS (SELECT 1 FROM product_standard_versions v WHERE v.id=r.version_id AND v.standard_id=r.standard_id AND (v.status IN ('published','archived','obsolete') OR (v.status='pending_review' AND @reviewerId!='' AND v.assigned_reviewer_id=@reviewerId)))")
+    : includeDeleted ? "" : section === "versions" ? "AND r.status!='deleted'" : "AND NOT EXISTS (SELECT 1 FROM product_standard_versions v WHERE v.id=r.version_id AND v.status='deleted')";
   const fieldFilter = fieldKey ? "AND r.field_key IN ('test_standard','winter_test_standard')" : "";
   const total = d.prepare(`SELECT COUNT(*) AS total FROM ${table} r WHERE r.standard_id=@id ${visibility} ${fieldFilter}`).get({id,reviewerId}).total;
   const rows = d.prepare(`SELECT r.* FROM ${table} r WHERE r.standard_id=@id ${visibility} ${fieldFilter} ORDER BY ${order} LIMIT @limit OFFSET @offset`).all({id,reviewerId,limit:pageSize,offset:(page-1)*pageSize});
@@ -688,7 +694,7 @@ export function updateStandard(id, data, user) {
     return getStandard(standard.id);
   }
 
-  const nextVersionNo = (latest?.version_no || 0) + 1;
+  const nextVersionNo = d.prepare("SELECT COALESCE(MAX(version_no),0)+1 AS next FROM product_standard_versions WHERE standard_id=?").get(standard.id).next;
   const versionId = randomUUID();
   d.transaction(() => {
     d.prepare(
@@ -720,9 +726,10 @@ export function submitStandard(id, user, expected) {
     const latest = latestVersion(d, id);
     checkRevision(latest, expected);
     if (latest.status !== STANDARD_STATUS.DRAFT && !(latest.status === STANDARD_STATUS.PENDING_REVIEW && !latest.submitted_by_id)) throw httpError(400, "当前没有可提交的草稿");
-    d.prepare(`UPDATE product_standard_versions SET status = ?, submitted_by_id = ?, submitted_by = ?, submitted_at = ?, assigned_reviewer_id=?,assigned_reviewer_name=?, revision = revision + 1 WHERE id = ?`)
-      .run(STANDARD_STATUS.PENDING_REVIEW, actor(user).id, actor(user).name, now, expected?.reviewerId || "", expected?.reviewerName || "", latest.id);
-    appendChange(d, id, { description: expected?.reviewerName ? `提交审核，指定审核人：${expected.reviewerName}` : "提交审核" }, user, now);
+    const submittedAt = new Date(Math.max(Date.parse(now), (Date.parse(latest.last_submitted_at) || 0) + 1, (Date.parse(latest.submitted_at) || 0) + 1)).toISOString();
+    d.prepare(`UPDATE product_standard_versions SET status = ?, submitted_by_id = ?, submitted_by = ?, submitted_at = ?, last_submitted_at = ?, assigned_reviewer_id=?,assigned_reviewer_name=?, revision = revision + 1 WHERE id = ?`)
+      .run(STANDARD_STATUS.PENDING_REVIEW, actor(user).id, actor(user).name, submittedAt, submittedAt, expected?.reviewerId || "", expected?.reviewerName || "", latest.id);
+    appendChange(d, id, { fieldKey: "review_submission", fieldLabel: "提交审核", description: expected?.reviewerName ? `提交审核，指定审核人：${expected.reviewerName}` : "提交审核" }, user, submittedAt);
   })();
   return getStandard(id);
 }
@@ -738,10 +745,11 @@ export function reviewStandard(id, { approve, comment, versionId, revision }, us
     const latest = latestVersion(d, id);
     checkRevision(latest, { versionId, revision });
     if (latest.status !== STANDARD_STATUS.PENDING_REVIEW) throw httpError(400, "该标准不在待审核状态");
-    if (latest.assigned_reviewer_id && latest.assigned_reviewer_id !== actor(user).id) throw httpError(403,"只有指定审核人可处理该标准");
+    const adminReject = !approve && actor(user).role === "admin";
+    if (!adminReject && latest.assigned_reviewer_id && latest.assigned_reviewer_id !== actor(user).id) throw httpError(403,"只有指定审核人可处理该标准");
     const submitterId = latest.submitted_by_id;
-    if (!submitterId) throw httpError(409, "旧待审记录缺少提交人身份，请工程人员重新提交审核");
-    if (submitterId === actor(user).id) {
+    if (!adminReject && !submitterId) throw httpError(409, "旧待审记录缺少提交人身份，请工程人员重新提交审核");
+    if (!adminReject && submitterId === actor(user).id) {
       throw httpError(400, "不能审核自己提交的标准");
     }
     if (approve) {
@@ -750,10 +758,71 @@ export function reviewStandard(id, { approve, comment, versionId, revision }, us
     }
     d.prepare(`UPDATE product_standard_versions SET status = ?, reviewed_by = ?, reviewed_by_id = ?, reviewed_at = ?, published_at = ?, review_comment = ?, revision = revision + 1 WHERE id = ?`)
       .run(approve ? STANDARD_STATUS.PUBLISHED : STANDARD_STATUS.DRAFT, actor(user).name, actor(user).id, now, approve ? now : null, reviewComment, latest.id);
-    appendChange(d, id, { description: approve ? "审核通过并发布" : `审核驳回：${reviewComment}` }, user, now);
+    appendChange(d, id, { description: approve ? "审核通过并发布" : `${adminReject ? "管理员介入驳回" : "审核驳回"}：${reviewComment}` }, user, now);
     if (approve) queuePublishedStandard(d, id, user, { comment: reviewComment });
   })();
   return getStandard(id);
+}
+
+function archiveWorkingVersion(d, id, latest, user, now, description, reviewReason) {
+  d.prepare(`UPDATE product_standard_versions SET status='deleted',revision=revision+1,
+    updated_by=?,updated_by_id=?,updated_at=? WHERE id=?`)
+    .run(actor(user).name,actor(user).id,now,latest.id);
+  if (reviewReason !== undefined) d.prepare(`UPDATE product_standard_versions SET review_comment=?,
+    reviewed_by=?,reviewed_by_id=?,reviewed_at=? WHERE id=?`)
+    .run(reviewReason,actor(user).name,actor(user).id,now,latest.id);
+  const published = d.prepare("SELECT category_key FROM product_standard_versions WHERE standard_id=? AND status='published' ORDER BY version_no DESC LIMIT 1").get(id);
+  if (published) d.prepare("UPDATE product_standards SET category_key=?,updated_at=? WHERE id=?").run(published.category_key,now,id);
+  appendChange(d,id,{versionId:latest.id,description},user,now);
+}
+
+export function discardPendingStandard(id, expected, user) {
+  if (actor(user)?.role !== "admin") throw httpError(403, "仅管理员可以删除待审内容");
+  const reason = expected?.reason;
+  if (typeof reason !== "string" || !reason.trim() || reason.length > 2000) throw httpError(400, "删除原因必填，最多2000字");
+  const d = getDB(), now = new Date().toISOString();
+  d.transaction(() => {
+    const latest = latestVersion(d, id);
+    checkRevision(latest, expected);
+    if (latest.status !== STANDARD_STATUS.PENDING_REVIEW) throw httpError(400, "只能删除待审核内容");
+    archiveWorkingVersion(d,id,latest,user,now,`管理员删除待审内容（归档保留）：${reason.trim()}`,reason.trim());
+  })();
+  return getStandard(id, { includeDeleted: true });
+}
+
+export function withdrawStandard(id, expected, user) {
+  const d = getDB(), now = new Date().toISOString(), who = actor(user);
+  d.transaction(() => {
+    const latest = latestVersion(d,id);
+    checkRevision(latest,expected);
+    if (!who?.id || !latest.submitted_by_id || latest.submitted_by_id !== who.id) throw httpError(403, "仅提交人本人可以撤回审核");
+    if (latest.status !== STANDARD_STATUS.PENDING_REVIEW) throw httpError(409, "待审状态已变化，请刷新后重试");
+    const lastSubmittedAt = new Date(Math.max(Date.parse(latest.submitted_at) || 0, Date.parse(latest.last_submitted_at) || 0)).toISOString();
+    d.prepare(`UPDATE product_standard_versions SET status='draft',revision=revision+1,
+      assigned_reviewer_id='',assigned_reviewer_name='',submitted_at=NULL,last_submitted_at=?,reviewed_by='',reviewed_by_id='',
+      reviewed_at=NULL,review_comment='',updated_by=?,updated_by_id=?,updated_at=? WHERE id=?`)
+      .run(lastSubmittedAt,who.name,who.id,now,latest.id);
+    appendChange(d,id,{versionId:latest.id,description:"提交人撤回审核，保留为草稿"},user,now);
+  })();
+  return getStandard(id);
+}
+
+export function discardDraftStandard(id, expected, user) {
+  const d = getDB(), now = new Date().toISOString(), who = actor(user);
+  d.transaction(() => {
+    const latest = latestVersion(d,id);
+    checkRevision(latest,expected);
+    if (who?.role !== "admin" && (!who?.id || (latest.created_by_id !== who.id && latest.submitted_by_id !== who.id))) {
+      throw httpError(403, "仅草稿创建人、原提交人或管理员可以清理草稿");
+    }
+    if (latest.status !== STANDARD_STATUS.DRAFT) throw httpError(409, "草稿状态已变化，请刷新后重试");
+    archiveWorkingVersion(d,id,latest,user,now,"清理草稿：放弃未提交修改并归档保留");
+  })();
+  return getStandard(id);
+}
+
+export function recordStandardOperation(id, description, user, versionId) {
+  appendChange(getDB(),id,{versionId,description},user,new Date().toISOString());
 }
 
 export function retireStandard(id, expected, user) {

@@ -1,7 +1,8 @@
+import { canDirectRetire, retirementReviewers, createRetirementRequest, listRetirementRequests, reviewRetirementRequest } from "../services/standard-retirement.js";
 import { createHash } from "node:crypto";
 import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
 import { getUserById, listUsers } from "../services/users.js";
-import { notifyReviewRequested, notifyReviewDone } from "../services/standard-notify.js";
+import { notifyReviewRequested, notifyReviewDone, notifyRetirementRequested } from "../services/standard-notify.js";
 import { createStandardReviewReminders } from "../services/standard-review-reminders.js";
 import { publicationDelivery, retryStandardPublication, publicationResponse } from "../services/standard-publication-outbox.js";
 import { readConfig } from "../config.js";
@@ -18,6 +19,9 @@ import {
   submitStandard,
   reviewStandard,
   retireStandard,
+  discardPendingStandard,
+  withdrawStandard,
+  discardDraftStandard,
   previewStandardImport,
   confirmStandardImport,
 } from "../services/standard-store.js";
@@ -70,6 +74,7 @@ export function registerStandardRoutes(app) {
   app.get("/api/standards", jwtAuth, currentUser, (req, res) => {
     try {
       const { category, status, standardType, search } = req.query;
+      if (status === "deleted" && req.user.role !== "admin") return res.status(403).json({ error: "仅管理员可查看删除归档" });
       if (req.query.all === "true" && (typeof category !== "string" || !category.trim())) {
         return res.status(400).json({ error: "全量查询必须指定分类" });
       }
@@ -87,7 +92,7 @@ export function registerStandardRoutes(app) {
         vehicleModel: req.query.vehicleModel, page: req.query.page, pageSize: req.query.all === "true" ? null : req.query.pageSize,
       });
       res.locals.responseRows = result.data.length;
-      res.json({ ok: true, ...result, version: viewerVersion(req.user), canEdit: canEdit(req.user), canReview: canReview(req.user), canImport: req.user.role === "admin" });
+      res.json({ ok: true, ...result, version: viewerVersion(req.user), canEdit: canEdit(req.user), canReview: canReview(req.user), canImport: req.user.role === "admin", canRetire: canDirectRetire(req.user) });
     } catch (err) {
       console.error("[standards] list error:", err);
       res.status(err.status || 500).json({ error: "查询失败", detail: err.message });
@@ -102,10 +107,12 @@ export function registerStandardRoutes(app) {
     res.json({ok:true,data:listUsers().filter(user=>user.status==="active" && user.id!==req.user.id).map(user=>({id:user.id,name:user.name||user.username}))});
   });
 
+  app.get("/api/standards/retirement-reviewers", jwtAuth, currentUser, (req,res) => res.json({ok:true,data:retirementReviewers(req.user)}));
+
   // 详情（含版本历史）
   app.get("/api/standards/:id", jwtAuth, currentUser, (req, res) => {
     try {
-      const standard = getStandard(req.params.id, { onlyPublished: !canEdit(req.user) && !canReview(req.user), reviewerId:req.user.id, includeHistory: req.query.summary !== "true", includeCurrentComments: req.query.comments === "current" });
+      const standard = getStandard(req.params.id, { onlyPublished: !canEdit(req.user) && !canReview(req.user), reviewerId:req.user.id, includeHistory: req.query.summary !== "true", includeCurrentComments: req.query.comments === "current", includeDeleted: req.user.role === "admin" && req.query.includeDeleted === "true" });
       if (!standard) return res.status(404).json({ error: "标准不存在" });
       res.json({ ok: true, data: standard, ...(req.query.comments === "current" ? { currentCommentsIncluded: true } : {}) });
     } catch (err) {
@@ -117,7 +124,7 @@ export function registerStandardRoutes(app) {
   app.get("/api/standards/:id/history", jwtAuth, currentUser, (req, res) => {
     try {
       const result = getStandardHistory(req.params.id, { onlyPublished: !canEdit(req.user) && !canReview(req.user),
-        reviewerId:req.user.id, section: req.query.section, page: req.query.page, pageSize: req.query.pageSize, fieldKey:req.query.fieldKey });
+        reviewerId:req.user.id, includeDeleted: req.user.role === "admin", section: req.query.section, page: req.query.page, pageSize: req.query.pageSize, fieldKey:req.query.fieldKey });
       if (!result) return res.status(404).json({ error: "标准不存在" });
       res.locals.responseRows = result.data.length;
       res.json({ ok: true, ...result });
@@ -195,7 +202,8 @@ export function registerStandardRoutes(app) {
   // 审核（通过/驳回）
   app.post("/api/standards/:id/review", jwtAuth, currentUser, (req, res, next) => {
     const pending=getStandard(req.params.id,{includeHistory:false})?.versions.find(version=>version.status==="pending_review");
-    if (pending?.assignedReviewerId ? pending.assignedReviewerId!==req.user.id : !canReview(req.user)) return res.status(403).json({ error: "不是指定审核人" });
+    const adminReject = req.user.role === "admin" && req.body?.approve === false;
+    if (!adminReject && (pending?.assignedReviewerId ? pending.assignedReviewerId!==req.user.id : !canReview(req.user))) return res.status(403).json({ error: "不是指定审核人" });
     next();
   }, async (req, res) => {
     try {
@@ -210,8 +218,36 @@ export function registerStandardRoutes(app) {
     }
   });
 
+  for (const [action, perform] of [["withdraw", withdrawStandard], ["discard-draft", discardDraftStandard]]) {
+    app.post(`/api/standards/:id/${action}`, jwtAuth, currentUser, (req, res) => {
+      try { res.json({ ok: true, data: perform(req.params.id, req.body, actorName(req)) }); }
+      catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+    });
+  }
+
+  app.post("/api/standards/:id/discard", jwtAuth, currentUser, (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ error: "仅管理员可以删除待审内容" });
+    try { res.json({ ok: true, data: discardPendingStandard(req.params.id, req.body, actorName(req)) }); }
+    catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+  });
+
+  app.get("/api/standards/:id/retirement-requests", jwtAuth, currentUser, (req,res) => {
+    if (!getStandard(req.params.id,{onlyPublished:!canEdit(req.user)&&!canReview(req.user)})) return res.status(404).json({error:"标准不存在"});
+    res.json({ok:true,data:listRetirementRequests(req.params.id)});
+  });
+  app.post("/api/standards/:id/retirement-requests", jwtAuth, currentUser, async (req,res) => {
+    try {
+      const request=createRetirementRequest(req.params.id,req.body,req.user);
+      const notification=await notifyRetirementRequested(getStandard(req.params.id),request).catch(()=>({status:"unknown"}));
+      res.status(201).json({ok:true,data:getStandard(req.params.id),request,notification});
+    } catch(error) {res.status(error.status||500).json({error:error.message});}
+  });
+  app.post("/api/standards/:id/retirement-requests/:requestId/review", jwtAuth, currentUser, (req,res) => {
+    try {res.json({ok:true,...reviewRetirementRequest(req.params.id,req.params.requestId,req.body,req.user)});}
+    catch(error) {res.status(error.status||500).json({error:error.message});}
+  });
   app.post("/api/standards/:id/retire", jwtAuth, currentUser, (req, res) => {
-    if (!canReview(req.user)) return res.status(403).json({error:"无权限"});
+    if (!canDirectRetire(req.user)) return res.status(403).json({error:"无直接停用权限"});
     try { res.json({ok:true,data:retireStandard(req.params.id,req.body,actorName(req))}); }
     catch(error) { res.status(error.status || 500).json({error:error.message}); }
   });

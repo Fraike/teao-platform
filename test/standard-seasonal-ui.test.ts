@@ -80,37 +80,21 @@ test('form defaults to summer and supports copying and clearing optional winter 
   } finally { await act(() => root.unmount()); api.post = originalPost; }
 });
 
-test('detail combines seasons and lazily pages complete filtered test changes and source originals independently', async () => {
+test('detail keeps current specifications without change or source comment panels', async () => {
   const originalGet = api.get;
   const requests: string[] = [];
   api.get = (async (url: string) => {
     requests.push(url);
-    if (url.includes('/history')) {
-      const params = new URL(url, 'http://localhost').searchParams;
-      assert.equal(params.get('fieldKey'), 'test_standard');
-      const page = Number(params.get('page'));
-      const pageSize = Number(params.get('pageSize'));
-      return { total: 41, page, pageSize, data: params.get('section') === 'changes'
-        ? [{ id: `c${page}`, fieldKey: 'winter_test_standard', fieldLabel: '冬季测试标准', description: `冬季变更第${page}页\n保留正文`, changedAt: '', author: '工程' }]
-        : [{ id: 'source', fieldKey: 'test_standard', fieldLabel: '测试范围', sourceCell: 'F487', author: '原作者', text: '原始批注\n2010.0431.0805', sourceHash: 'hash' }] };
-    }
-    return url.endsWith('reviewers') ? { ok: true, data: [] } : { ok: true, data: detail };
+    return url.endsWith('reviewers') || url.endsWith('retirement-requests') ? { ok: true, data: [] } : { ok: true, data: detail };
   }) as typeof api.get;
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(StandardDetailDrawer, { open: true, standardId: 's1', categories, canEdit: false, canReview: false, onClose() {}, onChanged() {}, onEdit() {} })));
     await wait();
-    assert.equal(requests.filter(url => url.includes('/history')).length, 0);
     assert.match(document.body.textContent!, /冬季.*100-140/);
-    await click(findText('.ant-collapse-header', '测试标准变更')!); await wait();
-    assert.match(document.body.textContent!, /冬季变更第1页/);
-    assert.equal(requests.filter(url => url.includes('section=comments')).length, 0);
-    await click(document.querySelector('.ant-pagination-next button')!); await wait();
-    assert.match(document.body.textContent!, /冬季变更第2页/);
-    await click(findText('.ant-collapse-header', '测试标准原始批注')!); await wait();
-    assert.match(document.body.textContent!, /F487/);
-    assert.match(document.body.textContent!, /原始批注\s*2010.0431.0805/);
-    assert.ok(requests.some(url => url.includes('section=comments') && url.includes('page=1')));
+    assert.equal(Boolean(findText('.ant-collapse-header', '测试标准变更')), false);
+    assert.equal(Boolean(findText('.ant-collapse-header', '测试标准原始批注')), false);
+    assert.equal(requests.some(url => url.includes('/history')), false);
   } finally { await act(() => root.unmount()); api.get = originalGet; }
 });
 
@@ -128,6 +112,7 @@ test('historical versions combine seasons once and never borrow winter from the 
   try {
     await act(async () => root.render(createElement(StandardHistoryDrawer, { open: true, standardId: 's1', onClose() {} })));
     await wait();
+    assert.equal(document.querySelector('.ant-drawer-title')?.textContent, '变更历史');
     await click(findText('.ant-collapse-header', '查看 V2 完整参数')!);
     await click(findText('.ant-collapse-header', '查看 V1 完整参数')!);
     const panels = [...document.querySelectorAll('.ant-collapse-content')];
@@ -207,4 +192,34 @@ test('test history retries visible errors, cancels old product requests and keep
     await act(async () => pending[4].resolve({ page: 1, pageSize: 20, total: 0, data: [] }));
     assert.match(document.body.textContent!, /无测试标准变更/);
   } finally { await act(() => root.unmount()); api.get = originalGet; }
+});
+
+
+test('change history retains all fields and lazily loads original Excel comments', async () => {
+  clearStandardQueryCache();
+  const originalGet = api.get;
+  const requests: string[] = [];
+  api.get = (async (url: string) => {
+    requests.push(url);
+    if (url.endsWith('categories')) return { data: categories };
+    if (!url.includes('/history')) return { data: detail };
+    const query = new URL(url, 'http://localhost').searchParams;
+    assert.equal(query.has('fieldKey'), false, 'history must include every field');
+    const section = query.get('section');
+    const data = section === 'versions' ? [version] : section === 'changes'
+      ? [{ id: 'change', fieldKey: 'gear_spec', fieldLabel: '齿轮规格', description: '齿轮调整完整记录', changedAt: '', author: '工程' }]
+      : [{ id: 'original', sourceCell: 'F487', fieldLabel: '测试标准', author: '原作者', text: '冬季原始批注完整保留' }];
+    return { data, total: data.length, page: 1, pageSize: Number(query.get('pageSize')) };
+  }) as typeof api.get;
+  const root = createRoot(document.getElementById('root')!);
+  try {
+    await act(async () => root.render(createElement(StandardHistoryDrawer, { open: true, standardId: 's1', onClose() {} })));
+    await wait();
+    assert.equal(document.querySelector('.ant-drawer-title')?.textContent, '变更历史');
+    assert.match(document.body.textContent!, /齿轮调整完整记录/);
+    assert.equal(requests.some(url => url.includes('section=comments')), false);
+    await click(findText('.ant-collapse-header', 'Excel 原始批注')!); await wait();
+    assert.match(document.body.textContent!, /F487/);
+    assert.match(document.body.textContent!, /冬季原始批注完整保留/);
+  } finally { await act(() => root.unmount()); api.get = originalGet; clearStandardQueryCache(); }
 });

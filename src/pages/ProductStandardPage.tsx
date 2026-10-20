@@ -2,11 +2,13 @@ import { groupStandardFields, activeStandardFields } from "../lib/standardFieldG
 import { SeasonalTestStandard } from "../components/standard/SeasonalTestStandard";
 import { GearSpecification } from "../components/standard/GearSpecification";
 import { StandardUsageGuide } from "../components/standard/StandardUsageGuide";
+import { StandardDraftActionButton } from "../components/standard/StandardDraftActionButton";
+import { getStandardDraftAction } from "../lib/standardDraftActions";
 import { StandardRemindButton } from "../components/standard/StandardRemindButton";
 import { lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Select, Tag, Typography, Empty, message, Tabs, Space, Tooltip, Modal } from "antd";
 import { useSearchParams } from "react-router-dom";
-import { PlusOutlined, SearchOutlined, ReloadOutlined, ClearOutlined, HistoryOutlined, EyeOutlined, CopyOutlined, EditOutlined, ImportOutlined, PrinterOutlined } from "@ant-design/icons";
+import { PlusOutlined, SearchOutlined, ReloadOutlined, ClearOutlined, HistoryOutlined, EyeOutlined, CopyOutlined, EditOutlined, PrinterOutlined, StopOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { loadStandardCategories } from "../lib/standardQueryCache";
 import { api } from "../lib/api";
@@ -17,11 +19,14 @@ import { standardStatusColor as statusColor, getStandardPublicationNotice, STAND
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { StandardDetailDrawer } from "../components/standard/StandardDetailDrawer";
 import { StandardHistoryDrawer } from "../components/standard/StandardHistoryDrawer";
-import { StandardImportModal } from "../components/standard/StandardImportModal";
+import { StandardPendingActionModal } from "../components/standard/StandardPendingActionModal";
+import { StandardRetireModal } from "../components/standard/StandardRetireModal";
 import { StandardFormModal } from "../components/standard/StandardFormModal";
 import { StandardRowSelectionProvider, StandardSelectableRow } from "../components/standard/StandardSelectableRow";
 import { CustomerName } from "../components/standard/CustomerName";
 import type {
+  StandardPendingActionTarget,
+  StandardRetireTarget,
   StandardPageResponse,
   StandardCategory,
   StandardDetail,
@@ -36,7 +41,7 @@ import {
 } from "../types/standard";
 import styles from "./ProductStandardPage.module.css";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 const FIELD_COLUMN_WIDTHS: Record<string, number> = {
   torque_standard: 104, test_standard: 108,
@@ -55,8 +60,8 @@ const STATUS_OPTIONS: { value: StandardStatus | "all"; label: string }[] = [
 
 const TYPE_OPTIONS: { value: StandardType | "all"; label: string }[] = [
   { value: "all", label: "全部性质" },
-  { value: "formal", label: "正式标准" },
-  { value: "temporary", label: "临时标准" },
+  { value: "formal", label: "常规" },
+  { value: "temporary", label: "临时" },
   { value: "new_pending", label: "新增待定" },
 ];
 
@@ -67,15 +72,17 @@ function ProductStandardPageContent() {
   const user = useAuthStore((s) => s.user);
   const currentUserId = user?.id;
   const authScope = `${user?.id ?? ""}:${user?.role ?? ""}:${user?.permissions?.join(",") ?? ""}`;
-  const [access, setAccess] = useState<{ scope: string; canEdit: boolean; canReview: boolean; canImport: boolean } | null>(null);
+  const [access, setAccess] = useState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean } | null>(null);
   const canEdit = access?.scope === authScope ? access.canEdit : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_submit"));
   const canReview = access?.scope === authScope ? access.canReview : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_review"));
 
-  const canInitialize = access?.scope === authScope ? access.canImport : user?.role === "admin";
+  const canDirectPublish = user?.role === "admin";
+  const canRetire = access?.scope === authScope && typeof access.canRetire === "boolean" ? access.canRetire : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_retire"));
 
   const [categories, setCategories] = useState<StandardCategory[]>([]);
   const [standardsScope, setStandardsScope] = useState("");
   const [total, setTotal] = useState(0);
+  const [overallTotal, setOverallTotal] = useState<number | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
   const [standards, setStandards] = useState<StandardListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,6 +90,7 @@ function ProductStandardPageContent() {
 
   const [activeCategory, setActiveCategory] = useState<string>("gear_damper");
   const [activeStatus, setActiveStatus] = useState<StandardStatus | "all">("all");
+  const visibleStatus = activeStatus === "deleted" && !canDirectPublish ? "all" : activeStatus;
   const [activeType, setActiveType] = useState<StandardType | "all">("all");
   const [filters, setFilters] = useState({ search: "", customer: "", model: "", customerPartNo: "", vehicleModel: "" });
   const [resetVersion, setResetVersion] = useState(0);
@@ -111,7 +119,8 @@ function ProductStandardPageContent() {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<StandardPendingActionTarget | null>(null);
+  const [retireTarget, setRetireTarget] = useState<StandardRetireTarget | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
   const [formInitial, setFormInitial] = useState<StandardDetail | null>(null);
   const [copySource, setCopySource] = useState<StandardDetail | null>(null);
@@ -119,14 +128,14 @@ function ProductStandardPageContent() {
 
   const requestQuery = useMemo(() => {
     const params = new URLSearchParams({ category: activeCategory, all: "true", includeObsolete: "true" });
-    if (activeStatus !== "all") params.set("status", activeStatus); else params.set("excludeObsolete", "true");
+    if (visibleStatus !== "all") params.set("status", visibleStatus); else params.set("excludeObsolete", "true");
     if (activeType !== "all") params.set("standardType", activeType);
     for (const [key, value] of Object.entries(filters)) {
       if (activeCategory === "sanitary_damper" && (key === "vehicleModel" || key === "customerPartNo")) continue;
       if (value.trim()) params.set(key, value.trim());
     }
     return params.toString();
-  }, [activeCategory, activeStatus, activeType, filters]);
+  }, [activeCategory, visibleStatus, activeType, filters]);
 
   const fetchVersion = useRef(0);
   const invalidateFetch = useCallback(() => { ++fetchVersion.current; }, []);
@@ -150,9 +159,10 @@ function ProductStandardPageContent() {
       setStandards(response.data);
       setStandardsScope(authScope);
       if (typeof response.canEdit === "boolean" && typeof response.canReview === "boolean") {
-        setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canImport: response.canImport === true });
+        setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canRetire: response.canRetire });
       }
       setTotal(response.total ?? response.data.length);
+      setOverallTotal(response.overallTotal ?? null);
       setLastUpdatedAt(response.updatedAt ?? response.data.reduce((latest, item) => item.updatedAt > latest ? item.updatedAt : latest, ""));
       collectionVersion.current = response.version ?? "";
       successfulAt.current = Date.now();
@@ -195,16 +205,24 @@ function ProductStandardPageContent() {
     };
   }, [fetchData, invalidateFetch]);
 
+  const urlStandardId = searchParams.get("standardId");
+  useEffect(() => {
+    if (!urlStandardId) return;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) { setDetailId(urlStandardId); setDetailOpen(true); } });
+    return () => { cancelled = true; };
+  }, [urlStandardId]);
+
   // 从 URL 参数初始化状态筛选（消息提醒「去审核」跳转）
   const urlStatus = searchParams.get("status");
   useEffect(() => {
-    if (urlStatus !== "draft" && urlStatus !== "pending_review" && urlStatus !== "published" && urlStatus !== "obsolete") return;
+    if (urlStatus !== "draft" && urlStatus !== "pending_review" && urlStatus !== "published" && urlStatus !== "obsolete" && !(urlStatus === "deleted" && canDirectPublish)) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) { setActiveStatus((current) => current === urlStatus ? current : urlStatus); }
     });
     return () => { cancelled = true; };
-  }, [urlStatus]);
+  }, [urlStatus, canDirectPublish]);
 
   // 从 URL 参数初始化分类（通知「去处理」跳转到对应分类）
   const urlCategory = searchParams.get("category");
@@ -332,7 +350,7 @@ function ProductStandardPageContent() {
         width: 110,
         fixed: "left",
         render: (value: string, record: StandardListItem) => (
-          <a className={styles.serialValue} title={value} onClick={() => openDetail(record.id)}>{value}</a>
+          <a className={styles.serialValue} title={value} onClick={() => record.status === "deleted" ? openHistory(record.id) : openDetail(record.id)}>{value}</a>
         ),
       },
       {
@@ -391,11 +409,12 @@ function ProductStandardPageContent() {
         width: 150,
         render: (_: unknown, record: StandardListItem) => (
           <Space size={4} wrap>
-            <Tag color={STANDARD_TYPE_COLORS[record.standardType]}>
+            {!(record.standardType === "formal" && record.status !== "published") && <Tag color={STANDARD_TYPE_COLORS[record.standardType]}>
               {STANDARD_TYPE_LABELS[record.standardType]}
-            </Tag>
+            </Tag>}
             <Tag color={statusColor(record.status)}>{STANDARD_STATUS_LABELS[record.status]}</Tag>
             {record.hasPending && <Tag color="orange">有草稿</Tag>}
+            {record.retirementRequest && <Tag color="orange">停用待审</Tag>}
           </Space>
         ),
       },
@@ -408,32 +427,48 @@ function ProductStandardPageContent() {
       },
       {
         title: "操作",
-        key: `action-${canEdit}-${canReview}-${currentUserId}`,
-        width: 146,
+        key: `action-${canEdit}-${canReview}-${canRetire}-${canDirectPublish}-${currentUserId}`,
+        width: 180,
         fixed: "right",
         render: (_: unknown, record: StandardListItem) => (
           <div className={styles.rowActions}>
             <div className={styles.actionIcons} aria-label="常规操作">
-              <Tooltip title="查看详情">
-                <Button type="text" size="small" aria-label={`查看标准 ${record.serialNo}`} icon={<EyeOutlined />} onClick={() => openDetail(record.id)} />
+              <Tooltip title={record.status === "deleted" ? "查看删除归档" : "查看详情"}>
+                <Button type="text" size="small" aria-label={`查看标准 ${record.serialNo}`} icon={<EyeOutlined />} onClick={() => record.status === "deleted" ? openHistory(record.id) : openDetail(record.id)} />
               </Tooltip>
-              {canEdit && (record.status !== "pending_review" || canInitialize) && record.status !== "obsolete" && (
+              {canEdit && (record.status !== "pending_review" || canDirectPublish) && record.status !== "obsolete" && record.status !== "deleted" && (
                 <Tooltip title="编辑">
                   <Button type="text" size="small" aria-label={`编辑标准 ${record.serialNo}`} icon={<EditOutlined />} onClick={() => editStandard(record.id)} />
                 </Tooltip>
               )}
-              {canEdit && (
+              {canEdit && record.status !== "deleted" && (
               <Tooltip title="复制新增">
                 <Button type="text" size="small" aria-label={`复制标准 ${record.serialNo}`} icon={<CopyOutlined />} onClick={() => copyStandard(record.id)} />
               </Tooltip>
               )}
-              <Tooltip title="查看历史">
-                <Button type="text" size="small" aria-label={`标准历史 ${record.serialNo}`} icon={<HistoryOutlined />} onClick={() => openHistory(record.id)} />
+              <Tooltip title="变更历史">
+                <Button type="text" size="small" aria-label={`变更历史 ${record.serialNo}`} icon={<HistoryOutlined />} onClick={() => openHistory(record.id)} />
               </Tooltip>
+              {(canRetire || canEdit) && (record.status === "published" || record.hasPending) && <Tooltip title={record.status !== "published" || record.hasPending ? "请先处理修订稿" : !canRetire && record.retirementRequest ? "已有停用申请待审核" : canRetire ? "直接停用" : "申请停用"}>
+                <span><Button type="text" danger size="small" icon={<StopOutlined />} aria-label={`${canRetire ? "停用标准" : "申请停用"} ${record.serialNo}`}
+                  disabled={record.status !== "published" || record.hasPending || (!canRetire && Boolean(record.retirementRequest))} onClick={() => setRetireTarget(record)} /></span>
+              </Tooltip>}
             </div>
-            {(isMyReview(record) || (record.status === "pending_review" && (canInitialize || Boolean(currentUserId && record.submittedById === currentUserId)))) && <div className={styles.reviewActions} aria-label="待审操作">
+            {record.retirementRequest && (user?.role === "admin" || (canRetire && record.retirementRequest.reviewerId === currentUserId)) && <div className={styles.reviewActions}>
+              <Button type="primary" size="small" onClick={() => openDetail(record.id)}>停用审核</Button>
+            </div>}
+            {record.status === "draft" && getStandardDraftAction(record, user) && <div className={styles.reviewActions} aria-label="草稿操作">
+              <StandardDraftActionButton target={record} action="discard-draft" hasPublished={record.hasPending} onCompleted={() => void fetchData()} />
+            </div>}
+            {(isMyReview(record) || (record.status === "pending_review" && (canDirectPublish || Boolean(currentUserId && record.submittedById === currentUserId)))) && <div className={styles.reviewActions} aria-label="待审操作">
+              {getStandardDraftAction(record, user) === "withdraw" && <StandardDraftActionButton
+                target={record} action="withdraw" hasPublished={record.hasPending} onCompleted={() => void fetchData()} />}
               {isMyReview(record) && <Button type="primary" size="small" aria-label={`审核标准 ${record.serialNo}`} onClick={() => openDetail(record.id)}>审核</Button>}
-              {record.status === "pending_review" && (canInitialize || Boolean(currentUserId && record.submittedById === currentUserId)) && <StandardRemindButton key={`${record.versionNo}:${record.updatedAt}`} standardId={record.id} versionNo={record.versionNo} serialNo={record.serialNo} />}
+              {canDirectPublish && record.status === "pending_review" && <>
+                <Button size="small" danger aria-label={`管理员驳回 ${record.serialNo}`} onClick={() => setPendingAction({ ...record, action: "reject" })}>驳回</Button>
+                <Button size="small" danger aria-label={`管理员删除待审 ${record.serialNo}`} onClick={() => setPendingAction({ ...record, action: "delete" })}>删除</Button>
+              </>}
+              {record.status === "pending_review" && (canDirectPublish || Boolean(currentUserId && record.submittedById === currentUserId)) && <StandardRemindButton key={`${record.versionNo}:${record.updatedAt}`} standardId={record.id} versionNo={record.versionNo} serialNo={record.serialNo} />}
             </div>}
           </div>
         ),
@@ -442,7 +477,7 @@ function ProductStandardPageContent() {
     return result.filter(column => activeCategoryObj?.key !== "sanitary_damper" || !("dataIndex" in column && (column.dataIndex === "vehicleModel" || column.dataIndex === "customerPartNo")))
       .map((column) => ({ ...column, shouldCellUpdate: (record, previous) => record !== previous }));
   }, [activeCategoryObj, filterDropdowns, filters.customer, filters.vehicleModel, filters.model,
-    filters.customerPartNo, canEdit, canReview, canInitialize, currentUserId, openDetail, openHistory, copyStandard, editStandard]);
+    filters.customerPartNo, canEdit, canReview, canRetire, canDirectPublish, currentUserId, user, fetchData, openDetail, openHistory, copyStandard, editStandard]);
 
   const handleSaved = (detail: StandardDetail) => {
     setFormOpen(false);
@@ -476,8 +511,9 @@ function ProductStandardPageContent() {
           <span className={styles.timeBadge}>上次刷新：<strong>{refreshedAt ? new Date(refreshedAt).toLocaleTimeString("zh-CN", { hour12: false }) : "—"}</strong></span>
           {STANDARD_CATEGORY_NOTES[activeCategory] && <span>{STANDARD_CATEGORY_NOTES[activeCategory]}</span>}
         </div>
-        {canInitialize && <Button className={styles.importButton} size="small" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>初始化导入</Button>}
       </div>
+
+      <div className={styles.standardCount}>标准总数：{standardsScope === authScope && overallTotal !== null ? overallTotal : "—"} 条 · 当前筛选：{visibleTotal} 条</div>
 
       <Tabs
         className={styles.tabs}
@@ -491,14 +527,16 @@ function ProductStandardPageContent() {
         <div className={styles.headerActions}>
           {canEdit && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增标准</Button>}
           <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => fetchData()}>刷新</Button>
-          <Button size="small" icon={<PrinterOutlined />} disabled={loading || !categories.length} onClick={() => setPrintOpen(true)}>导出 / 打印</Button>
+          <Tooltip title={visibleStatus === "deleted" ? "删除归档仅供追溯，请通过变更历史查看完整参数" : undefined}>
+            <span><Button size="small" icon={<PrinterOutlined />} disabled={loading || !categories.length || visibleStatus === "deleted"} onClick={() => setPrintOpen(true)}>导出 / 打印</Button></span>
+          </Tooltip>
         </div>
         <Select
           size="small"
           className={styles.filterSelect}
-          value={activeStatus}
+          value={visibleStatus}
           onChange={(value) => { setActiveStatus(value); }}
-          options={STATUS_OPTIONS}
+          options={canDirectPublish ? [...STATUS_OPTIONS, { value: "deleted", label: "已删除（归档）" }] : STATUS_OPTIONS}
         />
         <Select
           size="small"
@@ -520,7 +558,6 @@ function ProductStandardPageContent() {
         <Button size="small" onClick={resetFilters} icon={<ClearOutlined />}>
           重置筛选
         </Button>
-        <Text type="secondary">共 {visibleTotal} 条</Text>
       </div>
 
       <div className={styles.tableWrap}>
@@ -541,9 +578,10 @@ function ProductStandardPageContent() {
         </StandardRowSelectionProvider>
       </div>
 
-      {canInitialize && (
-        <StandardImportModal categories={categories} open={importOpen} onClose={() => setImportOpen(false)} onImported={() => { void fetchData(); }} />
-      )}
+      {canDirectPublish && pendingAction && <StandardPendingActionModal key={`${authScope}:${pendingAction.id}:${pendingAction.action}`}
+        target={pendingAction} onClose={() => setPendingAction(null)} onCompleted={handleChanged} />}
+      {(canRetire || canEdit) && retireTarget && <StandardRetireModal key={`${authScope}:${canRetire}:${retireTarget.id}:${retireTarget.versionNo}`} direct={canRetire} target={retireTarget}
+        onClose={() => setRetireTarget(null)} onRetired={handleChanged} />}
       {printOpen && <Suspense fallback={null}><StandardPrintModal key={authScope} categories={categories} currentCategory={activeCategory} currentRows={filtered} onClose={() => setPrintOpen(false)} /></Suspense>}
 
       <StandardDetailDrawer key={`detail:${authScope}:${canEdit}:${canReview}`}
@@ -551,8 +589,9 @@ function ProductStandardPageContent() {
         standardId={detailId}
         categories={categories}
         canEdit={canEdit}
-        allowDirectEdit={canInitialize}
+        allowDirectEdit={canDirectPublish}
         canReview={canReview}
+        canRetire={canRetire}
         onClose={() => setDetailOpen(false)}
         onChanged={handleChanged}
         onEdit={openEdit}
@@ -563,7 +602,7 @@ function ProductStandardPageContent() {
         onClose={() => setHistoryOpen(false)}
       />
       {canEdit && <StandardFormModal
-        directPublish={canInitialize}
+        directPublish={canDirectPublish}
         open={formOpen}
         categories={categories}
         initial={formInitial}

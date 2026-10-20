@@ -8,7 +8,7 @@ const store = await import("../server/services/standard-store.js"); store.initDB
 const { createStandardReviewReminders } = await import("../server/services/standard-review-reminders.js");
 const editor = { id: "editor", name: "提交人", role: "user" }, admin = { id: "admin", role: "admin" };
 const reviewer = { id: "reviewer", name: "审核人", status: "active", wecomUserid: "reviewer-wecom" };
-let now = Date.now(), configured = true, failure = null, calls = [];
+let now = Date.parse("2026-10-19T22:00:00+08:00"), configured = true, failure = null, calls = [];
 const dependencies = { now: () => now, users: () => [reviewer], config: () => ({ wecomWebhook: configured ? "https://example.invalid/mock" : "" }),
   send: async (_webhook, content, mentions) => { calls.push({ content, mentions }); if (failure) throw failure; } };
 const service = createStandardReviewReminders(dependencies);
@@ -16,6 +16,7 @@ let detail = store.createStandard({ serialNo: "MANUAL-TEST", customer: "客户",
 const expected = () => ({ versionNo: detail.versions[0].versionNo });
 await assert.rejects(service.remind(detail.id, admin, expected()), error => error.status === 409);
 detail = store.submitStandard(detail.id, editor, { versionId: detail.versions[0].id, revision: detail.versions[0].revision, reviewerId: reviewer.id, reviewerName: reviewer.name });
+store.getDB().prepare("UPDATE product_standard_versions SET submitted_at=? WHERE id=?").run(new Date(now - 60000).toISOString(), detail.versions[0].id);
 await assert.rejects(service.remind(detail.id, reviewer, expected()), error => error.status === 403);
 await assert.rejects(service.remind(detail.id, admin, { versionNo: 999 }), error => error.status === 409);
 configured = false; assert.equal((await service.remind(detail.id, editor, expected())).status, "not_configured");
@@ -31,8 +32,11 @@ failure = null; now += 5 * 60000; reviewer.wecomUserid = "";
 const withoutMention = await service.remind(detail.id, admin, expected());
 assert.equal(withoutMention.status, "sent"); assert.equal(withoutMention.mentionedReviewer, false); assert.deepEqual(calls.at(-1).mentions, []);
 const count = calls.length;
-now += 2 * 3600000 - 1; await service.tick(); assert.equal(calls.length, count, "manual reminder delays automatic reminder");
-now++; await service.tick(); assert.equal(calls.length, count + 1);
+assert.equal(withoutMention.nextReminderAt, '2026-10-20T00:00:00.000Z');
+now += 2 * 3600000; await service.tick(); assert.equal(calls.length, count, "no automatic reminder at night");
+now = Date.parse('2026-10-20T08:00:00+08:00'); await service.tick(); assert.equal(calls.length, count + 1);
+await service.tick();assert.equal(calls.length,count+1,'daily automatic reminder deduplicates');
+assert.equal((await service.remind(detail.id, admin, expected())).status, 'cooldown', 'automatic send preserves manual cooldown');
 store.reviewStandard(detail.id, { versionId: detail.versions[0].id, revision: detail.versions[0].revision, approve: true }, reviewer);
 await assert.rejects(service.remind(detail.id, admin, expected()), error => error.status === 409);
 assert.equal(calls.length, count + 1);

@@ -8,12 +8,12 @@ export function listNotificationsPage(user) {
   if (!user) return { total: 0, data: [] };
   const { total, items } = listPendingStandardNotifications(user, { limit: 20 });
   const data = items.map((item) => ({
-    id: `standard_review:${item.id}`,
-    type: "standard_review",
-    title: "产品标准待审核",
+    id: item.kind === "retirement" ? `standard_retirement:${item.requestId}` : `standard_review:${item.id}`,
+    type: item.kind === "retirement" ? "standard_retirement" : "standard_review",
+    title: item.kind === "retirement" ? "申请停用待审核" : "产品标准待审核",
     description: `${item.serialNo} · ${item.customer} · ${item.model || "-"}`,
     time: item.updatedAt || "",
-    link: `/product-standards?status=pending_review&category=${encodeURIComponent(item.categoryKey)}`,
+    link: item.kind === "retirement" ? `/product-standards?category=${encodeURIComponent(item.categoryKey)}&standardId=${encodeURIComponent(item.id)}` : `/product-standards?status=pending_review&category=${encodeURIComponent(item.categoryKey)}`,
   }));
   const recoveries = user.role === "admin" ? listPasswordRecoveryRequests().map(item => ({
     id: `password_recovery:${item.id}`, type: "password_recovery", title: "密码找回待审核",

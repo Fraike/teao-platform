@@ -16,7 +16,8 @@ export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
     permissions: [
       { key: "production_import", label: "生产日报导入", description: "导入 Excel 并全量覆盖日报数据，需先开通生产管理。", requires: "production" },
       { key: "engineering_submit", label: "产品标准提交审核", description: "新增、复制、修改标准草稿，并选择审核人提交。" },
-      { key: "engineering_review", label: "标准审核管理", description: "查看工作版本、审核旧待审记录及停用标准。新申请仅由指定审核人处理。" },
+      { key: "engineering_retire", label: "直接停用产品标准", description: "直接停用已发布标准，并可被指定审核停用申请。" },
+      { key: "engineering_review", label: "标准审核管理", description: "查看工作版本及审核旧待审记录。新申请仅由指定审核人处理。" },
     ],
   },
 ];

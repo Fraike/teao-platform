@@ -10,6 +10,7 @@ try{
  const second=s.createStandard({...input,serialNo:'SP-2',customer:'其他客户'},a);
  first=s.updateStandard(first.id,{...input,customer:'未发布秘密',...exp(first)},a);first=s.submitStandard(first.id,a,exp(first));
  const page=s.listStandardPage({onlyPublished:true,page:1,pageSize:1,customer:'客户%'});
+ assert.equal(page.overallTotal,1);assert.equal(s.listStandardPage({customer:'不存在'}).overallTotal,2);
  assert.equal(page.total,1);assert.equal(page.data[0].customer,'客户%');assert.equal(page.data[0].hasPending,false);
  assert.equal(s.listStandardPage({onlyPublished:true,customer:'秘密'}).total,0);
  page.data[0].customer='cache poisoning';assert.equal(s.listStandardPage({onlyPublished:true,page:1,pageSize:1,customer:'客户%'}).data[0].customer,'客户%');
@@ -26,7 +27,18 @@ try{
  assert.equal(s.listStandardPage({status:'pending_review',vehicleModel:'no'}).total,0);
  const notifications=s.listPendingStandardNotifications(b);assert.equal(notifications.total,1);assert.equal(notifications.items[0].id,first.id);
  assert.equal(s.listPendingStandardNotifications(a).total,0);
- const stamp=s.getStandardQueryVersion();s.createStandard({...input,serialNo:'SP-3'},b);assert.notEqual(s.getStandardQueryVersion(),stamp);
+ const stamp=s.getStandardQueryVersion();s.createStandard({...input,serialNo:'SP-3'},a);assert.notEqual(s.getStandardQueryVersion(),stamp);
  assert.throws(()=>s.listStandardPage({page:'bad'}),e=>e.status===400);
+ let retired=s.submitStandard(second.id,a,exp(second));
+ retired=s.reviewStandard(second.id,{approve:true,...exp(retired)},b);
+ s.retireStandard(retired.id,{...exp(retired),reason:'停用测试'},b);
+ assert.equal(s.listStandardPage({status:'obsolete'}).total,1);
+ assert.equal(s.listStandardPage({status:'obsolete'}).overallTotal,2);
+ const third=s.listStandardPage({search:'SP-3'}).data[0];
+ s.discardDraftStandard(third.id,{versionId:third.versionId,revision:third.revision},b);
+ assert.equal(s.listStandardPage({status:'deleted'}).total,1);
+ assert.equal(s.listStandardPage({status:'deleted'}).overallTotal,1);
+ assert.equal(s.listStandardPage({category:'nonexistent',search:'none'}).overallTotal,1);
+ assert.equal(s.listStandardPage({onlyPublished:true,status:'obsolete'}).overallTotal,1);
  console.log('standard SQL pagination, view permissions, filters, notifications and invalidation passed');
 }finally{s.closeDB();}

@@ -1,0 +1,6 @@
+.panel { width: 100%; margin-top: 16px; }
+.item { padding: 12px; border: 1px solid #e8edf3; border-radius: 8px; margin-top: 8px; }
+.reason { white-space: pre-wrap; overflow-wrap: anywhere; }
+.actions { margin-top: 8px; }
+
+.meta { color: #64748b; font-size: 12px; }

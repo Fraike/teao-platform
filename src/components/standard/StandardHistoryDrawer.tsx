@@ -8,9 +8,9 @@ import { useAuthStore } from "../../lib/authStore";
 import { loadStandardCategories } from "../../lib/standardQueryCache";
 import { useStandardHistoryPage } from "../../lib/useStandardHistoryPage";
 import { api } from "../../lib/api";
-import { standardStatusColor as statusColor } from "../../lib/standardFormat";
+import { standardStatusColor as statusColor, standardTypeDisplayLabel } from "../../lib/standardFormat";
 import type { StandardDetail, StandardCategory, StandardVersion, StandardChange, StandardSourceComment } from "../../types/standard";
-import { STANDARD_STATUS_LABELS, STANDARD_TYPE_LABELS, STANDARD_TYPE_COLORS } from "../../types/standard";
+import { STANDARD_STATUS_LABELS, STANDARD_TYPE_COLORS } from "../../types/standard";
 
 interface StandardHistoryDrawerProps {
   open: boolean;
@@ -22,10 +22,10 @@ export function StandardHistoryDrawer(props: StandardHistoryDrawerProps) {
   const user = useAuthStore(state => state.user);
   const scope = `${user?.id}:${user?.role}:${user?.permissions?.join(",")}`;
   if (!props.open || !props.standardId) return null;
-  return <StandardHistoryContent key={`${props.standardId}:${scope}`} standardId={props.standardId} onClose={props.onClose} />;
+  return <StandardHistoryContent key={`${props.standardId}:${scope}`} standardId={props.standardId} onClose={props.onClose} includeDeleted={user?.role === "admin"} />;
 }
 
-function StandardHistoryContent({ standardId, onClose }: { standardId: string; onClose: () => void }) {
+function StandardHistoryContent({ standardId, onClose, includeDeleted }: { standardId: string; onClose: () => void; includeDeleted: boolean }) {
   const [detail, setDetail] = useState<StandardDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<StandardCategory[]>([]);
@@ -37,17 +37,17 @@ function StandardHistoryContent({ standardId, onClose }: { standardId: string; o
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true`, { signal: controller.signal }),
+      api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true${includeDeleted ? "&includeDeleted=true" : ""}`, { signal: controller.signal }),
       loadStandardCategories(),
     ]).then(([response, categoryData]) => {
       if (!controller.signal.aborted) { setDetail(response.data); setCategories(categoryData); }
     }).catch(() => { if (!controller.signal.aborted) setDetail(null); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [standardId]);
+  }, [standardId, includeDeleted]);
 
   return (
-    <Drawer title="版本与变更历史" open onClose={onClose} width={640}>
+    <Drawer title="变更历史" open onClose={onClose} width={640}>
       {loading ? (
         <Spin size="large" />
       ) : !detail ? (
@@ -64,7 +64,7 @@ function StandardHistoryContent({ standardId, onClose }: { standardId: string; o
                 <Space direction="vertical" size={0}>
                   <span>
                     <Tag color={statusColor(v.status)}>{STANDARD_STATUS_LABELS[v.status]}</Tag>
-                    <Tag color={STANDARD_TYPE_COLORS[v.standardType]}>{STANDARD_TYPE_LABELS[v.standardType]}</Tag>
+                    <Tag color={STANDARD_TYPE_COLORS[v.standardType]}>{standardTypeDisplayLabel(v.standardType,v.status)}</Tag>
                     V{v.versionNo} · 创建人 {v.createdBy}
                   </span>
                   {v.reviewedBy && (

@@ -72,7 +72,8 @@ fi
 # 启动后端
 echo -e "${YELLOW}📦 启动后端 (Express :3899)...${NC}"
 cd "$PROJECT_DIR/server"
-NODE_ENV=development node --env-file="$ENV_FILE" server.js &
+REMINDERS_ENABLED=$(node --env-file="$ENV_FILE" -p 'process.env.STANDARD_REVIEW_REMINDERS_ENABLED ?? "true"')
+STANDARD_REVIEW_REMINDERS_ENABLED="$REMINDERS_ENABLED" NODE_ENV=development node --env-file="$ENV_FILE" server.js &
 BACKEND_PID=$!
 echo -e "${GREEN}  后端 PID: $BACKEND_PID${NC}"
 

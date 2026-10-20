@@ -179,11 +179,11 @@ export function StandardFormModal({
             />
           </Form.Item>
 
-          <Form.Item name="standardType" label="标准性质" rules={[{ required: true }]}>
+          <Form.Item name="standardType" label="拟发布性质" rules={[{ required: true }]}>
             <Radio.Group>
               {Object.entries(STANDARD_TYPE_LABELS).map(([value, label]) => (
                 <Radio key={value} value={value}>
-                  {label}
+                  {value === "formal" ? "常规" : value === "temporary" ? "临时" : label}
                 </Radio>
               ))}
             </Radio.Group>

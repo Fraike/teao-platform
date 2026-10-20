@@ -76,23 +76,19 @@ test('server filters preserve IME/focus, cancel old requests and skip fresh back
   }
 });
 
-test('initialization import button and modal are restricted to admins', async () => {
+test('import entry is removed and retirement is restricted to reviewers and admins', async () => {
   clearStandardQueryCache();
   const originalGet = api.get;
-  api.get = (async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : [] })) as typeof api.get;
+  api.get = (async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : [item('retire', '客户')] })) as typeof api.get;
   const root = createRoot(document.getElementById('root')!);
   try {
-    await act(async () => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage))));
-    await wait(10);
-    assert.equal(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.includes('初始化导入')), false);
-    await act(() => useAuthStore.setState({ user: { id: 'admin', name: 'Mike', role: 'admin', permissions: [] } as NonNullable<ReturnType<typeof useAuthStore.getState>['user']> }));
-    const button = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('初始化导入'));
-    assert.ok(button);
-    await click(button); await wait(30);
-    assert.ok(document.querySelector('.ant-modal'), 'admin button must open the actual import modal');
-    await act(() => useAuthStore.setState({ user: null }));
-    await wait(30);
-    assert.equal(document.querySelector('.ant-modal'), null, 'losing admin access must unmount import modal');
+    for (const [role, permissions, allowed] of [['user', ['engineering_submit'], false], ['user', ['engineering_review'], false], ['admin', [], true]] as const) {
+      await act(() => useAuthStore.setState({ user: { id: role + permissions.join(''), name: '测试', role, permissions: [...permissions] } as NonNullable<ReturnType<typeof useAuthStore.getState>['user']> }));
+      await act(async () => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage))));
+      await wait(10);
+      assert.equal(document.body.textContent?.includes('初始化导入'), false);
+      assert.equal(Boolean(document.querySelector('button[aria-label="停用标准 SN-retire"]')), allowed);
+    }
   } finally {
     await act(() => root.unmount()); api.get = originalGet; await act(() => useAuthStore.setState({ user: null }));
   }
@@ -161,7 +157,7 @@ test('page exposes notes, uses native scrolling and toggles a single highlighted
     assert.equal(second.querySelectorAll('button').length, 2);
     await act(() => useAuthStore.setState({ user: { id: 'admin', name: 'Mike', role: 'admin', permissions: [] } as NonNullable<ReturnType<typeof useAuthStore.getState>['user']> }));
     await wait(30); [first, second] = Array.from(document.querySelectorAll('.ant-table-row'));
-    assert.equal(second.querySelectorAll('button').length, 4, 'cached cells must respond to permissions');
+    assert.equal(second.querySelectorAll('button').length, 5, 'cached cells must respond to permissions');
     await act(() => useAuthStore.setState({ user: null }));
     await wait(30); [first, second] = Array.from(document.querySelectorAll('.ant-table-row'));
     assert.equal(second.querySelectorAll('button').length, 2, 'revoking edit rights must remove editing actions');
