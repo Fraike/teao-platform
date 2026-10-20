@@ -43,16 +43,14 @@
   overflow-wrap: anywhere;
 }
 
-.tabs {
-  min-width: 0;
-  flex-shrink: 0;
-}
-
 .standardCount {
+  margin-inline-start: auto;
   flex-shrink: 0;
   color: rgba(0, 0, 0, 0.55);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .timeBadge {
@@ -69,18 +67,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tabs :global(.ant-tabs-nav) {
-  margin: 0;
-}
-
-.tabs :global(.ant-tabs-tab) {
-  padding: 4px 0;
-}
-
-.tabs :global(.ant-tabs-tab + .ant-tabs-tab) {
-  margin-left: 16px;
-}
-
 .toolbar {
   display: flex;
   align-items: center;
@@ -94,8 +80,10 @@
 }
 
 .searchInput {
-  width: 280px;
-  max-width: 100%;
+  flex: 1 1 160px;
+  min-width: 140px;
+  width: auto;
+  max-width: 320px;
 }
 
 .filterDropdown {
@@ -214,6 +202,7 @@
 
 
 .tableWrap :global(.ant-table-tbody > tr > td.ant-table-cell) {
+  padding-block: 10px;
   transition: none;
 }
 

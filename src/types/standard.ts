@@ -14,6 +14,12 @@ export interface StandardCategory {
   fields: StandardCategoryField[];
 }
 
+export interface StandardCategoryTabsProps {
+  categories: StandardCategory[];
+  activeKey: string;
+  onChange: (key: string) => void;
+}
+
 export interface StandardFields {
   [key: string]: string;
 }

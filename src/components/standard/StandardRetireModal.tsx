@@ -1,5 +1,5 @@
 import styles from "./StandardRetireModal.module.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Alert, Input, Modal, Select, message } from "antd";
 import { api } from "../../lib/api";
 import type { StandardDetail, StandardRetireTarget, StandardVersion } from "../../types/standard";
@@ -19,6 +19,7 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const submitting = useRef(false);
+  const reasonCountId = useId();
 
   useEffect(() => {
     let disposed = false;
@@ -68,8 +69,9 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
     {!direct && <Select className={styles.reviewerSelect} aria-label="停用审核人" placeholder="请选择停用审核人" value={reviewerId} onChange={setReviewerId}
       showSearch optionFilterProp="label" disabled={saving} options={reviewers.map(person=>({value:person.id,label:person.name}))} />}
     {!direct && !reviewers.length && <p>暂无可选审核人，请联系管理员。</p>}
-    <Input.TextArea aria-label="停用原因" placeholder="请填写停用原因（必填）" value={reason}
-      maxLength={2000} showCount disabled={saving} autoSize={{ minRows: 3, maxRows: 6 }}
+    <Input.TextArea aria-label="停用原因" aria-describedby={reasonCountId} placeholder="请填写停用原因（必填）" value={reason}
+      maxLength={2000} disabled={saving} autoSize={{ minRows: 3, maxRows: 6 }}
       onChange={event => setReason(event.target.value)} />
+    <div id={reasonCountId} className={styles.reasonCount}>{reason.length} / 2000</div>
   </Modal>;
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import './standard-frontend-dom.ts';
+Object.assign(globalThis, { HTMLBodyElement: window.HTMLBodyElement, HTMLHtmlElement: window.HTMLHtmlElement });
 import { createElement, act } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import type { StandardListItem } from '../src/types/standard.ts';
@@ -45,7 +46,7 @@ test('server filters preserve IME/focus, cancel old requests and skip fresh back
     await resolveList(1, [item('1', 'Alpha'), item('2', 'Beta')]);
     await click(document.querySelector('.ant-table-filter-trigger')!); await wait(30);
     const input = document.querySelector<HTMLInputElement>('input[placeholder="筛选客户名"]')!;
-    await act(() => input.focus()); await setInput(input, 'no match');
+    assert.equal(document.activeElement === input, true, 'opening the column filter must focus its input'); await setInput(input, 'no match');
     assert.equal(rows().length, 2); await wait(220); await wait(10);
     assert.equal(new URL(pending[2].url, 'http://local').searchParams.get('customer'), 'no match');
     await resolveList(2, []);
@@ -214,4 +215,41 @@ test('pending standards lead each category while preserving order within both se
       await act(() => root.unmount()); api.get = originalGet; clearStandardQueryCache();
     }
   }
+});
+
+
+test('every column filter focuses on opening and reopening; categories and summary remain visible', async () => {
+  clearStandardQueryCache();
+  const originalGet = api.get;
+  const sevenCategories = ['齿形阻尼器','筒型阻尼器','齿条阻尼器','锁类·同步器','空气拉绳阻尼器','空气拉柄阻尼器','智能卫浴'].map((name,index)=>({key:index===0?'gear_damper':`category-${index}`,name,fields:[]}));
+  const requests:string[]=[];
+  api.get = (async (url:string) => { requests.push(url); return {data:url.endsWith('/categories') ? sevenCategories : [item('focus','客户')],total:344,overallTotal:808,version:'focus'}; }) as typeof api.get;
+  const root=createRoot(document.getElementById('root')!);
+  try {
+    await act(async()=>root.render(createElement(MemoryRouter,null,createElement(ProductStandardPage))));await wait(70);
+    assert(document.body.textContent?.includes('审核后发布'));
+    assert(!document.body.textContent?.includes('管理员保存即生效'));
+    const categoryGroup=document.querySelector('[aria-label="产品分类"]');
+    assert(categoryGroup,'category navigation must expose every category');
+    assert.equal(categoryGroup!.querySelectorAll('input[type="radio"]').length,7);
+    assert(document.body.textContent?.includes('共 7 类'));
+    const toolbar=[...document.querySelectorAll('div')].find(node=>node.querySelector('input[placeholder^="搜索序号"]') && node.textContent?.includes('重置筛选') && node.textContent?.includes('标准总数：808 条') && !node.querySelector('table'));
+    assert(toolbar,'totals belong in the filter toolbar instead of a separate row');
+    const triggers=[...document.querySelectorAll('.ant-table-header .ant-table-filter-trigger')];
+    assert.equal(triggers.length,4);
+    for(let index=0;index<triggers.length;index++) {
+      const placeholders=['筛选客户名','筛选项目代号','筛选型号','筛选客户料号'];
+      for(let attempt=0;attempt<2;attempt++) {
+        await click(triggers[index]);await wait(50);
+        const input=document.querySelector<HTMLInputElement>(`input[placeholder="${placeholders[index]}"]`);
+        assert(input,`missing popup for column ${index}, attempt ${attempt}; header ${triggers[index].closest('th')?.textContent}; inputs ${[...document.querySelectorAll('input')].map(element=>element.placeholder).filter(Boolean).join(',')}`);assert.equal(document.activeElement===input,true,`column ${index}, attempt ${attempt}: expected ${placeholders[index]}, focused ${(document.activeElement as HTMLInputElement)?.placeholder}`);
+        await click(triggers[index]);await wait(30);
+        await act(()=>document.querySelector<HTMLInputElement>('input[placeholder^="搜索序号"]')?.focus());
+      }
+    }
+    const sanitary=categoryGroup!.querySelector<HTMLInputElement>('input[value="category-6"]')!;
+    await click(sanitary);await wait(40);
+    assert.equal(sanitary.checked,true);
+    assert(requests.some(url=>new URL(url,'http://local').searchParams.get('category')==='category-6'));
+  } finally {await act(()=>root.unmount());api.get=originalGet;clearStandardQueryCache();}
 });

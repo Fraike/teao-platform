@@ -5,8 +5,10 @@ import { StandardUsageGuide } from "../components/standard/StandardUsageGuide";
 import { StandardDraftActionButton } from "../components/standard/StandardDraftActionButton";
 import { getStandardDraftAction } from "../lib/standardDraftActions";
 import { StandardRemindButton } from "../components/standard/StandardRemindButton";
-import { lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Select, Tag, Typography, Empty, message, Tabs, Space, Tooltip, Modal } from "antd";
+import { createRef, lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Select, Tag, Typography, Empty, message, Space, Tooltip, Modal } from "antd";
+import type { InputRef } from "antd";
+import { StandardCategoryTabs } from "../components/standard/StandardCategoryTabs";
 import { useSearchParams } from "react-router-dom";
 import { PlusOutlined, SearchOutlined, ReloadOutlined, ClearOutlined, HistoryOutlined, EyeOutlined, CopyOutlined, EditOutlined, PrinterOutlined, StopOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
@@ -42,6 +44,22 @@ import {
 import styles from "./ProductStandardPage.module.css";
 
 const { Title } = Typography;
+
+function createColumnFilterControl() {
+  const inputRef = createRef<InputRef>();
+  let frame: number | undefined;
+  const cancelFocus = () => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+  };
+  return { inputRef, cancelFocus, dropdownProps: { onOpenChange: (open: boolean) => {
+    cancelFocus();
+    if (open) frame = requestAnimationFrame(() => {
+      frame = undefined;
+      inputRef.current?.focus({ preventScroll: true, cursor: "end" });
+    });
+  } } };
+}
 
 const FIELD_COLUMN_WIDTHS: Record<string, number> = {
   torque_standard: 104, test_standard: 108,
@@ -94,6 +112,9 @@ function ProductStandardPageContent() {
   const [activeType, setActiveType] = useState<StandardType | "all">("all");
   const [filters, setFilters] = useState({ search: "", customer: "", model: "", customerPartNo: "", vehicleModel: "" });
   const [resetVersion, setResetVersion] = useState(0);
+  const filterControls = useMemo(() => ({ customer: createColumnFilterControl(), model: createColumnFilterControl(),
+    customerPartNo: createColumnFilterControl(), vehicleModel: createColumnFilterControl() }), []);
+  useEffect(() => () => Object.values(filterControls).forEach(control => control.cancelFocus()), [filterControls]);
   const applyFilters = useMemo(() => {
     const apply = (key: keyof typeof filters) => (value: string) => {
       setFilters((current) => current[key] === value ? current : { ...current, [key]: value });
@@ -103,16 +124,16 @@ function ProductStandardPageContent() {
   }, []);
   // 普通输入及防抖提交不会改变下拉渲染函数，避免 rc-table 重挂载输入框。
   const filterDropdowns = useMemo(() => {
-    const dropdown = (key: keyof typeof applyFilters, placeholder: string) =>
+    const dropdown = (key: keyof typeof filterControls, placeholder: string) =>
       ({ selectedKeys }: FilterDropdownProps) => (
         <div className={styles.filterDropdown}>
-          <StandardFilterInput size="small" allowClear autoFocus placeholder={placeholder}
+          <StandardFilterInput size="small" allowClear inputRef={filterControls[key].inputRef} placeholder={placeholder}
             initialValue={String(selectedKeys[0] ?? "")} resetVersion={resetVersion} onApply={applyFilters[key]} />
         </div>
       );
     return { customer: dropdown("customer", "筛选客户名"), model: dropdown("model", "筛选型号"),
       customerPartNo: dropdown("customerPartNo", "筛选客户料号"), vehicleModel: dropdown("vehicleModel", "筛选项目代号") };
-  }, [applyFilters, resetVersion]);
+  }, [applyFilters, resetVersion, filterControls]);
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -358,6 +379,7 @@ function ProductStandardPageContent() {
         dataIndex: "customer",
         width: 160,
         filterDropdown: filterDropdowns.customer,
+        filterDropdownProps: filterControls.customer.dropdownProps,
         filterIcon: (filtered: boolean) => (
           <SearchOutlined className={filtered ? styles.filterIconActive : styles.filterIcon} />
         ),
@@ -375,6 +397,7 @@ function ProductStandardPageContent() {
         dataIndex: "vehicleModel",
         width: 100,
         filterDropdown: filterDropdowns.vehicleModel,
+        filterDropdownProps: filterControls.vehicleModel.dropdownProps,
         filterIcon: (filtered: boolean) => (
           <SearchOutlined className={filtered ? styles.filterIconActive : styles.filterIcon} />
         ),
@@ -387,6 +410,7 @@ function ProductStandardPageContent() {
         width: 120,
         render: (value: string) => <span className={value ? styles.modelValue : styles.parameterValue}>{value || "—"}</span>,
         filterDropdown: filterDropdowns.model,
+        filterDropdownProps: filterControls.model.dropdownProps,
         filterIcon: (filtered: boolean) => (
           <SearchOutlined className={filtered ? styles.filterIconActive : styles.filterIcon} />
         ),
@@ -397,6 +421,7 @@ function ProductStandardPageContent() {
         dataIndex: "customerPartNo",
         width: 130,
         filterDropdown: filterDropdowns.customerPartNo,
+        filterDropdownProps: filterControls.customerPartNo.dropdownProps,
         filterIcon: (filtered: boolean) => (
           <SearchOutlined className={filtered ? styles.filterIconActive : styles.filterIcon} />
         ),
@@ -476,7 +501,7 @@ function ProductStandardPageContent() {
     ];
     return result.filter(column => activeCategoryObj?.key !== "sanitary_damper" || !("dataIndex" in column && (column.dataIndex === "vehicleModel" || column.dataIndex === "customerPartNo")))
       .map((column) => ({ ...column, shouldCellUpdate: (record, previous) => record !== previous }));
-  }, [activeCategoryObj, filterDropdowns, filters.customer, filters.vehicleModel, filters.model,
+  }, [activeCategoryObj, filterDropdowns, filterControls, filters.customer, filters.vehicleModel, filters.model,
     filters.customerPartNo, canEdit, canReview, canRetire, canDirectPublish, currentUserId, user, fetchData, openDetail, openHistory, copyStandard, editStandard]);
 
   const handleSaved = (detail: StandardDetail) => {
@@ -505,7 +530,7 @@ function ProductStandardPageContent() {
         <Title level={4} className={styles.title}>产品标准</Title>
         <StandardUsageGuide />
         <div className={styles.notes}>
-          <span>管理员保存即生效；其他人员审核后发布</span>
+          <span>审核后发布</span>
           <span>文件编码：TA-WI-ZP-10</span>
           <span className={styles.timeBadge}>数据更新时间：<strong>{lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString("zh-CN", { hour12: false }) : "—"}</strong></span>
           <span className={styles.timeBadge}>上次刷新：<strong>{refreshedAt ? new Date(refreshedAt).toLocaleTimeString("zh-CN", { hour12: false }) : "—"}</strong></span>
@@ -513,14 +538,10 @@ function ProductStandardPageContent() {
         </div>
       </div>
 
-      <div className={styles.standardCount}>标准总数：{standardsScope === authScope && overallTotal !== null ? overallTotal : "—"} 条 · 当前筛选：{visibleTotal} 条</div>
-
-      <Tabs
-        className={styles.tabs}
-        size="small"
+      <StandardCategoryTabs
+        categories={categories}
         activeKey={activeCategory}
-        onChange={(value) => { setActiveCategory(value); }}
-        items={categories.map((c) => ({ key: c.key, label: c.name }))}
+        onChange={setActiveCategory}
       />
 
       <div className={styles.toolbar}>
@@ -558,6 +579,7 @@ function ProductStandardPageContent() {
         <Button size="small" onClick={resetFilters} icon={<ClearOutlined />}>
           重置筛选
         </Button>
+        <div className={styles.standardCount}>标准总数：{standardsScope === authScope && overallTotal !== null ? overallTotal : "—"} 条 · 当前筛选：{visibleTotal} 条</div>
       </div>
 
       <div className={styles.tableWrap}>

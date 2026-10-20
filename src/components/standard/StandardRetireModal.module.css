@@ -1,2 +1,9 @@
 .reviewerSelect { width: 100%; margin-bottom: 12px; }
 .feedback { margin-bottom: 12px; }
+.reasonCount {
+  margin-top: 6px;
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+}

@@ -1,0 +1,86 @@
+.navigation {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: #475569;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.count {
+  color: #64748b;
+  font-weight: 400;
+}
+
+.options {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.options :global(.ant-radio-button-wrapper) {
+  height: 38px;
+  padding-inline: 16px;
+  border: 1px solid #d9e2ef;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-weight: 500;
+  line-height: 36px;
+}
+
+.options :global(.ant-radio-button-wrapper)::before {
+  display: none;
+}
+
+.options :global(.ant-radio-button-wrapper:hover) {
+  border-color: #91caff;
+  color: #0958d9;
+}
+
+.options :global(.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)) {
+  border-color: #1677ff;
+  background: #e6f4ff;
+  color: #0958d9;
+  font-weight: 600;
+}
+
+.options :global(.ant-radio-button-wrapper:focus-within) {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .options :global(.ant-radio-button-wrapper) {
+    height: 44px;
+    line-height: 42px;
+  }
+}
+
+@media (max-width: 600px) {
+  .navigation {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .heading {
+    min-height: auto;
+  }
+}
