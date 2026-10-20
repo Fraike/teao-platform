@@ -44,6 +44,16 @@
   margin-left: auto;
 }
 
+.lineFilter {
+  width: 170px;
+  flex-shrink: 0;
+}
+
+.lineFilter :global(.ant-select-selection-item) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* 纵向滚动 + 横向滚动的统一容器 */
 .content {
   flex: 1;

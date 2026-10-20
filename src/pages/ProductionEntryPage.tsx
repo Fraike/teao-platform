@@ -25,7 +25,7 @@ import { ProductionDateTable } from "../components/productionDateTable";
 import { useProductionHistory } from "../lib/productionHistory";
 import { buildAssemblySummary, replaceProductionRecord } from "../lib/productionGroups";
 import { exportProductionExcel, type ExportColumn } from "../lib/productionExcel";
-import { splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
+import { buildAssemblyLineOptions, splitPersonnelNames, type OrderQtySort } from "../lib/productionEntry";
 import { KingdeeDataRefreshButton } from "../components/production/KingdeeDataRefreshButton";
 import { getProductionDailyTableSticky } from "../lib/productionTable";
 import styles from "./ProductionEntryPage.module.css";
@@ -125,7 +125,7 @@ export function ProductionEntryPage() {
   useEffect(() => {
     api.get<{ ok: boolean; data: string[] }>("/api/production/lines")
       .then((result) => {
-        if (result.ok) setLines(result.data.filter((line) => line && !line.includes("组装线")));
+        if (result.ok) setLines(buildAssemblyLineOptions(result.data));
       })
       .catch(() => undefined);
   }, []);
@@ -325,7 +325,8 @@ export function ProductionEntryPage() {
             onChange={(dates) => { if (dates && dates[0] && dates[1]) { setFDateFrom(dates[0].format("YYYY-MM-DD")); setFDateTo(dates[1].format("YYYY-MM-DD")); } }}
             allowClear size="middle" style={{ width: 240 }} placeholder={["开始日期", "结束日期"]}
           />
-          <Select placeholder="产线" value={fLine} onChange={setFLine} allowClear size="middle" style={{ width: 90 }}
+          <Select placeholder="选择产线" aria-label="筛选产线" value={fLine} onChange={setFLine} allowClear showSearch optionFilterProp="label"
+            size="middle" className={styles.lineFilter} popupMatchSelectWidth={240}
             options={lines.map((l) => ({ value: l, label: l }))} />
           <Input placeholder="品名搜索" value={fProduct} onChange={(e) => setFProduct(e.target.value)} allowClear size="middle" style={{ width: 160 }}
             onPressEnter={doSearch} />

@@ -1,4 +1,5 @@
 import { writeGeneratedReport } from "../config.js";
+import { productionCustomerName } from "./production-customer-name.js";
 import {
   getAssemblyEntriesForDate,
   getAssemblyEntriesForRange,
@@ -149,7 +150,7 @@ export function buildWecomContent(date, assembly, injection) {
   lines.push("|------|------|------|------|------|");
   for (const line of sortedAssembly) {
     for (const p of line.products) {
-      lines.push(`| ${cell(line.line)} | ${cell(p.customer === "-" ? "" : p.customer)} | ${cell(p.name)} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
+      lines.push(`| ${cell(line.line)} | ${cell(productionCustomerName(p.customer === "-" ? "" : p.customer))} | ${cell(p.name)} | ${p.actualQty.toLocaleString()} | ${p.defects > 0 ? p.defects.toString() : "-"} |`);
     }
   }
   lines.push("");

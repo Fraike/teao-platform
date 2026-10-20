@@ -1,5 +1,10 @@
 export type OrderQtySort = "asc" | "desc" | null;
 
+export function buildAssemblyLineOptions(lines: readonly string[]): string[] {
+  return [...new Set(lines.filter(line => line.trim()))]
+    .sort((left, right) => left.localeCompare(right, "zh-CN", { numeric: true }));
+}
+
 export function getInjectionShiftVisual(shift: string): { tone: "day" | "night"; icon: "sun" | "moon" } {
   return shift === "白班" ? { tone: "day", icon: "sun" } : { tone: "night", icon: "moon" };
 }

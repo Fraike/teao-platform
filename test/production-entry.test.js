@@ -50,6 +50,16 @@ const injectionRecord = (overrides = {}) => ({
 try {
   initDB();
 
+  for (const line of ['2#', '2#组装线', '12#组装线', '2#线组装', '2组装线']) {
+    createEntry(assemblyRecord({ date: '2026-07-01', line }), 'test-user');
+  }
+  const lineFilter = { dateFrom: '2026-07-01', dateTo: '2026-07-01', line: '2#组装线' };
+  assert.equal(queryEntries(lineFilter).total, 1);
+  assert.equal(queryEntries(lineFilter).groups[0].records[0].line, '2#组装线');
+  assert.equal(exportAssemblyEntries(lineFilter).groups[0].records.length, 1);
+  // Remove only this isolated test fixture so subsequent totals remain unchanged.
+  getDB().prepare("DELETE FROM assembly_records WHERE date = ?").run('2026-07-01');
+
   assert.ok(productIdentity, "服务端生产商品校验模块应存在");
   fs.writeFileSync(path.join(testDirectory, "kingdee_materials.json"), JSON.stringify({ data: [
     { id: "finished-root", number: "SP-ROOT", name: "根分类成品", parent_id: "2314557705978701824" },
