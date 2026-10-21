@@ -44,8 +44,14 @@ export function ProductionProductSelect({
   );
   const legacyValue = value?.trim() && !resolvedOption ? `legacy:${value}` : undefined;
   const selectOptions = useMemo(() => {
-    if (!legacyValue) return filteredOptions;
-    return [{ value: legacyValue, label: `历史数据：${value}`, disabled: true }, ...filteredOptions];
+    const grouped = filteredOptions.some(option => option.group)
+      ? ["成品", "金蝶未分类"].map(group => ({
+        label: group,
+        options: filteredOptions.filter(option => (option.group || "成品") === group),
+      })).filter(group => group.options.length > 0)
+      : filteredOptions;
+    if (!legacyValue) return grouped;
+    return [{ value: legacyValue, label: `历史数据：${value}`, disabled: true }, ...grouped];
   }, [filteredOptions, legacyValue, value]);
   const selectedValue = useMemo(() => {
     return getProductionProductSelectedValue(

@@ -120,6 +120,8 @@
 }
 
 .tableWrap {
+  /* Stable reading density, independent of the category/overview layout. */
+  --standard-row-height: 64px;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -201,8 +203,11 @@
 
 
 
-.tableWrap :global(.ant-table-tbody > tr > td.ant-table-cell) {
-  padding-block: 10px;
+.tableWrap :global(.ant-table.ant-table-small .ant-table-tbody > tr.ant-table-row > td.ant-table-cell) {
+  height: var(--standard-row-height);
+  padding: 10px 8px;
+  box-sizing: border-box;
+  vertical-align: middle;
   transition: none;
 }
 

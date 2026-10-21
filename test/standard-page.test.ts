@@ -11,6 +11,7 @@ const { api } = await import('../src/lib/api.ts');
 const { useAuthStore } = await import('../src/lib/authStore.ts');
 const { message } = await import('antd');
 const { clearStandardQueryCache } = await import('../src/lib/standardQueryCache.ts');
+import { withEmptyPendingOverview as withOverview } from './standard-pending-fixture.ts';
 const wait = (ms: number) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); });
 const categories = [{ key: 'gear_damper', name: '齿轮阻尼器', fields: [{ key: 'torque', label: '扭矩' }] }];
 const item = (id: string, customer: string): StandardListItem => ({
@@ -31,7 +32,7 @@ test('server filters preserve IME/focus, cancel old requests and skip fresh back
   const errors: unknown[] = [];
   message.error = ((error: unknown) => { errors.push(error); }) as typeof message.error;
   const pending: { url: string; signal?: AbortSignal | null; resolve: (data: unknown) => void }[] = [];
-  api.get = (<T>(url: string, options?: RequestInit) => new Promise<T>(resolve => pending.push({ url, signal: options?.signal, resolve: resolve as (data: unknown) => void }))) as typeof api.get;
+  api.get = withOverview((<T>(url: string, options?: RequestInit) => new Promise<T>(resolve => pending.push({ url, signal: options?.signal, resolve: resolve as (data: unknown) => void }))) as typeof api.get);
   const resolveList = async (offset: number, data: StandardListItem[]) => act(async () => {
     pending[offset].resolve({ ok: true, data, total: data.length, page: 1, pageSize: 50, version: "v1", updatedAt: '2026-10-13T00:00:00Z' });
   });
@@ -80,7 +81,7 @@ test('server filters preserve IME/focus, cancel old requests and skip fresh back
 test('import entry is removed and retirement is restricted to reviewers and admins', async () => {
   clearStandardQueryCache();
   const originalGet = api.get;
-  api.get = (async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : [item('retire', '客户')] })) as typeof api.get;
+  api.get = withOverview((async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : [item('retire', '客户')] })) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     for (const [role, permissions, allowed] of [['user', ['engineering_submit'], false], ['user', ['engineering_review'], false], ['admin', [], true]] as const) {
@@ -103,12 +104,12 @@ test('URL status/category changes select the latest route without stale paramete
   const routeItems: StandardListItem[] = [item('gear-published', 'Alpha'),
     { ...item('gear-draft', 'Alpha'), status: 'draft' },
     { ...item('air-draft', 'Alpha'), categoryKey: 'air_pull_cord', categoryName: '拉绳阻尼器', status: 'draft' }];
-  api.get = (async (url: string) => {
+  api.get = withOverview((async (url: string) => {
     if (url.endsWith('categories')) return { ok: true, data: routeCategories };
     const params = new URL(url, 'http://local').searchParams;
     const data = routeItems.filter(item => item.categoryKey === params.get('category') && (!params.has('status') || item.status === params.get('status')));
     return { ok: true, data, total: data.length, version: 'v1' };
-  }) as typeof api.get;
+  }) as typeof api.get);
   let navigate: ReturnType<typeof useNavigate>;
   function RouteControl() { navigate = useNavigate(); return null; }
   const root = createRoot(document.getElementById('root')!);
@@ -138,7 +139,7 @@ test('URL status/category changes select the latest route without stale paramete
 test('page exposes notes, uses native scrolling and toggles a single highlighted row', async () => {
   clearStandardQueryCache();
   const originalGet = api.get;
-  api.get = (async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : url.startsWith('/api/standards?') ? [item('1', 'Alpha'), item('2', 'Beta')] : null })) as typeof api.get;
+  api.get = withOverview((async (url: string) => ({ ok: true, data: url.endsWith('categories') ? categories : url.startsWith('/api/standards?') ? [item('1', 'Alpha'), item('2', 'Beta')] : null })) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage))));
@@ -175,7 +176,7 @@ test('sanitary page hides unused identity columns and groups covers before seats
  const originalGet=api.get;
  const records=[['SP0010-G','座'],['SP0009-G','盖'],['SP0002-G','盖'],['SP0001-G','座']].map(([serialNo,part])=>({...item(serialNo,'客户'),serialNo,categoryKey:'sanitary_damper',fields:{part_type:part}}));
  const sanitary={key:'sanitary_damper',name:'智能卫浴',fields:[{key:'part_type',label:'产品部位'}]};
- api.get=(async(url:string)=>({ok:true,data:url.endsWith('categories')?[...categories,sanitary]:records,total:4,version:'test'})) as typeof api.get;
+ api.get=withOverview((async(url:string)=>({ok:true,data:url.endsWith('categories')?[...categories,sanitary]:records,total:4,version:'test'})) as typeof api.get);
  const root=createRoot(document.getElementById('root')!);
  try{
   await act(async()=>root.render(createElement(MemoryRouter,{initialEntries:['/product-standards?category=sanitary_damper']},createElement(ProductStandardPage))));
@@ -197,7 +198,7 @@ test('pending standards lead each category while preserving order within both se
       { ...item('published-cover', '客户'), serialNo: 'SP0002-G', fields: { part_type: '盖' } },
       { ...item('pending-cover', '客户'), serialNo: 'SP0001-G', fields: { part_type: '盖' }, status: 'pending_review' },
     ].map(record => ({ ...record, categoryKey }));
-    api.get = (async (url: string) => ({ ok: true, data: url.endsWith('categories') ? [...categories, sanitary] : [...records], total: records.length, version: 'review-order' })) as typeof api.get;
+    api.get = withOverview((async (url: string) => ({ ok: true, data: url.endsWith('categories') ? [...categories, sanitary] : [...records], total: records.length, version: 'review-order' })) as typeof api.get);
     const root = createRoot(document.getElementById('root')!);
     try {
       await act(async () => root.render(createElement(MemoryRouter, { initialEntries: [`/product-standards?category=${categoryKey}`] }, createElement(ProductStandardPage))));
@@ -223,7 +224,7 @@ test('every column filter focuses on opening and reopening; categories and summa
   const originalGet = api.get;
   const sevenCategories = ['齿形阻尼器','筒型阻尼器','齿条阻尼器','锁类·同步器','空气拉绳阻尼器','空气拉柄阻尼器','智能卫浴'].map((name,index)=>({key:index===0?'gear_damper':`category-${index}`,name,fields:[]}));
   const requests:string[]=[];
-  api.get = (async (url:string) => { requests.push(url); return {data:url.endsWith('/categories') ? sevenCategories : [item('focus','客户')],total:344,overallTotal:808,version:'focus'}; }) as typeof api.get;
+  api.get = withOverview((async (url:string) => { requests.push(url); return {data:url.endsWith('/categories') ? sevenCategories : [item('focus','客户')],total:344,overallTotal:808,version:'focus'}; }) as typeof api.get);
   const root=createRoot(document.getElementById('root')!);
   try {
     await act(async()=>root.render(createElement(MemoryRouter,null,createElement(ProductStandardPage))));await wait(70);
@@ -252,4 +253,50 @@ test('every column filter focuses on opening and reopening; categories and summa
     assert.equal(sanitary.checked,true);
     assert(requests.some(url=>new URL(url,'http://local').searchParams.get('category')==='category-6'));
   } finally {await act(()=>root.unmount());api.get=originalGet;clearStandardQueryCache();}
+});
+
+test('pending overview is independent of table filters and clears them when opening another category', async () => {
+  clearStandardQueryCache();
+  const originalGet = api.get;
+  const requests: string[] = [];
+  const rack = { key: 'rack_damper', name: '齿条阻尼器', fields: [] };
+  let revised = false, switched = false;
+  api.get = (async (url: string) => {
+    requests.push(url);
+    if (url.endsWith('/categories')) return { ok: true, data: [...categories, rack] };
+    if (url.startsWith('/api/standards/pending-reviews')) {
+      if (switched) return new Promise(() => {});
+      return { ok: true, overallTotal: revised ? 0 : 2, total: revised ? 0 : 2, version: revised ? 'v2' : 'v1',
+        categories: revised ? [] : [{ categoryKey: 'rack_damper', categoryName: '齿条阻尼器', total: 2 }],
+        data: revised ? [] : [{ taskId: 'review:cross', kind: 'standard', id: 'cross', serialNo: 'CROSS-CATEGORY', categoryKey: 'rack_damper', categoryName: '齿条阻尼器', customer: '客户', model: 'RD-CROSS', reviewerName: '乙' }] };
+    }
+    if (url.startsWith('/api/standards?')) return { data: [], total: 0, version: revised ? 'v2' : 'v1' };
+    return new Promise(() => {});
+  }) as typeof api.get;
+  const root = createRoot(document.getElementById('root')!);
+  try {
+    await act(() => useAuthStore.setState({ user: { id: 'admin', username: 'admin', name: '管理员', role: 'admin', permissions: [] } }));
+    await act(() => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage)))); await wait(70);
+    assert(document.querySelector('[aria-label="全部待审2项"]'));
+    assert(document.querySelector('section[aria-label="产品分类"] [aria-label="全部待审2项"]'));
+    assert(document.querySelector('[aria-label="齿条阻尼器待审2项"]'));
+    const overviewReads = () => requests.filter(url => url.startsWith('/api/standards/pending-reviews')).length;
+    assert.equal(overviewReads(), 1);
+    await setInput(document.querySelector<HTMLInputElement>('input[placeholder^="搜索序号"]')!, 'unrelated'); await wait(260);
+    assert.equal(overviewReads(), 1, 'table filters must not redownload the global pending list');
+    const trigger = document.querySelector('[aria-label="全部待审2项"]')!;
+    await act(() => trigger.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }))); await wait(60);
+    await click([...document.querySelectorAll('button')].find(button => button.textContent?.includes('CROSS-CATEGORY'))!); await wait(60);
+    const query = new URL(requests.filter(url => url.startsWith('/api/standards?')).at(-1)!, 'http://local').searchParams;
+    assert.equal(query.get('category'), 'rack_damper'); assert.equal(query.has('search'), false);
+    assert(requests.some(url => url.startsWith('/api/standards/cross')));
+    revised = true;
+    await click([...document.querySelectorAll('button')].find(button => button.textContent?.includes('刷新'))!); await wait(60);
+    assert(!document.querySelector('[aria-label="全部待审2项"]'));
+    assert(!document.body.textContent?.includes('CROSS-CATEGORY'));
+    switched = true;
+    await act(() => useAuthStore.setState({ user: { id: 'other', username: 'other', name: '其他人', role: 'user', permissions: ['engineering'] } }));
+    assert(!document.body.textContent?.includes('CROSS-CATEGORY'));
+    assert(!document.querySelector('[aria-label="齿条阻尼器待审2项"]'));
+  } finally { await act(() => root.unmount()); api.get = originalGet; await act(() => useAuthStore.setState({ user: null })); clearStandardQueryCache(); }
 });

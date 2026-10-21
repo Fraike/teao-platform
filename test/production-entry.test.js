@@ -64,6 +64,8 @@ try {
   fs.writeFileSync(path.join(testDirectory, "kingdee_materials.json"), JSON.stringify({ data: [
     { id: "finished-root", number: "SP-ROOT", name: "根分类成品", parent_id: "2314557705978701824" },
     { id: "missing-category", number: "SP0201-A", name: "RD-T023-60", parent_id: "", stock_name: "成品仓" },
+    { id: "blank-category", number: "UNC1", name: "空白类别", parent_id: "  " },
+    { id: "no-category", number: "UNC2", name: "缺少类别" },
     { id: "finished-1", number: "SP0001", name: "可信成品", parent_id: "finished-child" },
     { id: "plastic-1", number: "B0001", name: "可信塑胶件", parent_id: "2314559979366968320" },
   ] }));
@@ -80,7 +82,11 @@ try {
   assert.deepEqual(productIdentity.getTrustedProductionProduct("assembly", "finished-root"), {
     productId: "finished-root", productNumber: "SP-ROOT", productName: "根分类成品",
   });
-  assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "missing-category"), /不属于装配部/);
+  assert.equal(productIdentity.getTrustedProductionProduct("assembly", "missing-category").productNumber, "SP0201-A");
+  assert.equal(productIdentity.getTrustedProductionProduct("assembly", "blank-category").productNumber, "UNC1");
+  assert.equal(productIdentity.getTrustedProductionProduct("assembly", "no-category").productNumber, "UNC2");
+  assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "fake-id"), /不存在/);
+  assert.throws(() => productIdentity.getTrustedProductionProduct("injection", "missing-category"), /不属于注塑部/);
   assert.throws(() => productIdentity.getTrustedProductionProduct("assembly", "plastic-1"), /不属于装配部/);
   assert.throws(() => productIdentity.getTrustedProductionProduct("injection", "fake-id"), /不存在/);
 

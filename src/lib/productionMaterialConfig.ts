@@ -9,7 +9,7 @@ interface ProductionMaterialConfig {
 const PRODUCTION_MATERIAL_CONFIG: Record<ProductionMaterialDepartment, ProductionMaterialConfig> = {
   assembly: {
     category: "2314557705978701824",
-    cacheKey: "production_finished_products_v4",
+    cacheKey: "production_finished_products_v5",
     label: "成品",
   },
   injection: {

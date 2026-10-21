@@ -1,0 +1,7 @@
+.drawer :global(.ant-drawer-body) { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0; color: #64748b; font-size: 12px; }
+.filter { width: 220px; max-width: 100%; }
+.list { flex: 1; min-height: 0; overflow-y: auto; }
+.title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+.description { display: flex; flex-direction: column; gap: 3px; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .list :global(.ant-list-item) { flex-wrap: wrap; gap: 8px; } .list :global(.ant-list-item-meta) { min-width: 0; flex-basis: 100%; } .list :global(.ant-list-item-action) { margin-inline-start: 0; } }

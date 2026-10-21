@@ -9,6 +9,9 @@ import { createRef, lazy, Suspense, memo, useCallback, useEffect, useMemo, useRe
 import { Button, Select, Tag, Typography, Empty, message, Space, Tooltip, Modal } from "antd";
 import type { InputRef } from "antd";
 import { StandardCategoryTabs } from "../components/standard/StandardCategoryTabs";
+import { StandardPendingOverview } from "../components/standard/StandardPendingOverview";
+import { StandardPendingReviewDrawer } from "../components/standard/StandardPendingReviewDrawer";
+import { usePendingReviewOverview } from "../lib/standardPendingReviews";
 import { useSearchParams } from "react-router-dom";
 import { PlusOutlined, SearchOutlined, ReloadOutlined, ClearOutlined, HistoryOutlined, EyeOutlined, CopyOutlined, EditOutlined, PrinterOutlined, StopOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
@@ -28,6 +31,7 @@ import { StandardRowSelectionProvider, StandardSelectableRow } from "../componen
 import { CustomerName } from "../components/standard/CustomerName";
 import type {
   StandardPendingActionTarget,
+  StandardPendingReviewItem,
   StandardRetireTarget,
   StandardPageResponse,
   StandardCategory,
@@ -90,6 +94,8 @@ function ProductStandardPageContent() {
   const user = useAuthStore((s) => s.user);
   const currentUserId = user?.id;
   const authScope = `${user?.id ?? ""}:${user?.role ?? ""}:${user?.permissions?.join(",") ?? ""}`;
+  const { data: pendingData, loading: pendingLoading, error: pendingError, refresh: refreshPending } = usePendingReviewOverview(authScope);
+  const [pendingDrawer, setPendingDrawer] = useState<{ scope: string; category: string } | null>(null);
   const [access, setAccess] = useState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean } | null>(null);
   const canEdit = access?.scope === authScope ? access.canEdit : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_submit"));
   const canReview = access?.scope === authScope ? access.canReview : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_review"));
@@ -179,6 +185,7 @@ function ProductStandardPageContent() {
       setCategories(categoryData);
       setStandards(response.data);
       setStandardsScope(authScope);
+      void refreshPending(response.version ?? "", force);
       if (typeof response.canEdit === "boolean" && typeof response.canReview === "boolean") {
         setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canRetire: response.canRetire });
       }
@@ -189,11 +196,14 @@ function ProductStandardPageContent() {
       successfulAt.current = Date.now();
       setRefreshedAt(new Date().toISOString());
     } catch (err) {
-      if (version === fetchVersion.current && !controller.signal.aborted) message.error((err as Error).message || "获取产品标准失败");
+      if (version === fetchVersion.current && !controller.signal.aborted) {
+        message.error((err as Error).message || "获取产品标准失败");
+        void refreshPending();
+      }
     } finally {
       if (version === fetchVersion.current && !controller.signal.aborted) setLoading(false);
     }
-  }, [requestQuery, authScope]);
+  }, [requestQuery, authScope, refreshPending]);
 
   useEffect(() => {
     const initialTimer = setTimeout(() => { void fetchData(false); }, 0);
@@ -524,6 +534,13 @@ function ProductStandardPageContent() {
     setResetVersion((version) => version + 1);
   };
 
+  const openPendingProduct = (item: StandardPendingReviewItem) => {
+    resetFilters();
+    setActiveCategory(item.categoryKey);
+    setPendingDrawer(null);
+    openDetail(item.id);
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -538,10 +555,19 @@ function ProductStandardPageContent() {
         </div>
       </div>
 
+
+      {pendingDrawer?.scope === authScope && <StandardPendingReviewDrawer key={`${authScope}:${pendingDrawer.category}`}
+        open category={pendingDrawer.category} scope={authScope} version={pendingData?.version ?? ""} admin={canDirectPublish}
+        onClose={() => setPendingDrawer(null)} onOpen={openPendingProduct} />}
+
       <StandardCategoryTabs
         categories={categories}
         activeKey={activeCategory}
         onChange={setActiveCategory}
+        pendingCounts={Object.fromEntries((pendingError ? [] : pendingData?.categories ?? []).map(category => [category.categoryKey, category.total]))}
+        extra={pendingError || pendingData?.overallTotal ? <StandardPendingOverview data={pendingData} loading={pendingLoading} error={pendingError} admin={canDirectPublish}
+          onRetry={() => void refreshPending("", true)} onOpen={openPendingProduct}
+          onViewAll={(category = "") => setPendingDrawer({ scope: authScope, category })} /> : undefined}
       />
 
       <div className={styles.toolbar}>

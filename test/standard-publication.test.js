@@ -8,7 +8,7 @@ mock.module('../server/config.js',{namedExports:{readConfig:()=>({wecomWebhook:w
 const record=async(url,content,mentions=[],type='text')=>{calls.push({url,content,mentions,type});await new Promise(resolve=>setImmediate(resolve));if(failure)throw failure;return{errcode:0};};
 mock.module('../server/services/wecom.js',{namedExports:{sendWecomText:record,sendWecomMessage:async(url,content)=>record(url,content,[],'markdown_v2')}});
 mock.module('../server/services/users.js',{namedExports:{listReviewers:()=>[],findUserByName:()=>null,getUserById:()=>({wecomUserid:submitterBound?'submitter-id':''})}});
-mock.module('../server/services/standard-store.js',{namedExports:{getDB:()=>db,listCategories:()=>[{key:'gear_damper',fields:[{key:'test_standard',label:'测试标准'},{key:'gear_spec',label:'齿轮规格'}]}]}});
+mock.module('../server/services/standard-store.js',{namedExports:{getDB:()=>db,listCategories:()=>[{key:'rack_damper',name:'齿条阻尼器'},{key:'gear_damper',name:'齿形阻尼器',fields:[{key:'test_standard',label:'测试标准'},{key:'gear_spec',label:'齿轮规格'}]}]}});
 const {notifyReviewDone,notifyReviewRequested,notifyRetirementRequested}=await import('../server/services/standard-notify.js');
 const {initPublicationOutbox}=await import('../server/services/standard-publication-outbox.js');initPublicationOutbox(db);
 beforeEach(()=>db.exec('DELETE FROM standard_publication_outbox'));
@@ -46,11 +46,27 @@ test('rejection is private-targeted and delivery errors do not undo approval',as
 test('pending review notices name both the submitter and selected reviewer',async()=>{
  calls=[];failure=null;webhook='https://example.invalid/mock';submitterBound=true;
  const data=structuredClone(standard);data.versions[0].assignedReviewerId='reviewer';data.versions[0].assignedReviewerName='审核人乙';
+ data.id='identity-id';data.versions[0].categoryKey='rack_damper';data.versions[0].status='pending_review';
  await notifyReviewRequested(data,{id:'a',name:'提交人甲'});
  assert(calls[0].content.includes('提交人：提交人甲'));assert(calls[0].content.includes('指定审核人：审核人乙'));assert.equal(calls[0].mentions.length,1);
+ assert(calls[0].content.includes('分类：齿条阻尼器'));
+ assert(calls[0].content.includes('category=rack_damper') && calls[0].content.includes('standardId=identity-id'));
  calls=[];
  await notifyRetirementRequested(data,{versionId:'v1',reviewerId:'reviewer',reviewerName:'审核人乙',applicantName:'提交人甲',reason:'停用原因'.repeat(400)});
  assert(calls.map(c=>c.content).join('').includes('指定审核人：审核人乙'));
  assert(calls.map(c=>c.content).join('').includes('申请人：提交人甲'));
+ assert(calls.map(c=>c.content).join('').includes('分类：齿条阻尼器'));
  assert(calls.every(c=>Buffer.byteLength(c.content,'utf8')<=2048));assert(calls.slice(1).every(c=>c.mentions.length===0));
+});
+
+test('retirement notice identifies the requested version rather than a newer draft',async()=>{
+ calls=[];const data=structuredClone(standard);data.id='retire-id';
+ data.versions.unshift({...data.versions[0],id:'new-draft',categoryKey:'gear_damper',status:'draft',model:'草稿型号'});
+ data.versions[1].categoryKey='rack_damper';
+ await notifyRetirementRequested(data,{versionId:'v1',reviewerId:'reviewer',reviewerName:'乙',applicantName:'甲',reason:'停用'});
+ const content=calls.map(call=>call.content).join('');
+ assert(content.includes('分类：齿条阻尼器') && content.includes('型号：RD-T001'));
+ assert(!content.includes('草稿型号'));
+ assert(content.includes('category=rack_damper&standardId=retire-id'));
+ assert(!content.includes('status=pending_review'));
 });

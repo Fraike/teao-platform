@@ -1,3 +1,4 @@
+import { withEmptyPendingOverview } from './standard-pending-fixture.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import './standard-frontend-dom.ts';
@@ -16,7 +17,7 @@ const row={id:'s1',versionId:'v2',serialNo:'SP1',versionNo:2,revision:3,status:'
 const wait=()=>act(async()=>{await new Promise(r=>setTimeout(r,30));});
 test('admin can intervene from list; review permission alone does not expose administrator actions',async()=>{
  const oldGet=api.get;clearStandardQueryCache();
- api.get=(async(url:string)=>({data:url.endsWith('/categories')?categories:[row],total:1,version:'admin-test'})) as typeof api.get;
+ api.get = withEmptyPendingOverview((async(url:string)=>({data:url.endsWith('/categories')?categories:[row],total:1,version:'admin-test'})) as typeof api.get);
  const root=createRoot(document.getElementById('root')!);
  try{
   await act(()=>useAuthStore.setState({user:{id:'admin',name:'管理员',role:'admin',permissions:[]} as User}));
@@ -30,7 +31,7 @@ test('admin can intervene from list; review permission alone does not expose adm
 });
 test('detail lets admin reject/delete another reviewer task without granting approval override',async()=>{
  const oldGet=api.get;
- api.get=(async(url:string)=>({data:url.includes('/reviewers')?[]:{...row,versions:[{...row,createdAt:'',updatedAt:'',publishedAt:'',submittedAt:'',reviewedAt:''}],changes:[]}})) as typeof api.get;
+ api.get = withEmptyPendingOverview((async(url:string)=>({data:url.includes('/reviewers')?[]:{...row,versions:[{...row,createdAt:'',updatedAt:'',publishedAt:'',submittedAt:'',reviewedAt:''}],changes:[]}})) as typeof api.get);
  const root=createRoot(document.getElementById('root')!);
  try{
   await act(()=>useAuthStore.setState({user:{id:'admin',name:'管理员',role:'admin',permissions:[]} as User}));
@@ -42,7 +43,7 @@ test('detail lets admin reject/delete another reviewer task without granting app
 test('administrator archive filter exposes history and disables unsupported export',async()=>{
  const oldGet=api.get;clearStandardQueryCache();
  const urls:string[]=[];
- api.get=(async(url:string)=>{urls.push(url);return {data:url.endsWith('/categories')?categories:[{...row,status:'deleted'}],total:1,version:'archive-test'};}) as typeof api.get;
+ api.get = withEmptyPendingOverview((async(url:string)=>{urls.push(url);return {data:url.endsWith('/categories')?categories:[{...row,status:'deleted'}],total:1,version:'archive-test'};}) as typeof api.get);
  const root=createRoot(document.getElementById('root')!);
  try{
   await act(()=>useAuthStore.setState({user:{id:'admin',name:'管理员',role:'admin',permissions:[]} as User}));

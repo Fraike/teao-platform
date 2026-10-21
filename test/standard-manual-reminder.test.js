@@ -24,6 +24,8 @@ configured = true;
 const concurrent = await Promise.all([service.remind(detail.id, editor, expected()), createStandardReviewReminders(dependencies).remind(detail.id, admin, expected())]);
 assert.deepEqual(concurrent.map(result => result.status), ["sent", "cooldown"]); assert.equal(calls.length, 1);
 assert.deepEqual(calls[0].mentions, ["reviewer-wecom"]);
+assert(calls[0].content.includes('分类：齿形阻尼器'));
+assert(calls[0].content.includes(`standardId=${detail.id}`));
 now += 5 * 60000 - 1; assert.equal((await service.remind(detail.id, admin, expected())).status, "cooldown");
 now++; failure = Object.assign(new Error("uncertain"), { code: "SEND_RESULT_UNCERTAIN" });
 assert.equal((await service.remind(detail.id, editor, expected())).status, "unknown");

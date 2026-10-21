@@ -41,7 +41,7 @@ export function splitProductionMaterials(materials, categories) {
   return {
     finishedProducts: materials.filter((material) => finishedCategoryIds.has(String(material.parent_id))),
     unclassifiedMaterials: materials.filter((material) => !String(material.parent_id ?? "").trim())
-      .map((material) => ({ id: String(material.id), number: String(material.number || ""), name: String(material.name || "") })),
+      .map((material) => ({ id: String(material.id), number: String(material.number || ""), name: String(material.name || ""), spec: String(material.spec || material.model || "") })),
     plasticParts: materials.filter((material) => String(material.parent_id) === INJECTION_PLASTIC_PARTS_CATEGORY),
   };
 }
@@ -55,7 +55,8 @@ export function getTrustedProductionProduct(department, productId) {
     throw productError("金蝶商品缓存尚未准备好，请先更新金蝶商品", 503);
   }
   const groups = splitProductionMaterials(materials.data, categories.data);
-  const allowed = department === "assembly" ? groups.finishedProducts : groups.plasticParts;
+  const allowed = department === "assembly"
+    ? [...groups.finishedProducts, ...groups.unclassifiedMaterials] : groups.plasticParts;
   const product = allowed.find((material) => String(material.id) === id);
   if (!product) {
     const exists = materials.data.some((material) => String(material.id) === id);

@@ -1,5 +1,6 @@
-import { initDB, listPendingStandardNotifications } from "./standard-store.js";
+import { initDB, listCategories, listPendingStandardNotifications } from "./standard-store.js";
 import { listPasswordRecoveryRequests } from "./users.js";
+import { standardNotificationIdentity } from "./standard-notification-identity.js";
 
 initDB();
 
@@ -7,14 +8,18 @@ initDB();
 export function listNotificationsPage(user) {
   if (!user) return { total: 0, data: [] };
   const { total, items } = listPendingStandardNotifications(user, { limit: 20 });
-  const data = items.map((item) => ({
-    id: item.kind === "retirement" ? `standard_retirement:${item.requestId}` : `standard_review:${item.id}`,
-    type: item.kind === "retirement" ? "standard_retirement" : "standard_review",
-    title: item.kind === "retirement" ? "申请停用待审核" : "产品标准待审核",
-    description: `${item.serialNo} · ${item.customer} · ${item.model || "-"}`,
-    time: item.updatedAt || "",
-    link: item.kind === "retirement" ? `/product-standards?category=${encodeURIComponent(item.categoryKey)}&standardId=${encodeURIComponent(item.id)}` : `/product-standards?status=pending_review&category=${encodeURIComponent(item.categoryKey)}`,
-  }));
+  const names = new Map(listCategories().map(category => [category.key, category.name]));
+  const data = items.map((item) => {
+    const identity = standardNotificationIdentity(item, { ...item, status: item.kind === 'retirement' ? 'published' : 'pending_review' }, names);
+    return {
+      id: item.kind === "retirement" ? `standard_retirement:${item.requestId}` : `standard_review:${item.id}`,
+      type: item.kind === "retirement" ? "standard_retirement" : "standard_review",
+      title: item.kind === "retirement" ? "申请停用待审核" : "产品标准待审核",
+      description: identity.description,
+      time: item.updatedAt || "",
+      link: identity.link,
+    };
+  });
   const recoveries = user.role === "admin" ? listPasswordRecoveryRequests().map(item => ({
     id: `password_recovery:${item.id}`, type: "password_recovery", title: "密码找回待审核",
     description: `${item.name} · ${item.username}`, time: item.requestedAt, link: "/admin",

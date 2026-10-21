@@ -5,6 +5,7 @@ import { listCategories, getDB } from "./standard-store.js";
 import { buildStandardPublication, splitStandardPublication } from "./standard-publication.js";
 import { enqueueStandardPublication, publicationResponse } from "./standard-publication-outbox.js";
 import { withPublicationQueue } from "./standard-notification-queue.js";
+import { standardNotificationIdentity } from "./standard-notification-identity.js";
 export { withPublicationQueue } from "./standard-notification-queue.js";
 
 function stripMarkers(value) {
@@ -42,7 +43,8 @@ export async function notifyReviewRequested(standard, submitterName) {
     .map((r) => r.wecomUserid)
     .filter(Boolean);
   const reviewerName = standard?.versions?.[0]?.assignedReviewerName || (info.reviewerId && getUserById(info.reviewerId)?.name) || "未指定（历史任务）";
-  const content = `【产品标准待审核】序号 ${info.serialNo}「${info.customer} ${info.model}」已提交审核，提交人：${submitterName.name}，指定审核人：${reviewerName}，请及时处理。`;
+  const identity = standardNotificationIdentity(standard, standard.versions[0], new Map(listCategories().map(category => [category.key, category.name])));
+  const content = `【产品标准待审核】\n${identity.details}\n提交人：${submitterName.name}\n指定审核人：${reviewerName}\n查看并审核：${identity.url}`;
   const parts = splitStandardPublication(content,1800);
   return withPublicationQueue(webhook,async () => {
     try {
@@ -58,7 +60,8 @@ export async function notifyRetirementRequested(standard, request) {
   if (!webhook) return { status: "not_configured" };
   const reviewer = getUserById(request.reviewerId);
   const version = standard.versions.find(v => v.id === request.versionId);
-  const content = `【申请停用 · 待审核】\n标准：${standard.serialNo} · ${version?.customer || ""} · ${version?.model || ""}\n申请人：${request.applicantName}\n指定审核人：${request.reviewerName}\n停用原因：${request.reason}\n请进入产品标准页面处理停用申请；审核通过前，当前标准继续生效。`;
+  const identity = standardNotificationIdentity(standard, version, new Map(listCategories().map(category => [category.key, category.name])));
+  const content = `【申请停用 · 待审核】\n${identity.details}\n申请人：${request.applicantName}\n指定审核人：${request.reviewerName}\n停用原因：${request.reason}\n查看并处理：${identity.url}\n审核通过前，当前标准继续生效。`;
   const parts = splitStandardPublication(content,1800);
   return withPublicationQueue(webhook,async () => {
     try {

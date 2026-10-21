@@ -41,7 +41,10 @@ test("real cron with patched uuid preserves production and standard reminder lif
   const reminderCron = trackedCron();
   let sends = 0;
   let checks = 0;
-  config.writeConfig({ ...config.DEFAULT_CONFIG, enabled: true, cronExpression: "* * * * * *", wecomWebhook: "" });
+  // Start outside the matching second: node-cron checks synchronously on start,
+  // so an every-second expression can legitimately fire during schedule().
+  const laterSecond = (new Date().getSeconds() + 30) % 60;
+  config.writeConfig({ ...config.DEFAULT_CONFIG, enabled: true, cronExpression: `${laterSecond} * * * * *`, wecomWebhook: "" });
   const scheduler = createProductionScheduler(productionCron, async () => {
     sends++;
     return { status: "mocked" };
@@ -49,7 +52,8 @@ test("real cron with patched uuid preserves production and standard reminder lif
   let reminders;
   try {
     scheduler.start();
-    assert.equal(sends, 0, "schedule does not immediately deliver a report");
+    assert.equal(sends, 0, "startup outside the scheduled time does not deliver a report");
+    config.writeConfig({ ...config.readConfig(), cronExpression: "* * * * * *" });
     await waitFor(() => sends > 0);
     scheduler.stop();
     const stopped = sends;

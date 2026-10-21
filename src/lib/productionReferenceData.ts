@@ -55,7 +55,10 @@ async function getProductionMaterialOptions(forceRefresh = false): Promise<Produ
     const response = await api.get<{ ok: boolean; stale?: boolean; refreshed?: boolean; fetchedAt?: string | null; data: { unclassifiedMaterials?: UnclassifiedKingdeeMaterial[]; finishedProducts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }>; plasticParts: Array<{ id: string | number; name: string; number?: string; spec?: string; model?: string }> } }>(`/api/kingdee/production-materials${refreshParam}`);
     const data = forceRefresh ? requireFreshKingdeeData(response) : response.data;
     const options = {
-      finishedProducts: toProductionProductOptions(data.finishedProducts),
+      finishedProducts: [
+        ...toProductionProductOptions(data.finishedProducts).map(option => ({ ...option, group: "成品" as const })),
+        ...toProductionProductOptions(data.unclassifiedMaterials || []).map(option => ({ ...option, group: "金蝶未分类" as const })),
+      ],
       plasticParts: toProductionProductOptions(data.plasticParts),
       fetchedAt: response.fetchedAt,
       unclassifiedMaterials: data.unclassifiedMaterials,
@@ -115,7 +118,7 @@ export function refreshKingdeeData(): Promise<KingdeeDataRefreshResult> {
     ]);
     const result: KingdeeDataRefreshResult = {
       products: products.status === "fulfilled"
-        ? { ok: true, finishedCount: products.value.finishedProducts.length,
+        ? { ok: true, finishedCount: products.value.finishedProducts.filter(option => option.group !== "金蝶未分类").length,
           plasticCount: products.value.plasticParts.length, unclassifiedMaterials: products.value.unclassifiedMaterials, fetchedAt: products.value.fetchedAt || null }
         : { ok: false, error: refreshError(products.reason) },
       customers: customers.status === "fulfilled"
@@ -146,7 +149,7 @@ export function formatKingdeeRefreshMessage(result: KingdeeDataRefreshResult): K
     : `客户更新失败：${result.customers.error}`;
   const unclassified = result.products.ok ? result.products.unclassifiedMaterials || [] : [];
   const warning = unclassified.length
-    ? `；未分类商品 ${unclassified.length} 条（${unclassified.slice(0, 5).map(item => item.number || item.name || item.id).join("、")}${unclassified.length > 5 ? "等" : ""}），未纳入生产可选商品，请在金蝶补分类后重新更新`
+    ? `；未分类商品 ${unclassified.length} 条（${unclassified.slice(0, 5).map(item => item.number || item.name || item.id).join("、")}${unclassified.length > 5 ? "等" : ""}），已纳入装配部“金蝶未分类”分组，可直接搜索录入`
     : "";
   const level = result.products.ok && result.customers.ok ? (unclassified.length ? "warning" : "success")
     : result.products.ok || result.customers.ok ? "warning" : "error";

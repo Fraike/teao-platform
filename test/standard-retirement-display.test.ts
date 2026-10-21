@@ -1,3 +1,4 @@
+import { withEmptyPendingOverview } from './standard-pending-fixture.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import './standard-frontend-dom.ts';
@@ -18,7 +19,7 @@ const categories=[{key:'gear_damper',name:'齿形阻尼器',fields:[]}];
 const row={id:'s1',versionId:'v1',versionNo:1,revision:1,serialNo:'SP1',createdById:'editor',categoryKey:'gear_damper',standardType:'formal',status:'published',customer:'客户',model:'RD1',fields:{},hasPending:false};
 const wait=()=>act(async()=>{await new Promise(r=>setTimeout(r,30));});
 test('direct retirement is an icon with its own permission; submitters get application instead',async()=>{
- const oldGet=api.get;api.get=(async(url:string)=>({data:url.endsWith('/categories')?categories:[row],version:'v1',total:1,overallTotal:7})) as typeof api.get;
+ const oldGet=api.get;api.get = withEmptyPendingOverview((async(url:string)=>({data:url.endsWith('/categories')?categories:[row],version:'v1',total:1,overallTotal:7})) as typeof api.get);
  try{for(const [role,permissions,direct,apply] of [['admin',[],true,false],['user',['engineering_submit'],false,true],['user',['engineering_review'],false,false],['user',['engineering_retire'],true,false]] as const){
   clearStandardQueryCache();const root=createRoot(document.getElementById('root')!);
   try{
@@ -34,7 +35,7 @@ test('direct retirement is an icon with its own permission; submitters get appli
 test('only published rows claim to be formal standards',async()=>{
  const oldGet=api.get;
  try{for(const status of ['draft','pending_review','obsolete','deleted','archived']){
-  clearStandardQueryCache();api.get=(async(url:string)=>({data:url.endsWith('/categories')?categories:[{...row,status}],version:status,total:1})) as typeof api.get;
+  clearStandardQueryCache();api.get = withEmptyPendingOverview((async(url:string)=>({data:url.endsWith('/categories')?categories:[{...row,status}],version:status,total:1})) as typeof api.get);
   const root=createRoot(document.getElementById('root')!);
   try{await act(()=>useAuthStore.setState({user:{id:'editor',name:'工程',role:'user',permissions:['engineering_submit']} as User}));await act(async()=>root.render(createElement(MemoryRouter,null,createElement(ProductStandardPage))));await wait();assert(!document.querySelector('.ant-table-row')?.textContent?.includes('正式标准'));}
   finally{await act(()=>root.unmount());}

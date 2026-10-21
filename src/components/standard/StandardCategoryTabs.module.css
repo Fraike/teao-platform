@@ -1,6 +1,7 @@
 .navigation {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   flex-shrink: 0;
   min-width: 0;
@@ -27,6 +28,8 @@
   color: #64748b;
   font-weight: 400;
 }
+
+.pending { margin-inline-start: 7px; padding: 1px 5px; border-radius: 4px; background: #fff1d6; color: #9a5700; font-size: 11px; font-weight: 500; }
 
 .options {
   display: flex;
@@ -83,4 +86,13 @@
   .heading {
     min-height: auto;
   }
+}
+
+.navigation:has(> .extra) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.extra { justify-self: end; min-width: 0; }
+@media (max-width: 900px) {
+  .navigation, .navigation:has(> .extra) { grid-template-columns: minmax(0, 1fr) auto; }
+  .heading { grid-column: 1; grid-row: 1; }
+  .options { grid-column: 1 / -1; grid-row: 2; }
+  .extra { grid-column: 2; grid-row: 1; }
 }

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export type StandardStatus = "draft" | "pending_review" | "published" | "archived" | "obsolete" | "deleted";
 export type StandardType = "formal" | "temporary" | "new_pending";
 
@@ -18,6 +20,61 @@ export interface StandardCategoryTabsProps {
   categories: StandardCategory[];
   activeKey: string;
   onChange: (key: string) => void;
+  pendingCounts?: Record<string, number>;
+  extra?: ReactNode;
+}
+
+export interface StandardPendingReviewItem {
+  taskId: string;
+  kind: "standard" | "retirement";
+  id: string;
+  serialNo: string;
+  categoryKey: string;
+  categoryName: string;
+  customer: string;
+  model: string;
+  reviewerId: string;
+  reviewerName: string;
+  submittedAt: string;
+}
+
+export interface StandardPendingReviewCategory {
+  categoryKey: string;
+  categoryName: string;
+  total: number;
+  standardCount: number;
+  retirementCount: number;
+}
+
+export interface StandardPendingReviewPage {
+  ok: boolean;
+  data: StandardPendingReviewItem[];
+  total: number;
+  overallTotal: number;
+  categories: StandardPendingReviewCategory[];
+  page: number;
+  pageSize: number;
+  version: string;
+}
+
+export interface StandardPendingOverviewProps {
+  data?: StandardPendingReviewPage;
+  loading: boolean;
+  error: string;
+  admin: boolean;
+  onRetry: () => void;
+  onOpen: (item: StandardPendingReviewItem) => void;
+  onViewAll: (category?: string) => void;
+}
+
+export interface StandardPendingReviewDrawerProps {
+  open: boolean;
+  category: string;
+  scope: string;
+  version: string;
+  admin: boolean;
+  onClose: () => void;
+  onOpen: (item: StandardPendingReviewItem) => void;
 }
 
 export interface StandardFields {

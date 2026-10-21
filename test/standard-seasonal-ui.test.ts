@@ -1,3 +1,4 @@
+import { withEmptyPendingOverview } from './standard-pending-fixture.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import './standard-frontend-dom.ts';
@@ -37,12 +38,12 @@ test('main table keeps both seasons in one column and does not prefetch history'
   clearStandardQueryCache();
   const originalGet = api.get;
   const requests: string[] = [];
-  api.get = (async (url: string) => {
+  api.get = withEmptyPendingOverview((async (url: string) => {
     requests.push(url);
     return url.endsWith('categories') ? { ok: true, data: categories } : {
       ok: true, data: [{ ...version, id: 's1', hasPending: false }], total: 1, version: 'r1', page: 1, pageSize: null,
     };
-  }) as typeof api.get;
+  }) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage))));
@@ -83,10 +84,10 @@ test('form defaults to summer and supports copying and clearing optional winter 
 test('detail keeps current specifications without change or source comment panels', async () => {
   const originalGet = api.get;
   const requests: string[] = [];
-  api.get = (async (url: string) => {
+  api.get = withEmptyPendingOverview((async (url: string) => {
     requests.push(url);
     return url.endsWith('reviewers') || url.endsWith('retirement-requests') ? { ok: true, data: [] } : { ok: true, data: detail };
-  }) as typeof api.get;
+  }) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(StandardDetailDrawer, { open: true, standardId: 's1', categories, canEdit: false, canReview: false, onClose() {}, onChanged() {}, onEdit() {} })));
@@ -101,13 +102,13 @@ test('detail keeps current specifications without change or source comment panel
 test('historical versions combine seasons once and never borrow winter from the current version', async () => {
   clearStandardQueryCache();
   const originalGet = api.get;
-  api.get = (async (url: string) => {
+  api.get = withEmptyPendingOverview((async (url: string) => {
     if (url.endsWith('categories')) return { ok: true, data: categories };
     if (!url.includes('/history')) return { ok: true, data: detail };
     const params = new URL(url, 'http://localhost').searchParams;
     return { page: 1, pageSize: 20, total: params.get('section') === 'versions' ? 2 : 0, data: params.get('section') === 'versions'
       ? [version, { ...version, id: 'v1', versionNo: 1, fields: { test_standard: '110-150' } }] : [] };
-  }) as typeof api.get;
+  }) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(StandardHistoryDrawer, { open: true, standardId: 's1', onClose() {} })));
@@ -158,7 +159,7 @@ test('switching a copied product to a category without seasonal tests drops the 
 test('test history retries visible errors, cancels old product requests and keeps source pagination independent', async () => {
   const originalGet = api.get;
   const pending: { url: string; signal?: AbortSignal | null; resolve: (value: unknown) => void; reject: (reason: Error) => void }[] = [];
-  api.get = (<T>(url: string, options?: RequestInit) => new Promise<T>((resolve, reject) => pending.push({ url, signal: options?.signal, resolve: resolve as (value: unknown) => void, reject }))) as typeof api.get;
+  api.get = withEmptyPendingOverview((<T>(url: string, options?: RequestInit) => new Promise<T>((resolve, reject) => pending.push({ url, signal: options?.signal, resolve: resolve as (value: unknown) => void, reject }))) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   const render = (standardId: string) => act(async () => root.render(createElement(StandardTestHistory, { standardId })));
   try {
@@ -199,7 +200,7 @@ test('change history retains all fields and lazily loads original Excel comments
   clearStandardQueryCache();
   const originalGet = api.get;
   const requests: string[] = [];
-  api.get = (async (url: string) => {
+  api.get = withEmptyPendingOverview((async (url: string) => {
     requests.push(url);
     if (url.endsWith('categories')) return { data: categories };
     if (!url.includes('/history')) return { data: detail };
@@ -210,7 +211,7 @@ test('change history retains all fields and lazily loads original Excel comments
       ? [{ id: 'change', fieldKey: 'gear_spec', fieldLabel: '齿轮规格', description: '齿轮调整完整记录', changedAt: '', author: '工程' }]
       : [{ id: 'original', sourceCell: 'F487', fieldLabel: '测试标准', author: '原作者', text: '冬季原始批注完整保留' }];
     return { data, total: data.length, page: 1, pageSize: Number(query.get('pageSize')) };
-  }) as typeof api.get;
+  }) as typeof api.get);
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(async () => root.render(createElement(StandardHistoryDrawer, { open: true, standardId: 's1', onClose() {} })));

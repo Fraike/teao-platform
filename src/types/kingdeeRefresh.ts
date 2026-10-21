@@ -2,6 +2,8 @@ export interface UnclassifiedKingdeeMaterial {
   id: string;
   number: string;
   name: string;
+  spec?: string;
+  model?: string;
 }
 
 export type KingdeeProductRefresh =

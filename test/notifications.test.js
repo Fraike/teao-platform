@@ -6,10 +6,12 @@ let queries = [];
 mock.module('../server/services/users.js', { namedExports: { listPasswordRecoveryRequests() { return []; } } });
 mock.module('../server/services/standard-store.js', { namedExports: {
   initDB() {},
+  listCategories() { return [{ key: 'gear_damper', name: '齿形阻尼器' }, { key: 'rack_damper', name: '齿条阻尼器' }]; },
   listStandards() { throw new Error('full scan forbidden'); },
   listPendingStandardNotifications(user, options) {
     queries.push({ user, options });
     if (user.id === "reader") return {total:0,items:[]};
+    if (user.id === 'retirement') return { total: 1, items: [{ id: 'retire', requestId: 'request', kind: 'retirement', serialNo: 'SP-R', customer: '客户', model: 'RD-R', categoryKey: 'rack_damper' }] };
     return { total: 25, items: Array.from({ length: 20 }, (_, i) => ({
       id: String(i), serialNo: `SP-${i}`, customer: '客户', model: '型号',
       categoryKey: 'gear_damper', updatedAt: '2026-10-14',
@@ -26,8 +28,16 @@ test('notification page preserves total, bounds the indexed query and keeps item
   assert.equal(page.data.length, 20);
   assert.deepEqual(queries.at(-1), { user, options: { limit: 20 } });
   assert.equal(page.data[0].id, 'standard_review:0');
-  assert.equal(page.data[0].link, '/product-standards?status=pending_review&category=gear_damper');
+  assert.equal(page.data[0].link, '/product-standards?category=gear_damper&standardId=0&status=pending_review');
+  assert(page.data[0].description.includes('齿形阻尼器'));
   assert.deepEqual(service.listNotifications(user), page.data);
+});
+
+test('retirement notifications show category and open the published standard', () => {
+  const item = service.listNotificationsPage({ id: 'retirement' }).data[0];
+  assert.equal(item.type, 'standard_retirement');
+  assert.equal(item.description, '齿条阻尼器 · SP-R · 客户 · RD-R');
+  assert.equal(item.link, '/product-standards?category=rack_damper&standardId=retire');
 });
 
 test('no user skips queries and ordinary users use scoped pending queries', () => {

@@ -6,6 +6,7 @@ import { notifyReviewRequested, notifyReviewDone, notifyRetirementRequested } fr
 import { createStandardReviewReminders } from "../services/standard-review-reminders.js";
 import { publicationDelivery, retryStandardPublication, publicationResponse } from "../services/standard-publication-outbox.js";
 import { readConfig } from "../config.js";
+import { listPendingReviews } from "../services/standard-pending-reviews.js";
 import {
   initDB,
   getDB,
@@ -68,6 +69,14 @@ export function registerStandardRoutes(app) {
       console.error("[standards] categories error:", err);
       res.status(500).json({ error: "查询分类失败", detail: err.message });
     }
+  });
+
+  app.get('/api/standards/pending-reviews', jwtAuth, currentUser, (req, res) => {
+    try {
+      const result = listPendingReviews(req.user, req.query);
+      res.locals.responseRows = result.data.length;
+      res.json({ ok: true, ...result, version: viewerVersion(req.user) });
+    } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : '待审概览加载失败' }); }
   });
 
   // 列表

@@ -29,7 +29,7 @@ try {
   const unsubscribe = reference.subscribeToProductionMaterialUpdates(() => { notifications += 1; });
   try {
     for (const state of states) {
-      setCache("production_finished_products_v4", oldFinished);
+      setCache("production_finished_products_v5", oldFinished);
       setCache("production_injection_plastic_parts_v4", oldFinished);
       setCache("production_customers", oldCustomers);
       setCache("customers", [{ id: "old", name: "旧客户" }]);
@@ -40,7 +40,7 @@ try {
           return new Response(JSON.stringify({ ok: true, stale: state.productsFail, refreshed: !state.productsFail,
             fetchedAt: "2026-10-09T00:00:00.000Z",
             data: { finishedProducts: [{ id: "new-product", name: "新成品", number: "SP2" }],
-              unclassifiedMaterials: [{ id: "missing", number: "SP0201-A", name: "RD-T023-60" }],
+              unclassifiedMaterials: [{ id: "missing", number: "SP0201-A", name: "RD-T023-60", model: "型号60" }],
               plasticParts: [{ id: "new-part", name: "新配件", number: "B2" }] } }), { status: 200 });
         }
         if (String(url).startsWith("/api/kingdee/customers?refresh=1")) {
@@ -56,7 +56,16 @@ try {
       assert.equal(result.customers.ok, !state.customersFail);
       const display = reference.formatKingdeeRefreshMessage(result);
       assert.equal(display.level, !state.productsFail ? "warning" : state.level);
-      if (!state.productsFail) assert.match(display.content, /SP0201-A/, "API未分类信息必须传递至更新结果");
+      if (!state.productsFail) {
+        assert.match(display.content, /SP0201-A/);
+        assert.match(display.content, /已纳入装配部/);
+        const available = await reference.getFinishedProductOptions();
+        const missing = available.find(item => item.value === "missing");
+        assert.equal(missing?.group, "金蝶未分类");
+        assert.equal(missing?.spec, "型号60");
+        assert.equal(calls.length, 2, "缓存回读不得重复请求金蝶");
+        assert.equal((await reference.getInjectionPlasticPartOptions()).some(item => item.value === "missing"), false);
+      }
       assert.match(display.content, state.productsFail ? /商品更新失败/ : /成品 1 条/);
       assert.match(display.content, state.customersFail ? /客户更新失败/ : /客户 2 条/);
       if (!state.productsFail || !state.customersFail) {
@@ -64,7 +73,7 @@ try {
       }
       assert.equal(calls.filter((url) => url.includes("production-materials?refresh=1")).length, 1);
       assert.equal(calls.filter((url) => url.includes("customers?refresh=1")).length, 1);
-      assert.equal(getCache("production_finished_products_v4")[0].value,
+      assert.equal(getCache("production_finished_products_v5")[0].value,
         state.productsFail ? "old-product" : "new-product");
       assert.equal(getCache("production_customers").at(-1).value,
         state.customersFail ? "旧客户" : "新增客户");
@@ -86,7 +95,7 @@ try {
     assert.match(warning.content, /未分类/);
     assert.match(warning.content, /金蝶/);
 
-    setCache("production_finished_products_v4", oldFinished);
+    setCache("production_finished_products_v5", oldFinished);
     setCache("production_customers", oldCustomers);
     const beforeLegacy = notifications;
     globalThis.fetch = async (url) => {
@@ -103,7 +112,7 @@ try {
     const legacyResult = await reference.refreshKingdeeData();
     assert.equal(legacyResult.products.ok, false, "旧后端忽略刷新参数时不能误报商品更新成功");
     assert.equal(legacyResult.customers.ok, false, "旧后端忽略刷新参数时不能误报客户更新成功");
-    assert.equal(getCache("production_finished_products_v4")[0].value, "old-product");
+    assert.equal(getCache("production_finished_products_v5")[0].value, "old-product");
     assert.equal(getCache("production_customers")[0].value, "旧客户");
     assert.equal(notifications, beforeLegacy, "旧后端响应不能通知弹窗使用未更新的数据");
 

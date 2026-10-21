@@ -30,7 +30,7 @@ const productionFixture = kingdeeRoutes.splitProductionMaterials([
 }]);
 assert.deepEqual(productionFixture.finishedProducts.map((item) => item.id), ["finished-child", "finished-grandchild", "finished-root"], "装配部应包含成品根分类及全部后代商品");
 assert.deepEqual(productionFixture.plasticParts.map((item) => item.id), ["plastic"], "注塑部应只包含塑胶配件商品");
-assert.deepEqual(productionFixture.unclassifiedMaterials, [{ id: "unclassified", number: "SP0201-A", name: "RD-T023-60" }]);
+assert.deepEqual(productionFixture.unclassifiedMaterials, [{ id: "unclassified", number: "SP0201-A", name: "RD-T023-60", spec: "" }]);
 const require = createRequire(import.meta.url);
 const express = require("../server/node_modules/express");
 
@@ -111,7 +111,7 @@ try {
       headers: { Authorization: `Bearer ${token}` },
     }).then(response => response.json());
     assert.deepEqual(complete.data.finishedProducts.map(item => item.id), ["finished-1", "root"]);
-    assert.deepEqual(complete.data.unclassifiedMaterials, [{ id: "missing", number: "SP0201-A", name: "RD-T023-60" }]);
+    assert.deepEqual(complete.data.unclassifiedMaterials, [{ id: "missing", number: "SP0201-A", name: "RD-T023-60", spec: "" }]);
     writeKingdeeCache("materials", savedMaterials.data);
 
     const refreshEvents = [];

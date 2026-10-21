@@ -1,3 +1,4 @@
+import { withEmptyPendingOverview } from './standard-pending-fixture.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import './standard-frontend-dom.ts';
@@ -19,7 +20,7 @@ const click=async(label:string)=>{const button=[...document.querySelectorAll('bu
 test('list withdraws then discards a revision and removes all working-copy markers',async()=>{
  const oldGet=api.get,oldPost=api.post;let stage=0,calls=0;clearStandardQueryCache();
  const row=()=>stage===0?{...base,status:'pending_review'}:stage===1?{...base,revision:3,status:'draft',assignedReviewerId:''}:{...base,versionId:'v1',versionNo:1,revision:1,status:'published',hasPending:false,fields:{test_standard:'10-20'}};
- api.get=(async(url:string)=>({ok:true,data:url.endsWith('/categories')?categories:[row()],total:1,version:String(stage)})) as typeof api.get;
+ api.get = withEmptyPendingOverview((async(url:string)=>({ok:true,data:url.endsWith('/categories')?categories:[row()],total:1,version:String(stage)})) as typeof api.get);
  api.post=(async(url:string,body:unknown)=>{assert.equal(url,`/api/standards/s1/${stage===0?'withdraw':'discard-draft'}`);assert.deepEqual(body,{versionId:'v2',revision:stage===0?2:3});calls++;stage++;return {data:{...row(),versions:[row()],changes:[]}};}) as typeof api.post;
  const root=createRoot(document.getElementById('root')!);
  try{
@@ -33,7 +34,7 @@ test('list withdraws then discards a revision and removes all working-copy marke
 test('deleting a first draft from detail closes the removed record',async()=>{
  const oldGet=api.get,oldPost=api.post;let closed=0,changed=0;
  const detail={...base,versions:[{...base,id:'v2',status:'draft',submittedById:'',submittedAt:'',createdAt:'',updatedAt:'',publishedAt:'',reviewedAt:''}],changes:[]};
- api.get=(async(url:string)=>({data:url.endsWith('/reviewers')?[]:detail})) as typeof api.get;
+ api.get = withEmptyPendingOverview((async(url:string)=>({data:url.endsWith('/reviewers')?[]:detail})) as typeof api.get);
  api.post=(async(url:string,body:unknown)=>{assert.equal(url,'/api/standards/s1/discard-draft');assert.deepEqual(body,{versionId:'v2',revision:2});return {data:null};}) as typeof api.post;
  const root=createRoot(document.getElementById('root')!);
  try{

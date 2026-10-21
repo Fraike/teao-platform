@@ -7,6 +7,7 @@ export interface ProductionProductOption {
   productName: string;
   /** 金蝶商品编码，用于旧记录回选和人工识别。 */
   productNumber: string;
+  group?: "成品" | "金蝶未分类";
   spec?: string;
 }
 

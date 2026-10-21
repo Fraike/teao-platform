@@ -73,7 +73,7 @@ assert(calls.every(call=>!call.mentions.includes('@all')));
 let schedules=0,stops=0,callback;
 const count=calls.length;
 const fakeCron={schedule(expression,handler,options){
- assert.equal(expression,'0 8 * * *');assert.equal(options.timezone,'Asia/Shanghai');callback=handler;
+ assert.equal(expression,'0 8,13 * * *');assert.equal(options.timezone,'Asia/Shanghai');callback=handler;
  schedules++;return {stop(){stops++;}};
 }};
 service.start(fakeCron);service.start(fakeCron);assert.equal(schedules,1);
