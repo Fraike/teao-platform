@@ -15,10 +15,12 @@ initDB();
 export function registerProductionEntryInjectionRoutes(app) {
   app.get("/api/production/injection/entries", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const { dateFrom, dateTo, machine, product, search, limit, offset } = req.query;
+      const { dateFrom, dateTo, machine, product, batchNo, search, limit, offset } = req.query;
+      if (batchNo !== undefined && typeof batchNo !== "string") return res.status(400).json({ error: "批号参数格式错误" });
       const result = queryInjectionEntries({
         dateFrom: dateFrom || undefined, dateTo: dateTo || undefined,
         machine: machine || undefined, product: product || undefined,
+        batchNo: batchNo || undefined,
         search: search || undefined,
         limit: limit ? parseInt(limit, 10) : 10, offset: offset ? parseInt(offset, 10) : 0,
       });
@@ -56,8 +58,9 @@ export function registerProductionEntryInjectionRoutes(app) {
 
   app.get("/api/production/injection/entries/export", jwtAuth, requirePermission("production"), (req, res) => {
     try {
-      const { dateFrom, dateTo, machine, product, search } = req.query;
-      const result = exportInjectionEntries({ dateFrom, dateTo, machine, product, search });
+      const { dateFrom, dateTo, machine, product, batchNo, search } = req.query;
+      if (batchNo !== undefined && typeof batchNo !== "string") return res.status(400).json({ error: "批号参数格式错误" });
+      const result = exportInjectionEntries({ dateFrom, dateTo, machine, product, batchNo, search });
       res.json({ ok: true, data: mapProductionQueryActors(result) });
     } catch (err) {
       res.status(500).json({ error: "导出数据查询失败", detail: err.message });

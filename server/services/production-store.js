@@ -537,13 +537,14 @@ function injectionSummary(records) {
   };
 }
 
-export function queryInjectionEntries({ dateFrom, dateTo, machine, product, search, limit = 10, offset = 0 } = {}) {
+export function queryInjectionEntries({ dateFrom, dateTo, machine, product, batchNo, search, limit = 10, offset = 0 } = {}) {
   const d = getDB();
   const conditions = []; const params = {};
   if (dateFrom) { conditions.push("date >= @dateFrom"); params.dateFrom = dateFrom; }
   if (dateTo) { conditions.push("date <= @dateTo"); params.dateTo = dateTo; }
   if (machine) { conditions.push("machine = @machine"); params.machine = machine; }
   if (product) { conditions.push("product_name LIKE @product"); params.product = `%${product}%`; }
+  if (batchNo) { conditions.push("batch_no LIKE @batchNo ESCAPE '!'"); params.batchNo = `%${batchNo.replace(/[!%_]/g, "!$&")}%`; }
   if (search) { conditions.push("(product_name LIKE @search OR material LIKE @search OR batch_no LIKE @search OR remark LIKE @search)"); params.search = `%${search}%`; }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const nonDateConditions = conditions.filter(c => !c.startsWith("date"));

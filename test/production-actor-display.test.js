@@ -128,6 +128,13 @@ try {
     assert.equal(assemblyList.body.data.groups[0].records[0].updatedBy, "张三");
     const injectionList = await request("GET", "/api/production/injection/entries");
     assert.equal(injectionList.body.data.groups[0].records[0].updatedBy, "张三");
+    for (const endpoint of [
+      "/api/production/injection/entries?batchNo=one&batchNo=two",
+      "/api/production/injection/entries/export?batchNo=one&batchNo=two",
+    ]) {
+      const malformedBatch = await request("GET", endpoint);
+      assert.equal(malformedBatch.status, 400, `${endpoint} 的重复批号参数应返回 400`);
+    }
 
     const assemblyUpdate = await request("PUT", `/api/production/entries/${assembly.id}`, { remark: "已修改" });
     assert.equal(assemblyUpdate.body.data.updatedBy, "张三");

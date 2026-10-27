@@ -3,7 +3,10 @@ import { test, mock } from 'node:test';
 import { EventEmitter } from 'node:events';
 
 let queries = [];
-mock.module('../server/services/users.js', { namedExports: { listPasswordRecoveryRequests() { return []; } } });
+mock.module('../server/services/users.js', { namedExports: {
+  listPasswordRecoveryRequests() { return []; },
+  listPendingRegistrations() { return []; },
+} });
 mock.module('../server/services/standard-store.js', { namedExports: {
   initDB() {},
   listCategories() { return [{ key: 'gear_damper', name: '齿形阻尼器' }, { key: 'rack_damper', name: '齿条阻尼器' }]; },

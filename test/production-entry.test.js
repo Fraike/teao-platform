@@ -108,6 +108,16 @@ try {
   }), "test-user");
   assert.equal(linkedInjection.productId, "kingdee-plastic-1");
   assert.equal(linkedInjection.productNumber, "B0001");
+  createInjectionEntry(injectionRecord({ batchNo: "PB-2026-001", materialBatch: "RM-1" }), "test-user");
+  createInjectionEntry(injectionRecord({ date: "2026-07-28", batchNo: "PB-2026-001" }), "test-user");
+  createInjectionEntry(injectionRecord({ batchNo: "PB-2026-002", materialBatch: "RM-2" }), "test-user");
+  createInjectionEntry(injectionRecord({ batchNo: "OTHER", materialBatch: "PB-2026-001", remark: "PB-2026-001" }), "test-user");
+  createInjectionEntry(injectionRecord({ batchNo: "PB-%42" }), "test-user");
+  assert.equal(queryInjectionEntries({ batchNo: "2026-00" }).total, 3, "批号片段仅匹配半成品生产批号");
+  assert.equal(queryInjectionEntries({ batchNo: "001" }).groups[0].records[0].batchNo, "PB-2026-001");
+  assert.equal(queryInjectionEntries({ batchNo: "001" }).total, 2, "跨日期的相同批号均应保留");
+  assert.equal(exportInjectionEntries({ batchNo: "001" }).total, 2, "导出与列表使用相同批号筛选");
+  assert.equal(queryInjectionEntries({ batchNo: "%42" }).total, 1, "百分号应按普通字符搜索");
   for (const table of ["assembly_records", "injection_records"]) {
     const columns = getDB().prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
     assert.ok(columns.includes("product_id"), `${table} 应增量增加 product_id`);

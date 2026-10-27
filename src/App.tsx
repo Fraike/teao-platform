@@ -21,6 +21,7 @@ import { useAuthStore } from "./lib/authStore";
 import { useTabStore } from "./lib/tabStore";
 import { AdminPasswordModal } from "./components/AdminPasswordModal";
 import { NotificationBell } from "./components/NotificationBell";
+import { AppLocaleProvider } from "./components/AppLocaleProvider";
 import { FeedbackEntry } from "./components/feedback/FeedbackEntry";
 import { getNavigationItem, getVisibleMenuItems, NAVIGATION_GROUPS } from "./lib/navigation";
 import { getSidebarLayout } from "./lib/sidebarLayout";
@@ -319,16 +320,18 @@ function AppLayout() {
 
 export function App() {
   return (
-    <BrowserRouter>
-      <AntApp>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="*" element={<AppLayout />} />
-          </Routes>
-        </Suspense>
-      </AntApp>
-    </BrowserRouter>
+    <AppLocaleProvider>
+      <BrowserRouter>
+        <AntApp>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="*" element={<AppLayout />} />
+            </Routes>
+          </Suspense>
+        </AntApp>
+      </BrowserRouter>
+    </AppLocaleProvider>
   );
 }

@@ -1,5 +1,5 @@
 import { initDB, listCategories, listPendingStandardNotifications } from "./standard-store.js";
-import { listPasswordRecoveryRequests } from "./users.js";
+import { listPasswordRecoveryRequests, listPendingRegistrations } from "./users.js";
 import { standardNotificationIdentity } from "./standard-notification-identity.js";
 
 initDB();
@@ -24,7 +24,12 @@ export function listNotificationsPage(user) {
     id: `password_recovery:${item.id}`, type: "password_recovery", title: "密码找回待审核",
     description: `${item.name} · ${item.username}`, time: item.requestedAt, link: "/admin",
   })) : [];
-  return { total: total + recoveries.length, data: [...recoveries, ...data].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 20) };
+  const registrations = user.role === "admin" ? listPendingRegistrations().map(item => ({
+    id: `user_registration:${item.id}`, type: "user_registration", title: "新用户待审核",
+    description: `${item.name} · ${item.username}`, time: item.createdAt, link: "/admin",
+  })) : [];
+  return { total: total + recoveries.length + registrations.length,
+    data: [...registrations, ...recoveries, ...data].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 20) };
 }
 
 // 保持旧调用方的数组返回值；同样限制为轻量首页。

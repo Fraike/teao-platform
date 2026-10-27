@@ -36,6 +36,10 @@
   min-width: 0;
 }
 
+.batchSearchInput {
+  width: 200px;
+}
+
 .topActions {
   display: flex;
   gap: 6px;

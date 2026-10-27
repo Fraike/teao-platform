@@ -205,9 +205,9 @@ export function ProductionEntryInjectionPage() {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [machine, setMachine] = useState<string | null>(null);
   const [product, setProduct] = useState("");
-  const [search, setSearch] = useState("");
+  const [batchNo, setBatchNo] = useState("");
   const [lProduct, setLProduct] = useState("");
-  const [lSearch, setLSearch] = useState("");
+  const [lBatchNo, setLBatchNo] = useState("");
 
   const [groups, setGroups] = useState<InjGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -232,7 +232,7 @@ export function ProductionEntryInjectionPage() {
     : undefined, [contentElement]);
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
-  const doSearch = () => { setProduct(lProduct); setSearch(lSearch); };
+  const doSearch = () => { setProduct(lProduct); setBatchNo(lBatchNo); };
 
   const exportExcel = async () => {
     setExporting(true);
@@ -242,7 +242,7 @@ export function ProductionEntryInjectionPage() {
       if (dateTo) params.set("dateTo", dateTo);
       if (machine) params.set("machine", machine);
       if (product) params.set("product", product);
-      if (search) params.set("search", search);
+      if (batchNo) params.set("batchNo", batchNo);
       const response = await api.get<{ ok: boolean; data: { groups: InjGroup[] } }>(`/api/production/injection/entries/export?${params.toString()}`);
       await exportProductionExcel(`注塑部生产日报_${dateFrom}_${dateTo}.xlsx`, response.data.groups, INJECTION_DETAIL_COLUMNS, INJECTION_SUMMARY_COLUMNS);
       message.success(`已导出 ${response.data.groups.length} 天生产日报`);
@@ -258,7 +258,7 @@ export function ProductionEntryInjectionPage() {
     try {
       const p = new URLSearchParams();
       if (dateFrom) p.set("dateFrom", dateFrom); if (dateTo) p.set("dateTo", dateTo);
-      if (machine) p.set("machine", machine); if (product) p.set("product", product); if (search) p.set("search", search);
+      if (machine) p.set("machine", machine); if (product) p.set("product", product); if (batchNo) p.set("batchNo", batchNo);
       p.set("limit", String(PAGE_SIZE)); p.set("offset", String(curr));
       const r = await api.get<{ ok: boolean; data: { groups: InjGroup[]; total: number; hasMore: boolean } }>(`/api/production/injection/entries?${p.toString()}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -270,7 +270,7 @@ export function ProductionEntryInjectionPage() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [dateFrom, dateTo, machine, product, search]);
+  }, [dateFrom, dateTo, machine, product, batchNo]);
 
   useEffect(() => {
     let active = true;
@@ -354,9 +354,9 @@ export function ProductionEntryInjectionPage() {
             allowClear size="middle" style={{ width: 240 }} placeholder={["开始", "结束"]} />
           <Select placeholder="机台" value={machine} onChange={setMachine} allowClear size="middle" style={{ width: 90 }} options={MACHINES.map(l => ({ value: l, label: l }))} />
           <Input placeholder="品名搜索" value={lProduct} onChange={e => setLProduct(e.target.value)} allowClear size="middle" style={{ width: 160 }} onPressEnter={doSearch} />
-          <Input placeholder="全局搜索" value={lSearch} onChange={e => setLSearch(e.target.value)} allowClear size="middle" style={{ width: 200 }} prefix={<SearchOutlined />} onPressEnter={doSearch} />
+          <Input placeholder="批号搜索" value={lBatchNo} onChange={e => setLBatchNo(e.target.value)} allowClear size="middle" className={styles.batchSearchInput} prefix={<SearchOutlined />} onPressEnter={doSearch} />
           <Button type="primary" size="middle" icon={<SearchOutlined />} onClick={doSearch}>搜索</Button>
-          <Button size="middle" onClick={() => { setMachine(null); setProduct(""); setLProduct(""); setSearch(""); setLSearch(""); }}>重置筛选</Button>
+          <Button size="middle" onClick={() => { setMachine(null); setProduct(""); setLProduct(""); setBatchNo(""); setLBatchNo(""); }}>重置筛选</Button>
         </div>
         <div className={styles.topActions}>
           <KingdeeDataRefreshButton />
@@ -398,9 +398,9 @@ export function ProductionEntryInjectionPage() {
           setDateTo(dateTo);
           setMachine(null);
           setProduct("");
-          setSearch("");
+          setBatchNo("");
           setLProduct("");
-          setLSearch("");
+          setLBatchNo("");
           invalidateHistory();
           offsetRef.current = 0;
         }}

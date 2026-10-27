@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "pretest": "node --test test/production-import-guard.test.js test/production-recovery-replay.test.js",
+    "pretest": "node --test test/production-import-guard.test.js test/production-recovery-replay.test.js && npm run test:locale-injection",
+    "test:locale-injection": "node --import ./test/standard-frontend-loader.js --test test/date-picker-locale.test.ts test/injection-batch-filter.test.ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

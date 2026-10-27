@@ -286,6 +286,11 @@ export function listUsers() {
   }));
 }
 
+export function listPendingRegistrations() {
+  return readUsersUnsafe().filter(u => u.role !== "admin" && u.status === "pending")
+    .map(u => ({ id: u.id, name: u.name, username: u.username, createdAt: u.createdAt || "" }));
+}
+
 const PASSWORD_RECOVERY_VALID_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function listPasswordRecoveryRequests() {
