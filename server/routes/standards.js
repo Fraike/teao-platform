@@ -97,7 +97,7 @@ export function registerStandardRoutes(app) {
         reviewerId: onlyPublished ? req.user.id : undefined,
         includeObsolete: req.query.includeObsolete === "true",
         excludeObsolete: req.query.excludeObsolete === "true",
-        customer: req.query.customer, model: req.query.model, customerPartNo: req.query.customerPartNo,
+        serialNo: req.query.serialNo, customer: req.query.customer, model: req.query.model, customerPartNo: req.query.customerPartNo,
         vehicleModel: req.query.vehicleModel, page: req.query.page, pageSize: req.query.all === "true" ? null : req.query.pageSize,
       });
       res.locals.responseRows = result.data.length;

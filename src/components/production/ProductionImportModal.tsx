@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useTabPage, useTabState, useTabBusy, useTabDirty, } from "../../lib/tabPageContext";
+import { useMemo, useRef, } from "react";
 import { Alert, Button, Collapse, Modal, Popconfirm, Table, Upload, message } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import type { UploadProps } from "antd";
@@ -123,12 +124,15 @@ function validate(record: ImportedRecord, department: Department): string | null
 }
 
 export function ProductionImportModal({ department, open, onClose, onImported }: ProductionImportModalProps) {
+  const { container } = useTabPage();
   const config = CONFIG[department];
-  const [fileName, setFileName] = useState("");
-  const [records, setRecords] = useState<ImportedRecord[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [importing, setImporting] = useState(false);
-  const [preview, setPreview] = useState<ProductionImportPreview | null>(null);
+  const [fileName, setFileName] = useTabState("fileName", "");
+  const [records, setRecords] = useTabState<ImportedRecord[]>("records", []);
+  const [errors, setErrors] = useTabState<string[]>("errors", []);
+  const [importing, setImporting] = useTabState("importing", false);
+  const [preview, setPreview] = useTabState<ProductionImportPreview | null>("preview", null);
+  useTabBusy(importing);
+  useTabDirty(open && records.length > 0);
   const previewGeneration = useRef(0);
 
   const previewColumns = useMemo(
@@ -155,6 +159,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
   };
 
   const parseFile = async (file: File) => {
+    setImporting(true);
     const generation = ++previewGeneration.current;
     setPreview(null);
     setRecords([]);
@@ -193,6 +198,8 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
       if (generation !== previewGeneration.current) return;
       reset();
       message.error(error instanceof Error ? error.message : "文件解析失败");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -238,6 +245,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
 
   return (
     <Modal
+      getContainer={container ?? undefined}
       title={`${config.label}生产日报导入`}
       open={open}
       onCancel={handleClose}

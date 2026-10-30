@@ -1,3 +1,4 @@
+import { STANDARD_CATEGORY_NAMES } from "../shared/product-classification.ts";
 import { initializeRetirementSchema } from "./standard-retirement-schema.js";
 import { resolveStandardImportStatus } from "./standard-source-policy.js";
 import { listStandardPage, getStandardQueryVersion, listPendingStandardNotifications } from "./standard-query.js";
@@ -40,7 +41,7 @@ const STANDARD_TYPE_LABELS = {
 const CATEGORY_SEED = [
   {
     key: "gear_damper",
-    name: "齿形阻尼器",
+    name: STANDARD_CATEGORY_NAMES.gear_damper,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准gf.cm" },
@@ -53,7 +54,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "barrel_damper",
-    name: "筒型阻尼器",
+    name: STANDARD_CATEGORY_NAMES.barrel_damper,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准" },
@@ -66,7 +67,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "rack_damper",
-    name: "齿条阻尼器",
+    name: STANDARD_CATEGORY_NAMES.rack_damper,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准" },
@@ -80,7 +81,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "lock_sync",
-    name: "锁类·同步器",
+    name: STANDARD_CATEGORY_NAMES.lock_sync,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准" },
@@ -93,7 +94,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "air_pull_cord",
-    name: "空气拉绳阻尼器",
+    name: STANDARD_CATEGORY_NAMES.air_pull_cord,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准" },
@@ -110,7 +111,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "air_pull_handle",
-    name: "空气拉柄阻尼器",
+    name: STANDARD_CATEGORY_NAMES.air_pull_handle,
     fields: [
       { key: "torque_standard", label: "扭矩标准" },
       { key: "test_standard", label: "夏季／常规测试标准" },
@@ -123,7 +124,7 @@ const CATEGORY_SEED = [
   },
   {
     key: "sanitary_damper",
-    name: "智能卫浴",
+    name: STANDARD_CATEGORY_NAMES.sanitary_damper,
     fields: [
       { key: "customer_model", label: "客户型号", group: "基本信息" },
       { key: "part_type", label: "产品部位", group: "基本信息", variant: "component" },
@@ -200,6 +201,13 @@ export function initDB() {
       category_key TEXT NOT NULL,
       created_at   TEXT NOT NULL,
       updated_at   TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS standard_drawing_sources (
+      standard_id TEXT PRIMARY KEY REFERENCES product_standards(id),
+      source_standard_id TEXT NOT NULL REFERENCES product_standards(id),
+      source_number TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS product_standard_versions (
@@ -591,10 +599,22 @@ export function createStandard(data, user) {
   const standardId = randomUUID();
   const versionId = randomUUID();
 
+  let drawingSource = null;
+  if (data.copyDrawingSourceId !== undefined) {
+    if (typeof data.copyDrawingSourceId !== 'string' || data.copyDrawingSourceId.length > 100) throw httpError(400, '图纸来源标准格式无效');
+    drawingSource = d.prepare(`SELECT s.id,s.serial_no FROM product_standards s
+      JOIN product_standard_versions v ON v.standard_id=s.id AND v.status='published'
+      WHERE s.id=? LIMIT 1`).get(data.copyDrawingSourceId);
+    if (!drawingSource) throw httpError(400, '图纸来源标准不存在或未发布');
+  }
+
   d.transaction(() => {
     d.prepare(
       "INSERT INTO product_standards (id, serial_no, category_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
     ).run(standardId, serialNo, categoryKey, now, now);
+
+    if (drawingSource) d.prepare('INSERT INTO standard_drawing_sources VALUES(?,?,?,?)')
+      .run(standardId, drawingSource.id, drawingSource.serial_no, now);
 
     d.prepare(
       `INSERT INTO product_standard_versions (

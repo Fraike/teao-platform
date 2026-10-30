@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTabPage, useTabState, useTabBusy, useTabInitialEffect, useTabPageAdapter } from "../lib/tabPageContext";
+import { useCallback, useMemo, useRef, } from "react";
 import {
   Alert, Button, Card, Col, DatePicker, Modal, Row, Space,
   Spin, Statistic, Tabs, Tag, Typography, message,
@@ -30,20 +31,22 @@ function initialRange(): [Dayjs, Dayjs] {
 }
 
 export function ProductionReportPage() {
+  useTabPageAdapter();
+  const { container } = useTabPage();
   const isMobile = useIsMobile();
-  const [range, setRange] = useState<[Dayjs, Dayjs]>(initialRange);
-  const [report, setReport] = useState<ProductionReportData | null>(null);
-  const [records, setRecords] = useState<Record<ProductionDepartment, ProductionReportRecords | null>>({ assembly: null, injection: null });
-  const [config, setConfig] = useState<ProductionReportConfig | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  const [operation, setOperation] = useState<"send" | null>(null);
-  const [preview, setPreview] = useState<ProductionPreviewView | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [repeatConfirmation, setRepeatConfirmation] = useState<ProductionReportTicket | null>(null);
-  const [activeTab, setActiveTab] = useState<ProductionDepartment>("assembly");
+  const [range, setRange] = useTabState<[Dayjs, Dayjs]>("range", initialRange);
+  const [report, setReport] = useTabState<ProductionReportData | null>("report", null);
+  const [records, setRecords] = useTabState<Record<ProductionDepartment, ProductionReportRecords | null>>("records", { assembly: null, injection: null });
+  const [config, setConfig] = useTabState<ProductionReportConfig | null>("config", null);
+  const [configError, setConfigError] = useTabState<string | null>("configError", null);
+  const [reportError, setReportError] = useTabState<string | null>("reportError", null);
+  const [loading, setLoading] = useTabState("loading", false);
+  const [recordsLoading, setRecordsLoading] = useTabState("recordsLoading", false);
+  const [operation, setOperation] = useTabState<"send" | null>("operation", null);
+  const [preview, setPreview] = useTabState<ProductionPreviewView | null>("preview", null);
+  const [previewLoading, setPreviewLoading] = useTabState("previewLoading", false);
+  const [repeatConfirmation, setRepeatConfirmation] = useTabState<ProductionReportTicket | null>("repeatConfirmation", null);
+  const [activeTab, setActiveTab] = useTabState<ProductionDepartment>("activeTab", "assembly");
   const operationRef = useRef<ProductionReportTicket | null>(null);
   const previewRequestRef = useRef<ProductionReportTicket | null>(null);
 
@@ -51,8 +54,9 @@ export function ProductionReportPage() {
   const dateTo = range[1].format("YYYY-MM-DD");
   const rangeLabel = dateFrom === dateTo ? dateFrom : `${dateFrom} 至 ${dateTo}`;
   const singleDay = isSingleDayRange(dateFrom, dateTo);
-  const [coordinator] = useState(() => createProductionReportCoordinator(dateFrom, dateTo));
+  const [coordinator] = useTabState("coordinator", () => createProductionReportCoordinator(dateFrom, dateTo));
   const busy = loading || recordsLoading || previewLoading || operation !== null;
+  useTabBusy(busy);
 
   const presets = useMemo(() => {
     const yesterday = dayjs().subtract(1, "day");
@@ -72,7 +76,7 @@ export function ProductionReportPage() {
       setConfig(null);
       setConfigError(error instanceof Error ? error.message : "获取配置失败");
     }
-  }, []);
+  }, [setConfig, setConfigError]);
 
   const fetchReport = useCallback(async () => {
     const ticket = coordinator.begin("report");
@@ -90,7 +94,7 @@ export function ProductionReportPage() {
     } finally {
       if (coordinator.isCurrent(ticket)) setLoading(false);
     }
-  }, [coordinator]);
+  }, [coordinator, setLoading, setReport, setReportError]);
 
   const fetchRecords = useCallback(async (department: ProductionDepartment, page: number) => {
     const ticket = coordinator.begin("records");
@@ -107,19 +111,17 @@ export function ProductionReportPage() {
     } finally {
       if (coordinator.isCurrent(ticket)) setRecordsLoading(false);
     }
-  }, [coordinator]);
+  }, [coordinator, setRecords, setRecordsLoading]);
 
   const refresh = useCallback(() => {
     setRecords({ assembly: null, injection: null });
     void fetchReport();
     void fetchRecords(activeTab, 1);
-  }, [activeTab, fetchRecords, fetchReport]);
+  }, [activeTab, fetchRecords, fetchReport, setRecords]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  useTabInitialEffect("report.initial", () => {
     void Promise.all([fetchConfig(), fetchReport(), fetchRecords("assembly", 1)]);
-    return () => coordinator.invalidateAll();
-  }, [coordinator, fetchConfig, fetchRecords, fetchReport]);
+  }, [], config !== null && report !== null && records.assembly !== null);
 
   const changeRange = (next: null | [Dayjs | null, Dayjs | null]) => {
     if (!next?.[0] || !next[1]) return;
@@ -255,10 +257,10 @@ export function ProductionReportPage() {
       {noData && <Alert className={styles.notice} type="info" showIcon message={`${rangeLabel} 暂无生产记录`} />}
       {report && report.missingDepartments.length > 0 && !noData && <Alert className={styles.notice} type="warning" showIcon message={`暂无记录：${report.missingDepartments.map((department) => department === "assembly" ? "装配部" : "注塑部").join("、")}`} />}
 
-      <Modal open={preview !== null} title="生产日报消息预览" onCancel={closePreview} footer={<Button onClick={closePreview}>关闭</Button>} width={760}>
+      <Modal getContainer={container ?? undefined} open={preview !== null} title="生产日报消息预览" onCancel={closePreview} footer={<Button onClick={closePreview}>关闭</Button>} width={760}>
         {preview && <><p>日期：{preview.ticket.dateFrom}</p>{preview.error && <Alert type="error" showIcon message={preview.error} />}{previewLoading && <Spin />}{preview.data && !preview.data.hasData && <Alert type="info" showIcon message="该日期暂无生产记录" />}{preview.data && <pre className={styles.previewContent}>{preview.data.content}</pre>}</>}
       </Modal>
-      <Modal open={repeatConfirmation !== null} title="确认重复推送" okText="确认重发" cancelText="取消" onOk={() => repeatConfirmation && void handleSend(repeatConfirmation)} onCancel={() => setRepeatConfirmation(null)} okButtonProps={{ disabled: busy }} maskClosable={false}>
+      <Modal getContainer={container ?? undefined} open={repeatConfirmation !== null} title="确认重复推送" okText="确认重发" cancelText="取消" onOk={() => repeatConfirmation && void handleSend(repeatConfirmation)} onCancel={() => setRepeatConfirmation(null)} okButtonProps={{ disabled: busy }} maskClosable={false}>
         <p>{repeatConfirmation?.dateFrom} 的日报可能已经发送，请先核查企业微信群，再确认是否重发。</p>
       </Modal>
 

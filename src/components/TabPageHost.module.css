@@ -1,0 +1,16 @@
+.host { height: 100%; min-height: 0; position: relative; flex: 1; overflow: hidden; }
+.page { height: 100%; min-height: 0; overflow: auto; position: relative; }
+
+.managedInactive {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tab-page-width, 100%);
+  height: var(--tab-page-height, 100%);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.managedInactive, .managedInactive * {
+  animation-play-state: paused !important;
+}

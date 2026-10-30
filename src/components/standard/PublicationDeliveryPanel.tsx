@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import {useTabBusy,useTabState,useTabInitialEffect} from "../../lib/tabPageContext";
 import { Alert, App, Button, Space, message } from "antd";
 import { api } from "../../lib/api";
 import type { StandardPublicationDelivery } from "../../types/standard";
@@ -12,17 +12,22 @@ const LABELS: Record<StandardPublicationDelivery["status"], string> = {
 
 export function PublicationDeliveryPanel({ standardId }: { standardId: string }) {
   const { modal } = App.useApp();
-  const [delivery, setDelivery] = useState<StandardPublicationDelivery | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [reload, setReload] = useState(0);
-  useEffect(() => {
+  const [delivery, setDelivery] = useTabState<StandardPublicationDelivery | null>(`standard:PublicationDeliveryPanel:${standardId}:delivery`,null);
+  const [error, setError] = useTabState(`standard:PublicationDeliveryPanel:${standardId}:error`,"");
+  const [loading, setLoading] = useTabState(`standard:PublicationDeliveryPanel:${standardId}:loading`,false);
+  const [reload, setReload] = useTabState(`standard:PublicationDeliveryPanel:${standardId}:reload`,0);
+  const completionQuery = JSON.stringify([standardId, reload]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:PublicationDeliveryPanel:${standardId}:completion`,null);
+  useTabBusy(loading);
+  useTabInitialEffect(`PublicationDeliveryPanel:load:${standardId}`, () => {
+    setCompletedQuery(null);
     const controller = new AbortController();
     void api.get<{ data: StandardPublicationDelivery }>(`/api/standards/${standardId}/publication`, { signal: controller.signal })
       .then(result => { if (!controller.signal.aborted) { setDelivery(result.data); setError(""); } })
-      .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "送达记录读取失败"); });
+      .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "送达记录读取失败"); })
+      .finally(() => { if (!controller.signal.aborted) setCompletedQuery(completionQuery); });
     return () => controller.abort();
-  }, [standardId, reload]);
+  }, [standardId, reload], completedQuery===completionQuery);
   const retry = async (acknowledgeUncertain: boolean) => {
     if (!delivery) return;
     setLoading(true);

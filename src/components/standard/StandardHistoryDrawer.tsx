@@ -1,7 +1,7 @@
+import {useTabBusy,useTabState,useTabInitialEffect,useTabPage} from "../../lib/tabPageContext";
 import { activeStandardFields } from "../../lib/standardFieldGroups";
 import { SeasonalTestStandard } from "./SeasonalTestStandard";
 import { GearSpecification } from "./GearSpecification";
-import { useEffect, useState } from "react";
 import { Drawer, Descriptions, Tag, Timeline, Space, Table, Empty, Spin, Collapse, Pagination, Alert } from "antd";
 import styles from "./StandardHistoryDrawer.module.css";
 import { useAuthStore } from "../../lib/authStore";
@@ -26,15 +26,21 @@ export function StandardHistoryDrawer(props: StandardHistoryDrawerProps) {
 }
 
 function StandardHistoryContent({ standardId, onClose, includeDeleted }: { standardId: string; onClose: () => void; includeDeleted: boolean }) {
-  const [detail, setDetail] = useState<StandardDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<StandardCategory[]>([]);
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const tab=useTabPage();
+  const [detail, setDetail] = useTabState<StandardDetail | null>(`standard:StandardHistoryDrawer:${standardId}:detail`,null);
+  const [loading, setLoading] = useTabState(`standard:StandardHistoryDrawer:${standardId}:loading`,true);
+  const [categories, setCategories] = useTabState<StandardCategory[]>(`standard:StandardHistoryDrawer:${standardId}:categories`,[]);
+  const [commentsOpen, setCommentsOpen] = useTabState(`standard:StandardHistoryDrawer:${standardId}:commentsOpen`,false);
+  const [expanded,setExpanded]=useTabState<string[]>(`standard:history:${standardId}:expanded`,[]);
+  const completionQuery = JSON.stringify([standardId, includeDeleted]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:StandardHistoryDrawer:${standardId}:completion`,null);
+  useTabBusy(loading);
   const versions = useStandardHistoryPage<StandardVersion>(standardId, "versions", 20);
   const changes = useStandardHistoryPage<StandardChange>(standardId, "changes", 20);
   const comments = useStandardHistoryPage<StandardSourceComment>(standardId, "comments", 10, commentsOpen);
 
-  useEffect(() => {
+  useTabInitialEffect(`StandardHistoryDrawer:load:${standardId}`, () => {
+    setCompletedQuery(null);
     const controller = new AbortController();
     Promise.all([
       api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true${includeDeleted ? "&includeDeleted=true" : ""}`, { signal: controller.signal }),
@@ -42,12 +48,12 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
     ]).then(([response, categoryData]) => {
       if (!controller.signal.aborted) { setDetail(response.data); setCategories(categoryData); }
     }).catch(() => { if (!controller.signal.aborted) setDetail(null); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); setCompletedQuery(completionQuery); } });
     return () => controller.abort();
-  }, [standardId, includeDeleted]);
+  }, [standardId, includeDeleted], completedQuery===completionQuery);
 
   return (
-    <Drawer title="变更历史" open onClose={onClose} width={640}>
+    <Drawer getContainer={tab.container ?? undefined} title="变更历史" open onClose={onClose} width={640}>
       {loading ? (
         <Spin size="large" />
       ) : !detail ? (
@@ -74,7 +80,7 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
                     </span>
                   )}
                   {v.reviewComment && <span>意见：{v.reviewComment}</span>}
-                  <Collapse size="small" items={[{
+                  <Collapse size="small" activeKey={expanded} onChange={keys=>setExpanded(typeof keys==="string"?[keys]:keys)} items={[{
                     key: v.id, label: `查看 V${v.versionNo} 完整参数`, children: (
                       <Descriptions column={1} size="small" bordered items={[
                         {key:"category",label:"分类",children:v.categoryName},
@@ -93,7 +99,7 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
           </Spin>
           {versions.total > 20 && <Pagination size="small" current={versions.page} pageSize={20} total={versions.total} showSizeChanger={false} onChange={versions.setPage} />}
 
-          <Collapse onChange={(keys) => setCommentsOpen(keys.includes("excel-comments"))} items={[{key:"excel-comments",label:`Excel 原始批注${commentsOpen ? `（${comments.total}）` : ""}`,children:comments.error ? <Alert type="error" message={comments.error} /> : comments.loading ? <Spin /> : comments.data.length ? (
+          <Collapse activeKey={commentsOpen?["excel-comments"]:[]} onChange={(keys) => setCommentsOpen(keys.includes("excel-comments"))} items={[{key:"excel-comments",label:`Excel 原始批注${commentsOpen ? `（${comments.total}）` : ""}`,children:comments.error ? <Alert type="error" message={comments.error} /> : comments.loading ? <Spin /> : comments.data.length ? (
             <Table size="small" rowKey="id" pagination={{pageSize:10,current:comments.page,total:comments.total,onChange:comments.setPage,showSizeChanger:false}} dataSource={comments.data}
               columns={[{title:"原表单元格",dataIndex:"sourceCell",width:90},{title:"字段",dataIndex:"fieldLabel",width:90},{title:"作者",dataIndex:"author",width:90},{title:"原始批注",dataIndex:"text",render:(text:string)=><span className={styles.commentText}>{text}</span>}]} />
           ) : <Empty description="无原始 Excel 批注" />}]} />

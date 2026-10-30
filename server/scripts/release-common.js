@@ -46,7 +46,7 @@ export function allowedArtifact(name) {
   if (parts[0] === 'dist') return !parts.includes('data') && !/\.(?:xlsx?|xlsm|xlsb|csv|tsv)$/i.test(name);
   if (parts[0] !== 'server') return false;
   if (parts[1] === 'data') return parts.length === 3 && ['employees-seed.json', 'standard-source-decisions.json'].includes(parts[2]);
-  return !parts.slice(1).includes('data') && /\.(?:js|json|service|sh)$/.test(name);
+  return !parts.slice(1).includes('data') && /\.(?:js|ts|json|service|sh)$/.test(name);
 }
 export function artifactManifest(directory) {
   const files = walk(directory).filter(name => name !== 'release-manifest.json').sort();
@@ -97,6 +97,6 @@ export function nginxConfig(original, marker, expectedRoot = '/var/www/teao-plat
   let end = start + locations[0][0].length, depth = 1;
   while (end < config.length && depth) { if (config[end] === '{') depth++; if (config[end] === '}') depth--; end++; }
   if (depth) throw new Error('nginx API location 未闭合');
-  const proxy = `# teao-release-maintenance\n    if (-f ${marker}) { return 503; }\n    # teao-release-protection-begin\n    location = /server { deny all; }\n    location ^~ /server/ { deny all; }\n    location = /data { deny all; }\n    location ^~ /data/ { deny all; }\n    location ~ /\\.(?!well-known(?:/|$)) { deny all; }\n    # teao-release-protection-end\n    location /api/ {\n        client_max_body_size 20m;\n        proxy_pass http://127.0.0.1:3899;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_connect_timeout 30s;\n        proxy_read_timeout 600s;\n        proxy_send_timeout 600s;\n    }`;
+  const proxy = `# teao-release-maintenance\n    if (-f ${marker}) { return 503; }\n    # teao-release-protection-begin\n    location = /server { deny all; }\n    location ^~ /server/ { deny all; }\n    location = /data { deny all; }\n    location ^~ /data/ { deny all; }\n    location ~ /\\.(?!well-known(?:/|$)) { deny all; }\n    # teao-release-protection-end\n    location /api/ {\n        client_max_body_size 30m;\n        proxy_pass http://127.0.0.1:3899;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_connect_timeout 30s;\n        proxy_read_timeout 600s;\n        proxy_send_timeout 600s;\n    }`;
   return config.slice(0, start) + proxy + config.slice(end);
 }

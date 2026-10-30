@@ -1,4 +1,4 @@
-.selectedRow:global(.ant-table-row) > :global(td.ant-table-cell),
-.selectedRow:global(.ant-table-row) > :global(td.ant-table-cell.ant-table-cell-row-hover) {
+.selectedRow:global(.ant-table-row) > :global(.ant-table-cell),
+.selectedRow:global(.ant-table-row) > :global(.ant-table-cell.ant-table-cell-row-hover) {
   background: #e6f4ff;
 }

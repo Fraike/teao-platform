@@ -1,7 +1,8 @@
+import {useTabPage,useTabBusy,useTabDirty,useTabState,useTabForm} from "../../lib/tabPageContext";
 import { groupStandardFields, activeStandardFields } from "../../lib/standardFieldGroups";
 import { useAuthStore } from "../../lib/authStore";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Form, Input, Select, Radio, Space, Button, Modal, message } from "antd";
+import { Form, Input, Select, Radio, Checkbox, Space, Button, Modal, message } from "antd";
 import { api } from "../../lib/api";
 import type {
   StandardCategory,
@@ -26,6 +27,7 @@ interface StandardFormModalProps {
 }
 
 interface FormValues {
+  inheritDrawings:boolean;
   serialNo: string;
   categoryKey: string;
   standardType: StandardType;
@@ -59,12 +61,21 @@ export function StandardFormModal({
   const administrator = useAuthStore(state => state.user?.role === "admin");
   const directPublish = publishOverride ?? administrator;
   const [form] = Form.useForm<FormValues>();
+  const tab=useTabPage();
+  const [dirty,setDirty]=useTabState("standard:form:dirty",false);
   const [saving, setSaving] = useState(false);
+  useTabBusy(saving);
+  useTabDirty(open&&dirty);
+  const {restored:restoredForm}=useTabForm(form,"standard:edit",{dirty:open&&dirty});
+  const [draftSession, setDraftSession] = useTabState<string | null>("standard:form:session", null);
+  const [savedCategoryDirty, setSavedCategoryDirty] = useTabState("standard:form:categoryDirty", false);
   const initializedSession = useRef<string | null>(null);
-  const categoryDirty = useRef(false);
+  const restoringDraft=useRef(restoredForm);
+  const categoryDirty = useRef(savedCategoryDirty);
   const categoryKey = Form.useWatch("categoryKey", form);
   const isEdit = Boolean(initial);
   const isCopy = Boolean(copySource) && !isEdit;
+  const canInheritDrawings = Boolean(copySource?.versions.some(version => version.status === "published"));
 
   const activeCategory = useMemo(
     () => categories.find((c) => c.key === categoryKey),
@@ -74,6 +85,9 @@ export function StandardFormModal({
   useEffect(() => {
     if (!open) {
       initializedSession.current = null;
+      restoringDraft.current = false;
+      setDraftSession(null);
+      setDirty(false);
       return;
     }
     const source = pickSource(initial ?? copySource ?? null);
@@ -86,12 +100,19 @@ export function StandardFormModal({
       return;
     }
     initializedSession.current = sessionKey;
+    const recoverDraft = restoringDraft.current && draftSession === sessionKey;
+    restoringDraft.current = false;
+    setDraftSession(sessionKey);
+    if (recoverDraft) return;
+    setDirty(false);
     categoryDirty.current = false;
+    setSavedCategoryDirty(false);
     const serialNo =
       isCopy && source?.serialNo ? `${source.serialNo}-副本` : (source?.serialNo ?? "");
     form.resetFields();
     form.setFieldsValue({
       serialNo,
+      inheritDrawings: canInheritDrawings,
       categoryKey: source?.categoryKey ?? defaultCategoryKey ?? categories[0]?.key ?? "",
       standardType: source?.standardType ?? "formal",
       customer: source?.customer ?? "",
@@ -100,9 +121,18 @@ export function StandardFormModal({
       customerPartNo: source?.customerPartNo ?? "",
       fields: source?.fields ?? {},
     });
-  }, [open, initial, copySource, isEdit, isCopy, defaultCategoryKey, categories, form]);
+  }, [open, initial, copySource, isEdit, isCopy, defaultCategoryKey, categories, form, canInheritDrawings,setDirty,draftSession,setDraftSession,setSavedCategoryDirty]);
 
   const displayedFields = activeStandardFields(activeCategory, pickSource(initial ?? copySource ?? null)?.fields);
+
+  const endSession = () => {
+    setDraftSession(null);
+    setDirty(false);
+  };
+  const handleClose = () => {
+    endSession();
+    onClose();
+  };
 
   const handleSubmit = async () => {
     const values = await form.validateFields().catch(() => null);
@@ -113,6 +143,7 @@ export function StandardFormModal({
     try {
       const payload = {
         serialNo: values.serialNo.trim(),
+        ...(isCopy && canInheritDrawings && values.inheritDrawings ? { copyDrawingSourceId: copySource!.id } : {}),
         customer: values.customer?.trim() ?? "",
         vehicleModel: values.vehicleModel?.trim() ?? "",
         model: values.model?.trim() ?? "",
@@ -129,6 +160,7 @@ export function StandardFormModal({
       if (result.notification && result.notification.status !== "sent") message.warning(result.notification.status === "not_configured"
         ? "标准已生效，未配置企业微信群；公告已留存，可在详情中补发"
         : "标准已生效，请在详情中核查群公告送达状态，勿重复保存来补发");
+      endSession();
       onSaved(result.data);
     } catch (err) {
       message.error((err as Error).message || "保存失败");
@@ -144,15 +176,15 @@ export function StandardFormModal({
       : `新增产品标准${activeCategory ? ` · ${activeCategory.name}` : ""}`;
 
   return (
-    <Modal
+    <Modal getContainer={tab.container ?? undefined}
       title={title}
       open={open}
-      onCancel={onClose}
+      onCancel={handleClose}
       width={640}
       destroyOnClose
       footer={
         <Space>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={handleClose}>取消</Button>
           <Button type="primary" loading={saving} onClick={handleSubmit}>
             {directPublish ? "保存并发布" : "保存草稿"}
           </Button>
@@ -162,15 +194,21 @@ export function StandardFormModal({
       <div className={styles.body}>
         {directPublish && pickSource(initial)?.status === "pending_review" && <p>此标准正在待审，保存后将直接发布并结束本次待审流程，操作记录保留。</p>}
         <Form form={form} layout="vertical" onValuesChange={(changed: Partial<FormValues>) => {
-          if (Object.hasOwn(changed, "categoryKey")) categoryDirty.current = true;
+          setDirty(true);
+          if (Object.hasOwn(changed, "categoryKey")) {
+            categoryDirty.current = true;
+            setSavedCategoryDirty(true);
+          }
         }}>
           <Form.Item
             name="serialNo"
-            label="序号（内部料号）"
-            rules={[{ required: true, message: "请输入序号" }]}
+            label="内部料号"
+            rules={[{ required: true, message: "请输入内部料号" }]}
           >
             <Input placeholder="如 SP0009-A" disabled={isEdit} />
           </Form.Item>
+
+          {isCopy && <Form.Item name="inheritDrawings" valuePropName="checked" extra={canInheritDrawings ? "新标准发布后沿用原商品当前有效的通用图纸；不自动带入客户专用图。结构有变化时请取消。" : "来源标准尚未发布，暂不沿用图纸。"}><Checkbox disabled={!canInheritDrawings}>沿用原商品通用图纸</Checkbox></Form.Item>}
 
           <Form.Item name="categoryKey" label="产品分类" rules={[{ required: true, message: "请选择分类" }]}>
             <Select

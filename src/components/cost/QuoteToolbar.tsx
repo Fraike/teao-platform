@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { useQuoteStore } from "../../lib/costStore";
 
-export default function QuoteToolbar() {
+export default function QuoteToolbar({ onSaved }: { onSaved?: () => void }) {
   const resetToExample = useQuoteStore((s) => s.resetToExample);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
@@ -49,7 +49,7 @@ export default function QuoteToolbar() {
       <Button size="small" icon={<DownloadOutlined />} onClick={handleExport}>
         导出 JSON
       </Button>
-      <Button size="small" icon={<SaveOutlined />} onClick={saveQuote}>
+      <Button size="small" icon={<SaveOutlined />} onClick={() => { saveQuote(); onSaved?.(); }}>
         保存
       </Button>
       <Button

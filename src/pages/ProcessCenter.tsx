@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useTabState, useTabPageAdapter } from "../lib/tabPageContext";
+import { useMemo } from "react";
 import {
   Alert,
   Card,
@@ -77,9 +78,11 @@ function ProcessStepList({ steps }: ProcessStepListProps) {
 }
 
 export default function ProcessCenter() {
+  useTabPageAdapter();
   const isMobile = useIsMobile();
-  const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("全部");
+  const [expanded, setExpanded] = useTabState<Record<string, string[]>>("process.expanded", {});
+  const [search, setSearch] = useTabState("ProcessCenter.search", "");
+  const [department, setDepartment] = useTabState("ProcessCenter.department", "全部");
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -235,6 +238,8 @@ export default function ProcessCenter() {
                 <section className={styles.section}>
                   <Text strong className={styles.sectionTitle}>子流程明细</Text>
                   <Collapse
+                    activeKey={expanded[process.id] ?? []}
+                    onChange={keys => setExpanded(current => ({...current, [process.id]: (Array.isArray(keys) ? keys : [keys]).map(String)}))}
                     items={process.subprocesses.map((subprocess, index) => ({
                       key: `${process.id}-${index}`,
                       label: subprocess.title,

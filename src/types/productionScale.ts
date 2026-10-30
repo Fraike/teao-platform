@@ -7,6 +7,7 @@ export interface ProductionHistoryCacheEntry<T> {
 }
 
 export interface ProductionDateTableProps<T extends { id: number; orderQty: number }> {
+  cacheKey?:string;
   records: T[];
   columns: TableProps<T>["columns"];
   orderQtySort: OrderQtySort;

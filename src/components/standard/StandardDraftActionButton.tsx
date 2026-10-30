@@ -1,3 +1,4 @@
+import {useTabBusy} from "../../lib/tabPageContext";
 import { useRef, useState } from "react";
 import { Button, Popconfirm, message } from "antd";
 import { api } from "../../lib/api";
@@ -13,6 +14,7 @@ interface StandardDraftActionButtonProps {
 
 export function StandardDraftActionButton({ target, action, hasPublished, disabled, onCompleted }: StandardDraftActionButtonProps) {
   const [loading, setLoading] = useState(false);
+  useTabBusy(loading);
   const inFlight = useRef(false);
   const snapshot = useRef({ ...target, action });
   const withdraw = action === "withdraw";

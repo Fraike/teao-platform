@@ -1,3 +1,4 @@
+import { useTabBusy } from "../../lib/tabPageContext";
 import { useState } from "react";
 import { Button, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -5,6 +6,7 @@ import { formatKingdeeRefreshMessage, refreshKingdeeData } from "../../lib/produ
 
 export function KingdeeDataRefreshButton() {
   const [loading, setLoading] = useState(false);
+  useTabBusy(loading);
 
   const handleRefresh = async () => {
     if (loading) return;

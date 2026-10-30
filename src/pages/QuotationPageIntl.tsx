@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button, Space, message, Modal } from "antd";
 import {
@@ -16,12 +16,14 @@ import { TermsCardIntl } from "../components/TermsCard";
 import { MoldCardIntl } from "../components/MoldCard";
 import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
-import { prepareQuotationCopy, useIntlQuotationStore } from "../lib/store";
+import { useIntlQuotationStore } from "../lib/store";
 import { exportPDFIntl } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
 import { confirmTierPricing } from "../components/confirmTierPricing";
+
+import { useQuotationDraftTab } from "../lib/useDraftTab";
 
 interface Props {
   headerHeight: number;
@@ -42,33 +44,15 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [editingId, setEditingId] = useState<string | null>(null);
   const editingQueryId = searchParams.get("id");
   const copyingQueryId = searchParams.get("copyId");
   const loadingQueryId = editingQueryId ?? copyingQueryId;
+  const { tab, busy, run, markSaved, saved, editingId, setEditingId } = useQuotationDraftTab(quotation, loadingQueryId, copyingQueryId, "international", replaceQuotation, (error) => messageApi.error(error));
   const activeEditingId = editingQueryId ? editingId : null;
 
-  useEffect(() => {
-    if (!loadingQueryId) {
-      return;
-    }
-    let active = true;
-    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(loadingQueryId)}`)
-      .then((result) => {
-        if (!active) return;
-        if (result.data.market !== "international") throw new Error("This quotation is not an international quotation");
-        replaceQuotation(copyingQueryId ? prepareQuotationCopy(result.data.quotation) : result.data.quotation);
-        setEditingId(copyingQueryId ? null : result.data.id);
-      })
-      .catch((err: unknown) => {
-        if (active) messageApi.error(err instanceof Error ? err.message : "Failed to load quotation");
-      });
-    return () => { active = false; };
-  }, [copyingQueryId, loadingQueryId, messageApi, replaceQuotation]);
-
   const confirmTierValidation = useCallback(async (): Promise<boolean> => {
-    return confirmTierPricing(quotation.products, "en");
-  }, [quotation.products]);
+    return confirmTierPricing(quotation.products, "en", tab.container);
+  }, [quotation.products, tab.container]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
@@ -79,6 +63,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       : (product.price ?? 0) > 0);
     if (!hasCustomer || !hasPrice) {
       Modal.warning({
+        getContainer: tab.container ?? undefined,
         title: "Incomplete Quotation",
         content: [!hasCustomer && "Customer name is required", !hasPrice && "At least one product price must be greater than 0"]
           .filter(Boolean)
@@ -98,7 +83,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       const msg = err instanceof Error ? err.message : "PDF export failed, please try again";
       messageApi.error(msg);
     }
-  }, [confirmTierValidation, quotation, messageApi]);
+  }, [confirmTierValidation, quotation, messageApi, tab.container]);
 
   const handleSubmit = async () => {
     const hasCustomer = quotation.customer.name.trim() !== "";
@@ -106,6 +91,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
     const hasProduct = quotation.products.length > 0 && quotation.products.every((product) => product.name.trim() !== "");
     if (!hasCustomer || !hasQuoteNo || !hasProduct) {
       Modal.warning({
+        getContainer: tab.container ?? undefined,
         title: "Incomplete quotation",
         content: [!hasQuoteNo && "Quotation number is required", !hasCustomer && "Customer name is required", !hasProduct && "Every product needs a name"]
           .filter(Boolean)
@@ -120,7 +106,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
       const result = activeEditingId
         ? await api.put<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(activeEditingId)}`, payload)
         : await api.post<{ ok: true; data: ManagedQuotation }>("/api/quotations", payload);
-      setEditingId(result.data.id);
+      saved(result.data.id, quotation);
       setSearchParams({ id: result.data.id });
       messageApi.success(activeEditingId ? "Quotation updated and submitted" : "Quotation submitted");
     } catch (err) {
@@ -130,6 +116,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
 
   const handleSave = () => {
     exportJSON();
+    markSaved(quotation);
     messageApi.success("Draft saved to local browser");
   };
 
@@ -203,10 +190,10 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
           <Button size="small" icon={<SaveOutlined />} onClick={handleSave}>
             {!isMobile && "Save Draft"}
           </Button>
-          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={() => void handleSubmit()}>
+          <Button type="primary" size="small" icon={<CloudUploadOutlined />} loading={busy} onClick={() => void run(handleSubmit)}>
             {!isMobile && (activeEditingId ? "Update Quote" : "Submit Quote")}
           </Button>
-          <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
+          <Button type="primary" size="small" icon={<FilePdfOutlined />} loading={busy} onClick={() => void run(handleExportPDF)}>
             {!isMobile && "Export PDF"}
           </Button>
         </Space>

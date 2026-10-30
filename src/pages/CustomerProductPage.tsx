@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect, useTabDispose } from "../lib/tabPageContext";
+import { useCallback, useMemo, useRef } from "react";
 import { Input, Select, Typography, Spin, Card, Space, Tag, Button, message } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -33,16 +34,22 @@ const CACHE_KEY = "outside_materials_v2_default";
 const PAGE_SIZE = 50;
 
 export function CustomerProductPage() {
-  const [data, setData] = useState<OutsideMaterial[]>(() => getCache<OutsideMaterial[]>(CACHE_KEY) || []);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string | null>("2"); // 默认只看客户
-  const [submitted, setSubmitted] = useState({ search: "", type: "2" as string | null });
+  const [data, setData] = useTabState<OutsideMaterial[]>("CustomerProductPage.data", () => getCache<OutsideMaterial[]>(CACHE_KEY) || []);
+  const [loaded, setLoaded] = useTabState("CustomerProductPage.loaded", false);
+  useTabPageAdapter(loaded);
+  const [loading, setLoading] = useTabState("CustomerProductPage.loading", false);
+  const [search, setSearch] = useTabState("CustomerProductPage.search", "");
+  const [typeFilter, setTypeFilter] = useTabState<string | null>("CustomerProductPage.typeFilter", "2"); // 默认只看客户
+  const [submitted, setSubmitted] = useTabState("CustomerProductPage.submitted", { search: "", type: "2" as string | null });
+  const [loadedSubmission, setLoadedSubmission] = useTabState<typeof submitted | null>("CustomerProductPage.loadedSubmission", null);
   const coordinator = useMemo(() => createCustomerProductSearchCoordinator(), []);
   const displayedQuery = useRef("|2");
 
+  useTabBusy(loading);
+
   const fetchData = useCallback(async () => {
     const request = coordinator.begin();
+    setLoadedSubmission(null);
     const keyword = submitted.search.trim();
     const queryKey = `${keyword}|${submitted.type || ""}`;
     if (displayedQuery.current !== queryKey) {
@@ -61,19 +68,20 @@ export function CustomerProductPage() {
       if (!res.ok) throw new Error("客户商品查询失败");
       if (!coordinator.isCurrent(request)) return;
       setData(res.data);
+      setLoadedSubmission(submitted);
+      setLoaded(true);
       if (!keyword && submitted.type === "2") setCache(CACHE_KEY, res.data);
     } catch (error) {
       if (coordinator.isCurrent(request)) message.error(error instanceof Error ? error.message : "客户商品查询失败");
     } finally {
-      if (coordinator.isCurrent(request)) setLoading(false);
+      if (coordinator.isCurrent(request)) { setLoaded(true); setLoading(false); }
     }
-  }, [submitted, coordinator]);
+  }, [submitted, coordinator, setData, setLoaded, setLoading, setLoadedSubmission]);
 
-  useEffect(() => {
-    let active = true;
-    void Promise.resolve().then(() => { if (active) return fetchData(); });
-    return () => { active = false; coordinator.cancel(); };
-  }, [fetchData, coordinator]);
+  useTabDispose(() => coordinator.cancel(),'customer-products:cancel');
+  useTabInitialEffect("CustomerProductPage.initial", () => {
+    void fetchData();
+  }, [submitted], loadedSubmission === submitted);
 
   const rows = useMemo(() => data.map((item) => ({ ...item, key: item.id })), [data]);
   const submitSearch = () => setSubmitted({ search: search.trim(), type: typeFilter });

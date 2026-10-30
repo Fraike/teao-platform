@@ -39,7 +39,7 @@ if (isPlaceholderSecret) {
 const SESSION_DURATION_SECONDS = 15 * 24 * 60 * 60;
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
-const ALL_PERMISSIONS = ["business", "production", "production_import", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_review", "engineering_retire"];
+const ALL_PERMISSIONS = ["business", "production", "production_import", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_review", "engineering_retire", "product_drawing_manage"];
 
 const userMutex = createMutex();
 

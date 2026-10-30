@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useTabState, useTabPage, useTabBusy, useTabDirty } from "../lib/tabPageContext";
 import { Alert, Button, Modal, Popconfirm, Space, Table, Tag, Upload, message } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -31,10 +31,15 @@ function getFileExtension(filename: string): string {
 }
 
 export function EmployeeImportModal({ open, onClose, onSuccess }: EmployeeImportModalProps) {
-  const [preview, setPreview] = useState<EmployeeImportPreview | null>(null);
-  const [filename, setFilename] = useState("");
-  const [parsing, setParsing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [preview, setPreview] = useTabState<EmployeeImportPreview | null>("employee.import.preview", null);
+  const [filename, setFilename] = useTabState("employee.import.filename", "");
+  const [parsing, setParsing] = useTabState("employee.import.parsing", false);
+  const [submitting, setSubmitting] = useTabState("employee.import.submitting", false);
+
+  const tab = useTabPage();
+  useTabBusy(parsing || submitting);
+  useTabDirty(open && preview !== null);
+  const [page, setPage] = useTabState("employee.import.page", 1);
 
   const reset = () => {
     setPreview(null);
@@ -100,6 +105,7 @@ export function EmployeeImportModal({ open, onClose, onSuccess }: EmployeeImport
 
   return (
     <Modal
+      getContainer={tab.container ?? undefined}
       title="导入在职员工清单"
       open={open}
       onCancel={close}
@@ -151,7 +157,7 @@ export function EmployeeImportModal({ open, onClose, onSuccess }: EmployeeImport
             rowKey={(record) => `${record.rowNumber}-${record.employeeNo}`}
             size="small"
             scroll={{ x: 760, y: 260 }}
-            pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (total) => `共 ${total} 人` }}
+            pagination={{ current: page, onChange: setPage, pageSize: 10, showSizeChanger: false, showTotal: (total) => `共 ${total} 人` }}
           />
         </div>
       )}

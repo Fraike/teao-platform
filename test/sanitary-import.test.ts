@@ -120,3 +120,18 @@ test('sanitary numbering survives row reorder and duplicate identities block pre
  assert(noMerge.errors.some(e => e.includes('缺少客户')));
  await assert.rejects(parseStandardImportFile(encode([header, a])), /常规标准工作表/);
 });
+
+test('renamed sanitary worksheet imports the same records and stays out of main import', async () => {
+ const XLSX = await import('xlsx');
+ const book = XLSX.read(legacyPairedWorkbook(), {type:'array'});
+ const oldName = book.SheetNames.find(name => name.includes('智能卫浴'))!;
+ const newName = oldName.replace('智能卫浴', '马桶座盖');
+ book.Sheets[newName] = book.Sheets[oldName];
+ book.SheetNames = book.SheetNames.map(name => name === oldName ? newName : name);
+ const bytes = XLSX.write(book, {type:'array',bookType:'xlsx'}) as ArrayBuffer;
+ const result = await parseStandardImportFile(bytes,'sanitary');
+ const old = await parseStandardImportFile(legacyPairedWorkbook(),'sanitary');
+ assert.deepEqual(result.errors,[]);
+ assert.deepEqual(result.records.map(r=>[r.serialNo,r.categoryKey,r.fields]),old.records.map(r=>[r.serialNo,r.categoryKey,r.fields]));
+ assert.equal((await parseStandardImportFile(bytes,'main')).records[0].serialNo,'SP-SYNTHETIC');
+});

@@ -1,17 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import {useTabBusy,useTabState,useTabInitialEffect,useTabPage} from "../../lib/tabPageContext";
+import { useRef } from "react";
 import { Button, Drawer, Empty, List, Pagination, Select, Spin, Tag } from "antd";
 import { api } from "../../lib/api";
 import type { StandardPendingReviewDrawerProps, StandardPendingReviewPage } from "../../types/standard";
 import styles from "./StandardPendingReviewDrawer.module.css";
 
 export function StandardPendingReviewDrawer({ open, category, scope, version, admin, onClose, onOpen }: StandardPendingReviewDrawerProps) {
-  const [filter, setFilter] = useState(category);
-  const [page, setPage] = useState(1);
-  const [retry, setRetry] = useState(0);
-  const [snapshot, setSnapshot] = useState<{ scope: string; key: string; data?: StandardPendingReviewPage; error?: string } | null>(null);
+  const tab=useTabPage();
+  const [filter, setFilter] = useTabState(`standard:StandardPendingReviewDrawer:${category}:filter`,category);
+  const [page, setPage] = useTabState(`standard:StandardPendingReviewDrawer:${category}:page`,1);
+  const [retry, setRetry] = useTabState(`standard:StandardPendingReviewDrawer:${category}:retry`,0);
+  const [snapshot, setSnapshot] = useTabState<{ scope: string; key: string; data?: StandardPendingReviewPage; error?: string } | null>(`standard:StandardPendingReviewDrawer:${category}:snapshot`,null);
   const currentRequest = useRef<AbortController | null>(null);
   const key = `${filter}:${page}:${version}:${retry}`;
-  useEffect(() => {
+  const completionQuery=JSON.stringify([open,scope,key,page,filter]);
+  const [completedQuery,setCompletedQuery]=useTabState<string|null>(`standard:StandardPendingReviewDrawer:${category}:completion`,null);
+  useTabInitialEffect(`StandardPendingReviewDrawer:load:${category}`, () => {
+    setCompletedQuery(null);
     if (!open) return;
     const controller = new AbortController(); currentRequest.current = controller;
     const query = new URLSearchParams({ page: String(page), pageSize: "20" });
@@ -21,15 +26,17 @@ export function StandardPendingReviewDrawer({ open, category, scope, version, ad
         const lastPage = Math.max(1, Math.ceil(data.total / 20));
         if (page > lastPage) { setPage(lastPage); return; }
         setSnapshot({ scope, key, data });
+        setCompletedQuery(completionQuery);
       }
     }).catch(error => {
-      if (!controller.signal.aborted && currentRequest.current === controller) setSnapshot({ scope, key, error: error instanceof Error ? error.message : "加载失败" });
+      if (!controller.signal.aborted && currentRequest.current === controller) { setSnapshot({ scope, key, error: error instanceof Error ? error.message : "加载失败" }); setCompletedQuery(completionQuery); }
     });
     return () => controller.abort();
-  }, [open, scope, key, page, filter]);
+  }, [open, scope, key, page, filter], completedQuery===completionQuery);
+  useTabBusy(open && !(snapshot?.scope===scope&&snapshot.key===key));
   const current = snapshot?.scope === scope && snapshot.key === key ? snapshot : null;
   const options = snapshot?.scope === scope ? snapshot.data?.categories ?? [] : [];
-  return <Drawer open={open} onClose={onClose} title={admin ? "全部待审事项" : "我的待审事项"} width="min(720px, 100vw)" className={styles.drawer}>
+  return <Drawer getContainer={tab.container ?? undefined} open={open} onClose={onClose} title={admin ? "全部待审事项" : "我的待审事项"} width="min(720px, 100vw)" className={styles.drawer}>
     <div className={styles.toolbar}>
       <Select aria-label="待审分类" value={filter} className={styles.filter} onChange={value => { setFilter(value); setPage(1); }}
         options={[{ value: "", label: "全部分类" }, ...options.map(item => ({ value: item.categoryKey, label: `${item.categoryName}（${item.total}）` }))]} />

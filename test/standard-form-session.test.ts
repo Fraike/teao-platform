@@ -23,6 +23,8 @@ test('category refresh preserves dirty fields; opening and copy/edit identity in
   assert.equal(customer().value, '未保存客户');
   props = { ...props, copySource: detail('SP1', '复制客户') }; await render();
   assert.equal(customer().value, '复制客户');
+  assert.equal(document.querySelector<HTMLInputElement>('#inheritDrawings')?.checked, false);
+  assert.equal(document.querySelector<HTMLInputElement>('#inheritDrawings')?.disabled, true);
   assert.equal(document.querySelector<HTMLInputElement>('input[placeholder="如 SP0009-A"]')!.value, 'SP1-副本');
   props = { ...props, initial: detail('SP1', '编辑客户') }; await render();
   assert.equal(customer().value, '编辑客户');
@@ -50,4 +52,24 @@ test('late categories fill only the empty category and preserve other dirty inpu
   props = { ...props, categories: [{ key: 'rack_damper', name: '齿条', fields: [] }, ...categories] }; await render();
   assert.equal(document.querySelector('.ant-select-selection-item')?.textContent, '齿形');
   await act(() => root.unmount());
+});
+
+test('copy of a published standard submits explicit drawing source and allows opting out', async () => {
+  const {api}=await import('../src/lib/api.ts');
+  const originalPost=api.post;
+  const submitted:Record<string,unknown>[]=[];
+  const source=detail('SP-SOURCE','来源客户');source.versions[0].status='published';
+  api.post=(async<T>(_url:string,payload:unknown)=>{submitted.push(payload as Record<string,unknown>);return {data:detail('new','新客户')} as T;}) as typeof api.post;
+  const root=createRoot(document.getElementById('root')!);
+  try {
+    await act(()=>root.render(createElement(StandardFormModal,{open:true,categories,initial:null,copySource:source,directPublish:true,onClose(){},onSaved(){}})));
+    const checkbox=document.querySelector<HTMLInputElement>('#inheritDrawings')!;
+    assert.equal(checkbox.checked,true);assert.equal(checkbox.disabled,false);
+    const submit=()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='保存并发布')!;
+    await act(()=>submit().click());await act(async()=>{await new Promise(r=>setTimeout(r,30));});
+    assert.equal(submitted[0]?.copyDrawingSourceId,source.id);
+    await act(()=>checkbox.click());
+    await act(()=>submit().click());await act(async()=>{await new Promise(r=>setTimeout(r,30));});
+    assert.equal(submitted.length,2);assert.equal(Object.hasOwn(submitted[1],'copyDrawingSourceId'),false);
+  } finally {await act(()=>root.unmount());api.post=originalPost;}
 });

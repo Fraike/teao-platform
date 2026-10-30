@@ -1,0 +1,9 @@
+.toolbar {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0;}
+.batchSelect {min-width:280px;max-width:100%;}
+.notice {margin:12px 0;}
+.path {overflow-wrap:anywhere;font-size:12px;color:#667085;}
+.editor {display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,1fr);gap:20px;}
+.fields {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.target {border-bottom:1px solid #eee;padding:12px 0;}
+.targetSelect {width:100%;margin-top:8px;}
+@media(max-width:900px){.editor{grid-template-columns:1fr;}}

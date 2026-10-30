@@ -1,0 +1,1 @@
+{ "compilerOptions": { "target":"ES2023", "module":"NodeNext", "moduleResolution":"NodeNext", "noEmit":true, "strict":true, "allowJs":true, "checkJs":false, "skipLibCheck":true, "allowImportingTsExtensions":true, "types":["node"] }, "include":["server/routes/products.ts","server/services/product-*.ts","src/types/product.ts"] }

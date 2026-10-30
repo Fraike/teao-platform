@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {selectProductionDrawings} from '../server/shared/product-drawing-selection.ts';
+import type {ProductArchive,ProductDrawing} from '../src/types/product.ts';
+const product={standards:[{id:'s1',fields:{gear_spec:'不装齿轮'}},{id:'s2',fields:{gear_spec:'11齿3.0MM齿轮'}}]} as ProductArchive;
+const file=(id:string,structure:ProductDrawing['structure'],role:ProductDrawing['role']='primary',standardIds:string[]=[]):ProductDrawing=>({id,drawingNo:'D',filename:id,kind:'pdf',status:'published',structure,role,standardIds} as ProductDrawing);
+const files=[file('gear','geared'),file('none','gearless','supplement')];
+assert.equal(selectProductionDrawings(files,'s1',product)[0].id,'none');assert.equal(selectProductionDrawings(files,'s2',product)[0].id,'gear');
+assert.equal(selectProductionDrawings([file('extra','unspecified','supplement'),file('main','unspecified')],'',product)[0].id,'main');
+assert.equal(selectProductionDrawings([...files,file('customer','gearless','primary',['s1'])],'s1',product)[0].id,'customer');
+assert(!selectProductionDrawings([...files,file('other-client','geared','primary',['s2'])],'s1',product).some(f=>f.id==='other-client'));
+assert(selectProductionDrawings([...files,file('customer','gearless','primary',['s1'])],'s1',product).some(f=>f.id==='gear'),'other structure common drawing remains available');
+console.log('shared structure/main/customer selection passed');

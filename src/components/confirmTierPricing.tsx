@@ -22,16 +22,17 @@ const COPY = {
   },
 } as const;
 
-export function confirmTierPricing(products: Product[], locale: TierValidationLocale): Promise<boolean> {
+export function confirmTierPricing(products: Product[], locale: TierValidationLocale, container?: HTMLElement | null): Promise<boolean> {
   const validation = validateQuotationTiers(products, locale);
   const copy = COPY[locale];
   if (validation.errors.length > 0) {
-    Modal.error({ title: copy.errorTitle, content: validation.errors.join(locale === "zh" ? "；" : "; "), okText: copy.edit });
+    Modal.error({ getContainer: container ?? undefined, title: copy.errorTitle, content: validation.errors.join(locale === "zh" ? "；" : "; "), okText: copy.edit });
     return Promise.resolve(false);
   }
   if (validation.warnings.length === 0) return Promise.resolve(true);
   return new Promise((resolve) => {
     Modal.confirm({
+      getContainer: container ?? undefined,
       title: copy.warningTitle,
       icon: <WarningOutlined />,
       content: `${validation.warnings.join(locale === "zh" ? "；" : "; ")}${copy.warningSuffix}`,

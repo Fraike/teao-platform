@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -25,6 +25,8 @@ import { ResponsiveTable } from "../components/ResponsiveTable";
 import styles from "./DataTablePage.module.css";
 import { formatDomesticPrice } from "../lib/quotationCompatibility";
 
+import { useTabState, useTabPage, useTabPageAdapter, useTabBusy, useTabInitialEffect } from "../lib/tabPageContext";
+
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
@@ -43,16 +45,22 @@ interface QuotationResponse {
 
 export default function QuotationManagementPage() {
   const navigate = useNavigate();
+  useTabPageAdapter();
+  const [loadedQuery, setLoadedQuery] = useTabState<string | null>("management:loadedQuery", null);
+  const [writing, setWriting] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const [records, setRecords] = useState<ManagedQuotation[]>([]);
+  const [records, setRecords] = useTabState<ManagedQuotation[]>("management:records", []);
   const [loading, setLoading] = useState(false);
-  const [keyword, setKeyword] = useState("");
-  const [market, setMarket] = useState<string | undefined>();
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [selected, setSelected] = useState<ManagedQuotation | null>(null);
+  const [keyword, setKeyword] = useTabState("management:keyword", "");
+  const [market, setMarket] = useTabState<string | undefined>("management:market", undefined);
+  const [dateRange, setDateRange] = useTabState<[dayjs.Dayjs, dayjs.Dayjs] | null>("management:dateRange", null);
+  const [page, setPage] = useTabState("management:page", 1);
+  const [total, setTotal] = useTabState("management:total", 0);
+  const [selected, setSelected] = useTabState<ManagedQuotation | null>("management:selected", null);
   const pageSize = 20;
+  const queryKey = JSON.stringify([keyword, market, page, dateRange?.[0].valueOf(), dateRange?.[1].valueOf()]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  useTabBusy(writing || loading || detailLoading);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -65,6 +73,7 @@ export default function QuotationManagementPage() {
         params.set("dateTo", dateRange[1].format("YYYY-MM-DD"));
       }
       const result = await api.get<QuotationListResponse>(`/api/quotations?${params.toString()}`);
+      setLoadedQuery(queryKey);
       setRecords(result.data);
       setTotal(result.total);
     } catch (err) {
@@ -72,19 +81,20 @@ export default function QuotationManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, keyword, market, messageApi, page]);
+  }, [dateRange, keyword, market, messageApi, page, queryKey, setLoadedQuery, setRecords, setTotal]);
 
-  useEffect(() => {
+  useTabInitialEffect("management:load", () => {
     void Promise.resolve().then(loadRecords);
-  }, [loadRecords]);
+  }, [keyword, market, page, dateRange?.[0].valueOf(), dateRange?.[1].valueOf()], loadedQuery === queryKey);
 
   const openDetail = async (id: string) => {
+    setDetailLoading(true);
     try {
       const result = await api.get<QuotationResponse>(`/api/quotations/${encodeURIComponent(id)}`);
       setSelected(result.data);
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : "报价读取失败");
-    }
+    } finally { setDetailLoading(false); }
   };
 
   const editQuotation = (record: ManagedQuotation) => {
@@ -98,6 +108,7 @@ export default function QuotationManagementPage() {
   };
 
   const deleteQuotation = async (id: string) => {
+    setWriting(true);
     try {
       await api.delete(`/api/quotations/${encodeURIComponent(id)}`);
       if (selected?.id === id) setSelected(null);
@@ -106,7 +117,7 @@ export default function QuotationManagementPage() {
       else await loadRecords();
     } catch (err) {
       messageApi.error(err instanceof Error ? err.message : "报价删除失败");
-    }
+    } finally { setWriting(false); }
   };
 
   const columns: ColumnsType<ManagedQuotation> = [
@@ -250,6 +261,7 @@ export default function QuotationManagementPage() {
 }
 
 function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: ManagedQuotation | null; onClose: () => void; onEdit: (record: ManagedQuotation) => void; onCopy: (record: ManagedQuotation) => void }) {
+  const tab = useTabPage();
   const quotation = record?.quotation;
   const productColumns: ColumnsType<Product> = [
     {
@@ -285,6 +297,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
 
   return (
     <Drawer
+      getContainer={tab.container ?? undefined}
       title={record ? `${record.market === "international" ? "国际" : "国内"}报价详情` : "报价详情"}
       open={Boolean(record)}
       onClose={onClose}

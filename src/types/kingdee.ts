@@ -53,6 +53,9 @@ export interface KingdeeCustomer {
 
 /** 金蝶商品详情 */
 export interface KingdeeMaterialDetail {
+  /** 最小包装量，以基本单位计 */
+  min_package_qty?: number|string;
+  custom_field?:Record<string,string|number|null>;
   id: string;
   number: string;
   name: string;

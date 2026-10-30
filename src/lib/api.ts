@@ -90,8 +90,8 @@ async function request<T>(
 
 export const api = {
   get: <T>(url: string, options?: RequestInit) => request<T>(url, options),
-  post: <T>(url: string, body?: unknown) =>
-    request<T>(url, { method: "POST", body: JSON.stringify(body) }),
+  post: <T>(url: string, body?: unknown, options: RequestInit = {}) =>
+    request<T>(url, { ...options, method: "POST", body: JSON.stringify(body) }),
   put: <T>(url: string, body?: unknown) =>
     request<T>(url, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(url: string) =>

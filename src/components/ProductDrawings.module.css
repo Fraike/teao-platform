@@ -1,0 +1,17 @@
+.toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 0; flex-wrap:wrap; }
+.meta { color:#667085; font-size:13px; margin-top:8px; }
+.viewer { height:clamp(280px,calc(100dvh - 450px),800px); min-height:280px; scrollbar-gutter:stable; overflow:auto; padding:12px; box-sizing:border-box; background:#eef0f3; border:1px solid #e4e7ec; }
+.pdf { width:100%;height:100%;border:0;display:block; }
+.footer { color:#667085;font-size:12px;line-height:1.7;padding:12px 0; }
+.empty { padding:90px 20px; background:#fafafa;border:1px dashed #d9d9d9; }
+.drawingSelect { width:100%;margin-bottom:12px; }
+.management { margin-top:24px; border-top:1px solid #eee;padding-top:8px; }
+.management h3 {font-size:15px;}
+.notice { margin-bottom:16px; }
+.fileInput { display:grid;gap:8px; }
+@media(max-width:768px) { .viewer {height:60vh;min-height:340px;} .toolbar {align-items:flex-start;} }
+
+.canvas{display:block;margin:0 auto;background:white;}
+.pdfControls{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;background:#f5f6f8;border:1px solid #e4e7ec;border-top:0;font-size:13px;}
+
+.printFrame{width:100%;height:72vh;border:0;background:#f5f6f8;}

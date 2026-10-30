@@ -1,3 +1,7 @@
+import type {Location} from 'react-router-dom';
+import {TabPageHost} from './components/TabPageHost';
+import {guardTabClose,disposeTabPage,getTabPage} from './lib/tabPageCache';
+import {productPdfResources} from './lib/productPdfResources';
 import { useState, useEffect, Suspense, lazy, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip, Space } from "antd";
@@ -68,13 +72,33 @@ function PageLoader() {
   return <div className="page-loader" />;
 }
 
+
+function renderTabPage(location:Location) {
+  return <Suspense fallback={<PageLoader />}>
+              <Routes location={location}>
+                <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
+                <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
+                <Route path="/quotation" element={<AuthGuard permission="business"><QuotationPage headerHeight={56} /></AuthGuard>} />
+                <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
+                <Route path="/quotation-management" element={<AuthGuard permission="business"><QuotationManagementPage /></AuthGuard>} />
+                <Route path="/cost" element={<AuthGuard permission="business"><CostCalculatorPage headerHeight={56} /></AuthGuard>} />
+                <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
+                <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
+                <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
+                <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
+                <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
+                <Route path="/materials" element={<AuthGuard><MaterialDataPage /></AuthGuard>} />
+                <Route path="/materials/:id" element={<AuthGuard><MaterialDetailPage /></AuthGuard>} />
+                <Route path="/customers" element={<AuthGuard permission="basic_data"><CustomerDataPage /></AuthGuard>} />
+                <Route path="/suppliers" element={<AuthGuard permission="basic_data"><SupplierDataPage /></AuthGuard>} />
+                <Route path="/customer-products" element={<AuthGuard permission="basic_data"><CustomerProductPage /></AuthGuard>} />
+                <Route path="/product-standards" element={<AuthGuard><ProductStandardPage /></AuthGuard>} />
+              </Routes>
+  </Suspense>;
+}
+
 function AppLayout() {
   const location = useLocation();
-  const isTablePageViewport = [
-    "/product-standards", "/materials", "/customers", "/suppliers", "/employees", "/admin",
-    "/customer-products", "/quotation-management",
-    "/production-entry", "/production-entry-injection",
-  ].includes(location.pathname.replace(/\/+$/, ""));
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
@@ -82,6 +106,21 @@ function AppLayout() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { tabs, activeKey, openTab, closeTab, closeOthers, setActiveKey } = useTabStore();
+  const {modal,message:appMessage}=AntApp.useApp();
+  const cacheScope=`${user?.id||''}:${user?.role||''}:${[...(user?.permissions||[])].sort().join(',')}`;
+  const cachedTabs=useMemo(()=>tabs.flatMap(tab=>{
+    const saved=tab.key===location.pathname?location:tab.location;
+    return saved?[{key:tab.key,location:saved}]:[];
+  }),[tabs,location]);
+  useEffect(()=>()=>productPdfResources.reset(),[cacheScope]);
+  const tabHref=(key:string)=>{const saved=useTabStore.getState().tabs.find(tab=>tab.key===key)?.location;return saved?saved.pathname+saved.search+saved.hash:key;};
+  const allowClose=async(keys:string[])=>{
+    const busy=()=>keys.some(key=>[...getTabPage(cacheScope,key).busy.values()].some(Boolean));
+    if(busy()){appMessage.info('页面正在保存或处理文件，请完成后再关闭');return false;}
+    return guardTabClose(cacheScope,keys,dirty=>new Promise<boolean>(resolve=>{
+      modal.confirm({title:'存在未保存内容',content:`${dirty.length} 个标签页有未保存内容，确认丢弃并关闭？`,okText:'丢弃并关闭',cancelText:'继续编辑',onOk:()=>{resolve(true);},onCancel:()=>{resolve(false);}});
+    }));
+  };
 
   // 移动端默认折叠
   useEffect(() => {
@@ -92,29 +131,31 @@ function AppLayout() {
   // 路由变化 → 同步标签
   useEffect(() => {
     const pathname = location.pathname;
+    if(pathname==="/materials/number")return;
     const item = getNavigationItem(pathname);
     if (!item) return;
     document.title = `${item.title} | 特澳科技后台`;
-    openTab({ key: pathname, label: item.title });
-  }, [location.pathname, openTab]);
+    openTab({ key: pathname, label: item.title,location });
+  }, [location, openTab]);
 
   // 标签 activeKey 变化 → 导航
   const handleTabChange = (key: string) => {
     setActiveKey(key);
-    navigate(key);
+    navigate(tabHref(key));
   };
 
   // 关闭标签
-  const handleTabEdit = (key: string | React.MouseEvent | React.KeyboardEvent, action: "add" | "remove") => {
+  const handleTabEdit = async (key: string | React.MouseEvent | React.KeyboardEvent, action: "add" | "remove") => {
     if (action === "remove" && typeof key === "string") {
       const { tabs: currentTabs, activeKey: currentActive } = useTabStore.getState();
-      closeTab(key);
+      if(!await allowClose([key]))return;
+      closeTab(key);disposeTabPage(cacheScope,key);
       // 如果关闭的是当前标签，导航到新激活的标签
       if (currentActive === key) {
         const idx = currentTabs.findIndex((t) => t.key === key);
         const remaining = currentTabs.filter((t) => t.key !== key);
         const target = remaining[Math.min(idx, remaining.length - 1)];
-        if (target) navigate(target.key);
+        if (target) navigate(tabHref(target.key));
       }
     }
   };
@@ -216,7 +257,7 @@ function AppLayout() {
                   onEdit={handleTabEdit}
                   items={tabs.map((tab) => ({
                     key: tab.key,
-                    label: tab.label,
+                    label: tab.subtitle ? <span className={styles.productTabLabel}><span>{tab.label}</span><small>{tab.subtitle}</small></span> : tab.label,
                     closable: tab.key !== "/",
                   }))}
                   style={{ marginBottom: 0 }}
@@ -231,7 +272,7 @@ function AppLayout() {
               <Button
                 type="text"
                 size="small"
-                onClick={() => closeOthers(activeKey)}
+                onClick={() => void (async()=>{const keys=tabs.filter(tab=>tab.key!==activeKey&&tab.key!=='/').map(tab=>tab.key);if(!await allowClose(keys))return;closeOthers(activeKey);keys.forEach(key=>disposeTabPage(cacheScope,key));})()}
                 style={{ fontSize: 12, color: "#999", flexShrink: 0 }}
               >
                 关闭其他
@@ -274,33 +315,9 @@ function AppLayout() {
         <AdminPasswordModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} />
 
         {/* 内容区 */}
-        <Content className={styles.content} data-page-scroll-container>
-          <div
-            className={isTablePageViewport ? styles.pageViewport : undefined}
-            data-table-page-viewport={isTablePageViewport ? "" : undefined}
-          >
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
-                <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
-                <Route path="/quotation" element={<AuthGuard permission="business"><QuotationPage headerHeight={56} /></AuthGuard>} />
-                <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
-                <Route path="/quotation-management" element={<AuthGuard permission="business"><QuotationManagementPage /></AuthGuard>} />
-                <Route path="/cost" element={<AuthGuard permission="business"><CostCalculatorPage headerHeight={56} /></AuthGuard>} />
-                <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
-                <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
-                <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
-                <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
-                <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
-                <Route path="/materials" element={<AuthGuard permission="basic_data"><MaterialDataPage /></AuthGuard>} />
-                <Route path="/materials/:id" element={<AuthGuard permission="basic_data"><MaterialDetailPage /></AuthGuard>} />
-                <Route path="/customers" element={<AuthGuard permission="basic_data"><CustomerDataPage /></AuthGuard>} />
-                <Route path="/suppliers" element={<AuthGuard permission="basic_data"><SupplierDataPage /></AuthGuard>} />
-                <Route path="/customer-products" element={<AuthGuard permission="basic_data"><CustomerProductPage /></AuthGuard>} />
-                <Route path="/product-standards" element={<AuthGuard><ProductStandardPage /></AuthGuard>} />
-              </Routes>
-            </Suspense>
-          </div>
+        <Content className={styles.content}>
+          <TabPageHost scope={cacheScope} tabs={cachedTabs} activeKey={location.pathname==='/materials/number'?'__resolver__':location.pathname} renderPage={renderTabPage} />
+          {location.pathname==='/materials/number'&&renderTabPage(location)}
         </Content>
 
         <Footer className={styles.footer}>

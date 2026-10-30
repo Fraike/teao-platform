@@ -42,8 +42,9 @@ export async function parseStandardImportFile(buffer: ArrayBuffer, scope: Standa
   await validateStandardZip(buffer);
   const fileHash = await sha256Hex(new Uint8Array(buffer));
   const names = XLSX.read(buffer, { type: "array", bookSheets: true }).SheetNames;
-  const sheetName = names.find(name => scope === "sanitary" ? name.includes("智能卫浴") : !name.includes("智能卫浴"));
-  if (!sheetName) throw new Error(scope === "sanitary" ? "未找到智能卫浴工作表。" : "未找到常规标准工作表。");
+  const isSanitary = (name: string) => /智能卫浴|马桶座盖/.test(name);
+  const sheetName = names.find(name => scope === "sanitary" ? isSanitary(name) : !isSanitary(name));
+  if (!sheetName) throw new Error(scope === "sanitary" ? "未找到马桶座盖工作表。" : "未找到常规标准工作表。");
   // 先用一行读取取得原始 dimension / !fullref，拒绝异常宽表后才读取数据行。
   const preflight = XLSX.read(buffer, {
     type: "array", sheets: [sheetName], sheetRows: 1,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import {useTabBusy,useTabState,useTabInitialEffect} from "../../lib/tabPageContext";
 import { Alert, Collapse, Empty, Table } from "antd";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../lib/authStore";
@@ -6,11 +6,15 @@ import type { StandardChange, StandardHistoryPage, StandardSourceComment } from 
 import styles from "./StandardDetailDrawer.module.css";
 
 function useTestHistoryPage<T>(standardId: string, section: "changes" | "comments", enabled: boolean, pageSize: number) {
-  const [page, setPage] = useState(1);
-  const [result, setResult] = useState<StandardHistoryPage<T>>({ data: [], page: 1, pageSize, total: 0 });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
+  const [page, setPage] = useTabState(`standard:StandardTestHistory:${standardId}:${section}:page`,1);
+  const [result, setResult] = useTabState<StandardHistoryPage<T>>(`standard:StandardTestHistory:${standardId}:${section}:result`,{ data: [], page: 1, pageSize, total: 0 });
+  const [loading, setLoading] = useTabState(`standard:StandardTestHistory:${standardId}:${section}:loading`,false);
+  const [error, setError] = useTabState(`standard:StandardTestHistory:${standardId}:${section}:error`,"");
+  const completionQuery = JSON.stringify([standardId, section, enabled, page, pageSize]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:StandardTestHistory:${standardId}:${section}:completion`,null);
+  useTabBusy(loading);
+  useTabInitialEffect(`StandardTestHistory:load:${standardId}:${section}`, () => {
+    setCompletedQuery(null);
     if (!enabled) return;
     const controller = new AbortController();
     queueMicrotask(() => { if (!controller.signal.aborted) { setLoading(true); setError(""); } });
@@ -18,9 +22,9 @@ function useTestHistoryPage<T>(standardId: string, section: "changes" | "comment
     api.get<StandardHistoryPage<T>>(`/api/standards/${encodeURIComponent(standardId)}/history?${query}`, { signal: controller.signal })
       .then(response => { if (!controller.signal.aborted) setResult(response); })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "加载测试标准历史失败"); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); setCompletedQuery(completionQuery); } });
     return () => controller.abort();
-  }, [standardId, section, enabled, page, pageSize]);
+  }, [standardId, section, enabled, page, pageSize], enabled&&completedQuery===completionQuery);
   return { ...result, page, setPage, loading, error };
 }
 
@@ -30,7 +34,7 @@ export function StandardTestHistory({ standardId }: { standardId: string }) {
 }
 
 function TestHistoryContent({ standardId }: { standardId: string }) {
-  const [open, setOpen] = useState<string[]>([]);
+  const [open, setOpen] = useTabState<string[]>(`standard:StandardTestHistory:${standardId}:open`,[]);
   const changes = useTestHistoryPage<StandardChange>(standardId, "changes", open.includes("changes"), 20);
   const comments = useTestHistoryPage<StandardSourceComment>(standardId, "comments", open.includes("comments"), 10);
   const text = (value: string) => <span className={styles.historyText}>{value || "—"}</span>;

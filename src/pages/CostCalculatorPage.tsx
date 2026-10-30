@@ -10,12 +10,17 @@ import MarkupSection from "../components/cost/MarkupSection";
 import CostSummaryPanel from "../components/cost/CostSummaryPanel";
 import { useIsMobile } from "../lib/useIsMobile";
 
+import { useQuoteStore } from "../lib/costStore";
+import { useDraftTab } from "../lib/useDraftTab";
+
 interface Props {
   headerHeight: number;
 }
 
 export default function CostCalculatorPage({ headerHeight }: Props) {
   const isMobile = useIsMobile();
+  const quote = useQuoteStore(s => s.quote);
+  const { markSaved } = useDraftTab(quote);
 
   return (
     <div style={{ height: `calc(100vh - ${headerHeight}px)`, display: "flex", flexDirection: "column" }}>
@@ -33,7 +38,7 @@ export default function CostCalculatorPage({ headerHeight }: Props) {
         <span style={{ fontSize: 13, fontWeight: 500, color: "#1e293b" }}>
           成本报价计算器
         </span>
-        <QuoteToolbar />
+        <QuoteToolbar onSaved={() => markSaved(quote)} />
       </div>
 
       {/* 主体：桌面左右分屏，移动端上下堆叠 */}

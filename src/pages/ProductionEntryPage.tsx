@@ -1,3 +1,4 @@
+import { useTabDispose, useTabPage, useTabState, useTabBusy, useTabInitialEffect, useTabPageAdapter } from "../lib/tabPageContext";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card, Button, DatePicker, Select, Input, Tag,
@@ -81,37 +82,44 @@ const ASSEMBLY_SUMMARY_COLUMNS: ExportColumn[] = [
 ];
 
 export function ProductionEntryPage() {
-  const [saveQueue] = useState(() => createProductionSaveQueue());
+  useTabPageAdapter();
+  const { container } = useTabPage();
+  const [saveQueue] = useTabState("saveQueue", () => createProductionSaveQueue());
   const currentUser = useAuthStore((state) => state.user);
   const canImport = currentUser?.role === "admin" || (currentUser?.permissions.includes("production") && currentUser.permissions.includes("production_import"));
   // ---- 所有筛选条件使用本地状态，点击"搜索"才提交 ----
-  const [fDateFrom, setFDateFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 9); return d.toISOString().slice(0, 10); });
-  const [fDateTo, setFDateTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [fLine, setFLine] = useState<string | null>(null);
-  const [fProduct, setFProduct] = useState("");
-  const [fCustomer, setFCustomer] = useState("");
-  const [fSearch, setFSearch] = useState("");
+  const [fDateFrom, setFDateFrom] = useTabState("fDateFrom", () => { const d = new Date(); d.setDate(d.getDate() - 9); return d.toISOString().slice(0, 10); });
+  const [fDateTo, setFDateTo] = useTabState("fDateTo", () => new Date().toISOString().slice(0, 10));
+  const [fLine, setFLine] = useTabState<string | null>("fLine", null);
+  const [fProduct, setFProduct] = useTabState("fProduct", "");
+  const [fCustomer, setFCustomer] = useTabState("fCustomer", "");
+  const [fSearch, setFSearch] = useTabState("fSearch", "");
 
   // 已提交的筛选值（用于实际查询）
-  const [activeFilters, setActiveFilters] = useState({ dateFrom: fDateFrom, dateTo: fDateTo, line: fLine, product: fProduct, customer: fCustomer, search: fSearch });
+  const [activeFilters, setActiveFilters] = useTabState("activeFilters", { dateFrom: fDateFrom, dateTo: fDateTo, line: fLine, product: fProduct, customer: fCustomer, search: fSearch });
 
-  const [groups, setGroups] = useState<DailyGroup[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<ProductionRecord | null>(null);
-  const [copyFromRecord, setCopyFromRecord] = useState<ProductionRecord | null>(null);
-  const [defaultDate, setDefaultDate] = useState("");
-  const offsetRef = useRef(0);
+  const [groups, setGroups] = useTabState<DailyGroup[]>("groups", []);
+  const [loading, setLoading] = useTabState("loading", false);
+  const [total, setTotal] = useTabState("total", 0);
+  const [hasMore, setHasMore] = useTabState("hasMore", false);
+  const [exporting, setExporting] = useTabState("exporting", false);
+  const [drawerOpen, setDrawerOpen] = useTabState("drawerOpen", false);
+  const [importOpen, setImportOpen] = useTabState("importOpen", false);
+  const [editingRecord, setEditingRecord] = useTabState<ProductionRecord | null>("editingRecord", null);
+  const [copyFromRecord, setCopyFromRecord] = useTabState<ProductionRecord | null>("copyFromRecord", null);
+  const [defaultDate, setDefaultDate] = useTabState("defaultDate", "");
+  const [offsetBox] = useTabState("offsetBox", () => ({ current: 0 }));
+  const offsetRef = offsetBox;
+  const [loadedQuery, setLoadedQuery] = useTabState<string | null>("loadedQuery", null);
+  const [pendingWrites, setPendingWrites] = useState(0);
+  useTabBusy(loading || exporting || pendingWrites > 0);
   const queryController = useRef<AbortController | null>(null);
-  const groupsRef = useRef<DailyGroup[]>([]);
+  useTabDispose(() => queryController.current?.abort(),'production:query');
+  const groupsRef = useRef<DailyGroup[]>(groups);
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
-  const [lines, setLines] = useState<string[]>([]);
-  const [orderQtySort, setOrderQtySort] = useState<OrderQtySort>(null);
+  const [lines, setLines] = useTabState<string[]>("lines", []);
+  const [orderQtySort, setOrderQtySort] = useTabState<OrderQtySort>("orderQtySort", null);
   const { open: historyOpen, data: historyData, loading: historyLoading,
     show: showHistory, close: closeHistory, invalidate: invalidateHistory,
   } = useProductionHistory<AuditLog>("/api/production/entries");
@@ -122,13 +130,13 @@ export function ProductionEntryPage() {
   useEffect(() => { groupsRef.current = groups; }, [groups]);
 
   // 加载关联数据
-  useEffect(() => {
+  useTabInitialEffect("lines", () => {
     api.get<{ ok: boolean; data: string[] }>("/api/production/lines")
       .then((result) => {
         if (result.ok) setLines(buildAssemblyLineOptions(result.data));
       })
       .catch(() => undefined);
-  }, []);
+  }, [], lines.length > 0);
 
   // 点击搜索 → 提交所有筛选条件
   const doSearch = () => {
@@ -154,6 +162,7 @@ export function ProductionEntryPage() {
     finally { setExporting(false); }
   };
 
+  const queryKey = JSON.stringify(activeFilters);
   const fetchData = useCallback(async (append: boolean) => {
     queryController.current?.abort();
     const controller = new AbortController();
@@ -172,6 +181,7 @@ export function ProductionEntryPage() {
       if (controller.signal.aborted) return;
       if (!r || !r.data) { console.error("API response missing data:", r); message.error("数据格式异常"); return; }
       const d = r.data;
+      setLoadedQuery(queryKey);
       setGroups(append ? [...groupsRef.current, ...d.groups] : d.groups);
       setTotal(d.total); setHasMore(d.hasMore);
       offsetRef.current = curr + PAGE_SIZE;
@@ -183,10 +193,11 @@ export function ProductionEntryPage() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [activeFilters]);
+  }, [activeFilters, queryKey, offsetRef, setGroups, setHasMore, setLoadedQuery, setLoading, setTotal]);
 
   // activeFilters 变化 → 重新加载
-  useEffect(() => {
+  useTabInitialEffect("entries", () => {
+    if (loadedQuery === queryKey) return;
     let active = true;
     void Promise.resolve().then(() => {
       if (active) {
@@ -196,34 +207,34 @@ export function ProductionEntryPage() {
     });
     return () => {
       active = false;
-      queryController.current?.abort();
     };
-  }, [fetchData]);
+  }, [queryKey], loadedQuery === queryKey);
 
   const cellSave = useCallback(async (rec: ProductionRecord, field: keyof ProductionRecord, val: string | number) => {
     try {
+      setPendingWrites((count) => count + 1);
       await saveQueue.run(rec.id, async () => {
         const response = await api.put<{ ok: boolean; data: ProductionRecord }>(`/api/production/entries/${rec.id}`, { [field]: val });
         invalidateHistory(rec.id);
         setGroups((current) => replaceProductionRecord(current, response.data, buildAssemblySummary));
       });
-    } catch { message.error("更新失败"); }
-  }, [saveQueue, invalidateHistory]);
+    } catch { message.error("更新失败"); } finally { setPendingWrites((count) => Math.max(0, count - 1)); }
+  }, [saveQueue, invalidateHistory, setGroups]);
 
-  const add = useCallback((date?: string) => { setEditingRecord(null); setCopyFromRecord(null); setDefaultDate(date || fDateTo); setDrawerOpen(true); }, [fDateTo]);
-  const edit = useCallback((rec: ProductionRecord) => { setEditingRecord(rec); setCopyFromRecord(null); setDefaultDate(""); setDrawerOpen(true); }, []);
-  const copy = useCallback((rec: ProductionRecord) => { setEditingRecord(null); setCopyFromRecord(rec); setDefaultDate(""); setDrawerOpen(true); }, []);
+  const add = useCallback((date?: string) => { setEditingRecord(null); setCopyFromRecord(null); setDefaultDate(date || fDateTo); setDrawerOpen(true); }, [fDateTo, setCopyFromRecord, setDefaultDate, setDrawerOpen, setEditingRecord]);
+  const edit = useCallback((rec: ProductionRecord) => { setEditingRecord(rec); setCopyFromRecord(null); setDefaultDate(""); setDrawerOpen(true); }, [setCopyFromRecord, setDefaultDate, setDrawerOpen, setEditingRecord]);
+  const copy = useCallback((rec: ProductionRecord) => { setEditingRecord(null); setCopyFromRecord(rec); setDefaultDate(""); setDrawerOpen(true); }, [setCopyFromRecord, setDefaultDate, setDrawerOpen, setEditingRecord]);
   const del = useCallback(async (id: number) => {
-    try { await api.delete(`/api/production/entries/${id}`); invalidateHistory(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
-    catch { message.error("删除失败"); }
-  }, [fetchData, invalidateHistory]);
+    try { setPendingWrites((count) => count + 1); await api.delete(`/api/production/entries/${id}`); invalidateHistory(id); message.success("已删除"); offsetRef.current = 0; fetchData(false); }
+    catch { message.error("删除失败"); } finally { setPendingWrites((count) => Math.max(0, count - 1)); }
+  }, [fetchData, invalidateHistory, offsetRef]);
   const onDrawerClose = (saved: boolean) => {
     setDrawerOpen(false); setEditingRecord(null); setCopyFromRecord(null);
     if (saved) { invalidateHistory(); offsetRef.current = 0; fetchData(false); }
   };
   const toggleOrderQtySort = useCallback(() => {
     setOrderQtySort((current) => current === null ? "desc" : current === "desc" ? "asc" : null);
-  }, []);
+  }, [setOrderQtySort]);
 
   const flm: Record<string, string> = {
     date: "日期", line: "产线", customer: "客户", spec: "规格",
@@ -379,7 +390,7 @@ export function ProductionEntryPage() {
                   }
                   size="small"
                 >
-                  <ProductionDateTable records={group.records} columns={columns} orderQtySort={orderQtySort}
+                  <ProductionDateTable cacheKey={`production:${group.date}`} records={group.records} columns={columns} orderQtySort={orderQtySort}
                     minWidth={2050} sticky={dailyTableSticky} />
                 </Card>
               ))}
@@ -411,7 +422,7 @@ export function ProductionEntryPage() {
         }}
       />
 
-      <Modal title="修改历史" open={historyOpen} onCancel={closeHistory} footer={null} width={700}>
+      <Modal getContainer={container ?? undefined} title="修改历史" open={historyOpen} onCancel={closeHistory} footer={null} width={700}>
         <Spin spinning={historyLoading}>
           {historyData.length === 0 && !historyLoading ? (
             <div style={{ color: "#999", textAlign: "center", padding: 20 }}>暂无修改记录</div>

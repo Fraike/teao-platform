@@ -1,3 +1,4 @@
+import { STANDARD_CATEGORY_NAMES } from "../../server/shared/product-classification";
 import { standardTypeDisplayLabel } from "./standardFormat";
 import type { StandardCategory } from "../types/standard";
 import type { StandardOutputValue, StandardPrintProduct, StandardSpecField } from "../types/standardPrint";
@@ -13,7 +14,7 @@ function values(rows: [string, string, unknown][]): StandardOutputValue[] {
 }
 
 export function standardIdentityValues({ standard, version: v }: StandardPrintProduct): StandardOutputValue[] {
-  const rows: [string, string, unknown][] = [["serialNo", "序号", standard.serialNo], ["categoryKey", "产品分类", v.categoryName || standard.categoryName || v.categoryKey], ["customer", "客户名", v.customer], ["model", "产品型号", v.model]];
+  const rows: [string, string, unknown][] = [["serialNo", "内部料号", standard.serialNo], ["categoryKey", "产品分类", STANDARD_CATEGORY_NAMES[v.categoryKey] || v.categoryName || standard.categoryName || v.categoryKey], ["customer", "客户名", v.customer], ["model", "产品型号", v.model]];
   if (v.categoryKey !== "sanitary_damper") rows.push(["vehicleModel", "项目代号", v.vehicleModel], ["customerPartNo", "客户料号", v.customerPartNo]);
   rows.push(["versionNo", "版本", `V${v.versionNo}`], ["status", "状态", STANDARD_STATUS_LABELS[v.status]], ["standardType", "标准性质", standardTypeDisplayLabel(v.standardType,v.status)]);
   return values(rows);

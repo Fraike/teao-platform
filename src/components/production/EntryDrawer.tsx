@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useTabPage, useTabState, useTabBusy, useTabForm, useTabInitialEffect, } from "../../lib/tabPageContext";
+import { useEffect, useCallback } from "react";
 import {
   Modal, Form, Select, Input, InputNumber, DatePicker, Divider,
   Button, Space, message, Descriptions, Row, Col, AutoComplete,
@@ -63,14 +64,18 @@ interface FormValues {
 }
 
 export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: EntryDrawerProps) {
+  const { container } = useTabPage();
   const [form] = Form.useForm<FormValues>();
-  const [loading, setLoading] = useState(false);
-  const [materials, setMaterials] = useState<ProductionProductOption[]>([]);
-  const [customers, setCustomers] = useState<SelectOption[]>([]);
-  const [employees, setEmployees] = useState<SelectOption[]>([]);
-  const pendingPersonnelRef = useRef<Record<string, string>>({});
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [loading, setLoading] = useTabState("drawer.loading", false);
+  const [materials, setMaterials] = useTabState<ProductionProductOption[]>("drawer.materials", []);
+  const [customers, setCustomers] = useTabState<SelectOption[]>("drawer.customers", []);
+  const [employees, setEmployees] = useTabState<SelectOption[]>("drawer.employees", []);
+  const [pendingPersonnel, setPendingPersonnel] = useTabState<Record<string, string>>("drawer.personnel", {});
+  const [dataLoaded, setDataLoaded] = useTabState("drawer.dataLoaded", false);
   const currentUser = useAuthStore((s) => s.user);
+  const [initialized, setInitialized] = useTabState("assembly.entry.initialized", false);
+  useTabForm(form, "assembly.entry", { dirty: open });
+  useTabBusy(loading);
   const isEdit = !!record;
   const isCopy = !record && !!copyFrom;
 
@@ -89,15 +94,16 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         setDataLoaded(true);
       });
     };
-    loadReferenceData();
+    if (!dataLoaded) loadReferenceData();
     const unsubscribe = subscribeToProductionMaterialUpdates(loadReferenceData);
     return () => { cancelled = true; unsubscribe(); };
-  }, []);
+  }, [dataLoaded, setCustomers, setDataLoaded, setEmployees, setMaterials]);
 
-  useEffect(() => {
+  useTabInitialEffect("assembly.entry.defaults", () => {
+    setInitialized(true);
     if (!open) return;
     form.setFields([{ name: "productName", errors: [] }]);
-    pendingPersonnelRef.current = {};
+    setPendingPersonnel({});
     const fillRecord = record || copyFrom;
     const defaultFiller = currentUser?.name || currentUser?.username || "";
     if (fillRecord) {
@@ -136,7 +142,7 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
         filler: defaultFiller,
       } as Partial<FormValues>);
     }
-  }, [open, record, copyFrom, defaultDate, form, currentUser]);
+  }, [open, record?.id, copyFrom?.id, defaultDate], initialized, { synchronous: true });
 
   const handleProductSelect = useCallback((product: ProductionProductOption) => {
     form.setFieldValue("productId", product.value);
@@ -151,11 +157,11 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
   }, [form]);
 
   const commitPersonnelText = (key: keyof FormValues) => {
-    const typedValue = pendingPersonnelRef.current[key]?.trim();
+    const typedValue = pendingPersonnel[key]?.trim();
     if (!typedValue) return;
     const current = form.getFieldValue(key) as string[] | undefined;
     form.setFieldValue(key, [...new Set([...(current || []), ...personnelToTags(typedValue)])]);
-    delete pendingPersonnelRef.current[key];
+    setPendingPersonnel((current) => ({ ...current, [key]: "" }));
   };
 
   const commitAllPersonnelText = () => {
@@ -234,6 +240,7 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
 
   return (
     <Modal
+      getContainer={container ?? undefined}
       title={isEdit ? "编辑生产记录" : isCopy ? "复制生产记录（今日）" : "新增生产记录"}
       open={open}
       onCancel={() => onClose(false)}
@@ -356,7 +363,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
                   loading={!dataLoaded}
                   filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
                   options={employees} maxTagCount={3} tokenSeparators={[",", "，", "、"]}
-                  onSearch={(value) => { pendingPersonnelRef.current[key] = value; }}
+                  searchValue={pendingPersonnel[key] || ""}
+                  onSearch={(value) => setPendingPersonnel((current) => ({ ...current, [key]: value }))}
                   onBlur={() => commitPersonnelText(key as keyof FormValues)} />
               </Form.Item>
             </Col>

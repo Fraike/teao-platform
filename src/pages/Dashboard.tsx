@@ -1,3 +1,4 @@
+import { useTabPageAdapter } from "../lib/tabPageContext";
 import { useNavigate } from "react-router-dom";
 import { Card, Row, Col } from "antd";
 import {
@@ -22,6 +23,7 @@ const ICONS = { team: <TeamOutlined />, file: <FileTextOutlined />, global: <Glo
 type SystemEntry = { key: string; title: string; description: string; icon: React.ReactNode; color: string; path: string; category: string };
 
 export function Dashboard() {
+  useTabPageAdapter();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const user = useAuthStore((s) => s.user);

@@ -66,6 +66,53 @@ test('bottom scrollbar synchronizes body/header, resizes, supports keyboard and 
   assert.ok(observers.every(observer => observer.elements.size === 0), 'all observed nodes must be released');
 });
 
+test('content-sized ancestors cannot cause viewport tables to shrink on repeated measurements',async()=>{
+  const node=document.getElementById('root')!,frame=document.createElement('div'),page=document.createElement('div'),content=document.createElement('div');
+  frame.setAttribute('data-page-scroll-container','');frame.setAttribute('data-table-page-viewport','');
+  frame.append(page);page.append(content);content.append(node);document.body.append(frame);
+  const rect=(top:number,height:number)=>({top,bottom:top+height,left:0,right:700,width:700,height,x:0,y:top,toJSON(){}});
+  frame.getBoundingClientRect=()=>rect(56,844);
+  const height=()=>parseFloat(node.querySelector<HTMLElement>('.tableShell')?.style.getPropertyValue('--table-body-height')||'240');
+  // This parent's height is determined by the table itself; it is not a viewport.
+  page.getBoundingClientRect=()=>rect(80,180+height()+56-80);
+  const root=createRoot(node);
+  try{
+    await act(()=>root.render(createElement(ResponsiveTable,{...props,fitViewport:true})));
+    const shell=node.querySelector<HTMLElement>('.tableShell')!,header=node.querySelector<HTMLElement>('.ant-table-header')!;
+    shell.getBoundingClientRect=()=>rect(180,height()+56);header.getBoundingClientRect=()=>rect(180,38);
+    const measured:number[]=[];
+    for(let i=0;i<5;i++){
+      await act(async()=>{for(const observer of observers)observer.resize(frame,700);await new Promise(resolve=>setTimeout(resolve,35));});
+      measured.push(height());
+    }
+    const expected=Math.min(900,window.innerHeight)-180-58-8;
+    assert.deepEqual(measured,Array(5).fill(expected),'table height must depend on the viewport, not its own shrinking content wrapper');
+  }finally{await act(()=>root.unmount());document.body.append(node);frame.remove();}
+});
+
+test('an explicit fixed-height boundary reserves its own bottom space',async()=>{
+  const node=document.getElementById('root')!,frame=document.createElement('div'),boundary=document.createElement('div');
+  frame.setAttribute('data-page-scroll-container','');boundary.setAttribute('data-table-height-boundary','');
+  frame.append(boundary);boundary.append(node);document.body.append(frame);
+  const rect=(top:number,height:number)=>({top,bottom:top+height,left:0,right:700,width:700,height,x:0,y:top,toJSON(){}});
+  frame.getBoundingClientRect=()=>rect(56,704);let boundaryBottom=640;
+  boundary.getBoundingClientRect=()=>rect(140,boundaryBottom-140);
+  const root=createRoot(node);
+  try{
+    await act(()=>root.render(createElement(ResponsiveTable,{...props,fitViewport:true})));
+    const shell=node.querySelector<HTMLElement>('.tableShell')!;
+    shell.getBoundingClientRect=()=>rect(180,500);node.querySelector<HTMLElement>('.ant-table-header')!.getBoundingClientRect=()=>rect(180,38);
+    for(const [bottom,expected] of [[640,'402px'],[700,'462px']] as const){
+      boundaryBottom=bottom;
+      await act(async()=>{for(const observer of observers)observer.resize(boundary,700);await new Promise(resolve=>setTimeout(resolve,35));});
+      assert.equal(shell.style.getPropertyValue('--table-body-height'),expected);
+    }
+    boundary.style.setProperty('--table-height-boundary','none');
+    await act(async()=>{for(const observer of observers)observer.resize(boundary,700);await new Promise(resolve=>setTimeout(resolve,35));});
+    assert.equal(shell.style.getPropertyValue('--table-body-height'),'514px','a responsive auto-height layout can opt out of its desktop boundary');
+  }finally{await act(()=>root.unmount());document.body.append(node);frame.remove();}
+});
+
 test('viewport-fit reserves actual header, pagination and bottom control within framework content', async () => {
   const node=document.getElementById('root')!;
   const container=document.createElement('div');container.setAttribute('data-page-scroll-container','');node.parentElement!.append(container);container.append(node);

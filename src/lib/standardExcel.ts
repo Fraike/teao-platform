@@ -1,3 +1,4 @@
+import { STANDARD_CATEGORY_NAMES } from "../../server/shared/product-classification";
 import type { CellObject, WorkBook, WorkSheet } from "xlsx";
 import type { StandardCategory } from "../types/standard";
 import type { StandardPrintProduct } from "../types/standardPrint";
@@ -57,7 +58,7 @@ export async function buildStandardWorkbook(products: StandardPrintProduct[], ca
     sheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
     sheet["!cols"] = headers.map(label => ({ wch: /备注|说明|规格|意见/.test(label) ? 40 : 22 }));
     attachComments(sheet, group, identity.map(field => field.key), specs.map(field => field.key), XLSX.utils.encode_cell);
-    XLSX.utils.book_append_sheet(workbook, sheet, sheetName(category?.name || group[0].version.categoryName || key, workbook.SheetNames));
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName(STANDARD_CATEGORY_NAMES[key] || category?.name || group[0].version.categoryName || key, workbook.SheetNames));
   }
   const notes = products.flatMap(({ standard, version }) => (standard.sourceComments || []).filter(note => note.versionId === version.id)
     .flatMap(note => {
@@ -65,7 +66,7 @@ export async function buildStandardWorkbook(products: StandardPrintProduct[], ca
       return parts.map((part, index) => [standard.serialNo, version.customer, version.model, `V${version.versionNo}`, note.fieldLabel || note.fieldKey, note.sourceCell || "", note.author || "", part, note.changedAt || "", `${index + 1}/${parts.length}`]);
     }));
   if (notes.length) {
-    const sheet = XLSX.utils.aoa_to_sheet([["序号", "客户名", "产品型号", "版本", "属性", "原单元格", "批注作者", "批注内容", "批注日期", "分段"], ...notes]);
+    const sheet = XLSX.utils.aoa_to_sheet([["内部料号", "客户名", "产品型号", "版本", "属性", "原单元格", "批注作者", "批注内容", "批注日期", "分段"], ...notes]);
     sheet["!cols"] = [20, 24, 24, 10, 25, 12, 20, 65, 22, 10].map(wch => ({ wch }));
     XLSX.utils.book_append_sheet(workbook, sheet, sheetName("原始批注", workbook.SheetNames));
   }

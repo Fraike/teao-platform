@@ -1,19 +1,13 @@
+import { STANDARD_CATEGORY_ALIASES } from "../../server/shared/product-classification.ts";
 import type { StandardType } from "../types/standard";
 import { firstCommentDate } from "./standardCommentDate.ts";
 
 import type { StandardImportRowRecord } from "../types/standardImport";
 
-// 主表 4 个分类的标题 → 分类 key（锁类在 Excel 里写「锁类、同步器」，系统内规范名「锁类·同步器」）
-const CATEGORY_TITLES: Record<string, string> = {
-  齿形阻尼器: "gear_damper",
-  齿轮阻尼器: "gear_damper",
-  齿条阻尼器: "rack_damper",
-  筒型阻尼器: "barrel_damper",
-  "锁类、同步器": "lock_sync",
-  "锁类·同步器": "lock_sync",
-  空气拉绳阻尼器: "air_pull_cord",
-  空气拉柄阻尼器: "air_pull_handle",
-};
+// 新旧名称共用分类标识，卫浴使用独立导入流程。
+const CATEGORY_TITLES: Record<string, string> = Object.fromEntries(
+  Object.entries(STANDARD_CATEGORY_ALIASES).filter(([, key]) => key !== 'sanitary_damper'),
+);
 
 interface CategoryColumnMap {
   key: string;
@@ -182,7 +176,7 @@ export function parseStandardImportRows(rows: unknown[][], options: ImportOption
 
     if (!current) continue;
     // 跳过表头行（序号）
-    if (col0 === "序号") {
+    if (col0 === "序号" || col0 === "内部料号") {
       current = applyColumnHeaders(row, current);
       continue;
     }
@@ -196,7 +190,7 @@ export function parseStandardImportRows(rows: unknown[][], options: ImportOption
       warnings.push(`Excel 第 ${rowIndex + 1} 行（${serialNo}）含作废标记，请重点核查；服务端将按完整身份校验，确认的作废标准导入为停用，其他作废项阻止发布。`);
     }
 
-    const labels: Record<string, string> = { serial_no: "序号", customer: "客户名", model: "型号", customer_part_no: "客户料号", torque_standard: "扭矩标准", test_standard: "测试范围", winter_test_standard: "冬季测试标准", marking: "打码/喷码", gear_spec: "齿轮规格", torque_direction: "扭矩方向", lock_direction: "装锁方向", rib_return: "筋条是否归位", spring: "弹簧", clip: "扣件", seat: "下座", axis_core: "轴芯", pull_cord: "拉绳", material: "物料", remark: "备注", import_note: "附加说明" };
+    const labels: Record<string, string> = { serial_no: "内部料号", customer: "客户名", model: "型号", customer_part_no: "客户料号", torque_standard: "扭矩标准", test_standard: "测试范围", winter_test_standard: "冬季测试标准", marking: "打码/喷码", gear_spec: "齿轮规格", torque_direction: "扭矩方向", lock_direction: "装锁方向", rib_return: "筋条是否归位", spring: "弹簧", clip: "扣件", seat: "下座", axis_core: "轴芯", pull_cord: "拉绳", material: "物料", remark: "备注", import_note: "附加说明" };
     const rowComments = [...(commentsByRow.get(rowIndex) ?? [])];
     for (const [column, anchorRow] of mergedSources.get(rowIndex) ?? []) {
       rowComments.push(...(commentsByRow.get(anchorRow) ?? []).filter(c => c.column === column));

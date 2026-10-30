@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect } from "../lib/tabPageContext";
+import { useCallback, useMemo } from "react";
 import { Input, Typography, Spin, Empty, message, Tag } from "antd";
 import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
@@ -13,26 +14,32 @@ const { Title, Text } = Typography;
 const CACHE_KEY = "customers";
 
 export function CustomerDataPage() {
-  const [customers, setCustomers] = useState<KingdeeCustomer[]>(() => getCache<KingdeeCustomer[]>(CACHE_KEY) || []);
-  const [loading, setLoading] = useState(() => !getCache<KingdeeCustomer[]>(CACHE_KEY));
-  const [search, setSearch] = useState("");
+  const [customers, setCustomers] = useTabState<KingdeeCustomer[]>("CustomerDataPage.customers", () => getCache<KingdeeCustomer[]>(CACHE_KEY) || []);
+  const [loaded, setLoaded] = useTabState("CustomerDataPage.loaded", false);
+  useTabPageAdapter(loaded);
+  const [loading, setLoading] = useTabState("CustomerDataPage.loading", () => !getCache<KingdeeCustomer[]>(CACHE_KEY));
+  const [search, setSearch] = useTabState("CustomerDataPage.search", "");
+
+  useTabBusy(loading);
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
       const res = await api.get<{ ok: boolean; data: KingdeeCustomer[] }>("/api/kingdee/customers");
       setCustomers(res.data);
+      setLoaded(true);
       setCache(CACHE_KEY, res.data);
     } catch (err) {
       message.error((err as Error).message || "获取客户数据失败");
     } finally {
+      setLoaded(true);
       setLoading(false);
     }
-  }, []);
+  }, [setCustomers, setLoaded, setLoading]);
 
-  useEffect(() => {
+  useTabInitialEffect("CustomerDataPage.initial", () => {
     void Promise.resolve().then(() => fetchData(!getCache<KingdeeCustomer[]>(CACHE_KEY)));
-  }, [fetchData]);
+  }, [], loaded);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return customers;

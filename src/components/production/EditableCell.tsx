@@ -1,3 +1,4 @@
+import { useTabBusy, useTabDirty } from "../../lib/tabPageContext";
 import { useState, type ReactNode } from "react";
 import { Input, InputNumber } from "antd";
 
@@ -20,6 +21,9 @@ export function EditableCell({
 }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
+
+  useTabBusy(editing);
+  useTabDirty(editing && editValue !== value);
 
   const handleSave = () => {
     setEditing(false);

@@ -189,11 +189,11 @@ function StandardImportContent({ open, onClose, onImported, isAdmin, categories 
           <Radio.Group value={scope} disabled={busy === "confirm"} aria-label="导入内容" onChange={event => {
             generation.current++; parsing.current?.abort(); working.current = false;
             setScope(event.target.value); setSession(null); setBusy(null); setError(""); setAcknowledged(false);
-          }} options={[{label: "常规标准", value: "main"}, {label: "智能卫浴（盖、座独立产品）", value: "sanitary"}]} />
+          }} options={[{label: "常规标准", value: "main"}, {label: "马桶座盖（盖、座独立产品）", value: "sanitary"}]} />
           <Upload accept=".xls,.xlsx" maxCount={1} showUploadList={false} beforeUpload={selectFile} disabled={busy === "confirm"}>
             <Button icon={<UploadOutlined />} disabled={busy === "confirm"}>{busy === "preview" ? "重新选择 Excel（取消当前解析）" : "选择 Excel 并预览"}</Button>
           </Upload>
-          <span className={styles.hint}>支持 XLS / XLSX，最大 10MB；按所选内容读取工作表。新卫浴表按左右SP序号分别导入盖、座产品，旧表保留兼容；原始单位和批注完整保留。</span>
+          <span className={styles.hint}>支持 XLS / XLSX，最大 10MB；按所选内容读取工作表。新卫浴表按左右SP内部料号分别导入盖、座产品，旧表保留兼容；原始单位和批注完整保留。</span>
         </>}
         {error && <Alert type="error" showIcon message={error} />}
         {session && <>
@@ -213,7 +213,7 @@ function StandardImportContent({ open, onClose, onImported, isAdmin, categories 
               <ul className={styles.issues}>{record.comments?.map(comment => <li key={comment.cell}>{comment.cell} · {comment.fieldLabel} · {comment.author}：<span className={styles.text}>{comment.text}</span></li>)}</ul>
             </> } : undefined}
             pagination={{ pageSize: 10, showSizeChanger: false }} scroll={{ x: 760 }} columns={[
-              { title: "序号", dataIndex: "serialNo", width: 125 },
+              { title: "内部料号", dataIndex: "serialNo", width: 125 },
               { title: "客户", dataIndex: "customer", width: 150, render: (value: string) => <span className={styles.text}>{value || "（空白）"}</span> },
               { title: "型号", dataIndex: "model", width: 130 },
               { title: "类型", dataIndex: "standardType", width: 95, render: (value: StandardImportRecord["standardType"]) => STANDARD_TYPE_LABELS[value] },

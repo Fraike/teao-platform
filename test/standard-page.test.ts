@@ -45,7 +45,7 @@ test('server filters preserve IME/focus, cancel old requests and skip fresh back
     assert.equal(query.get('all'), 'true'); assert.equal(query.has('pageSize'), false); assert.equal(query.get('category'), 'gear_damper');
     await act(async () => pending[0].resolve({ ok: true, data: categories }));
     await resolveList(1, [item('1', 'Alpha'), item('2', 'Beta')]);
-    await click(document.querySelector('.ant-table-filter-trigger')!); await wait(30);
+    await click([...document.querySelectorAll('th')].find(th=>th.textContent?.includes('客户名'))!.querySelector('.ant-table-filter-trigger')!); await wait(30);
     const input = document.querySelector<HTMLInputElement>('input[placeholder="筛选客户名"]')!;
     assert.equal(document.activeElement === input, true, 'opening the column filter must focus its input'); await setInput(input, 'no match');
     assert.equal(rows().length, 2); await wait(220); await wait(10);
@@ -234,18 +234,18 @@ test('every column filter focuses on opening and reopening; categories and summa
     assert(categoryGroup,'category navigation must expose every category');
     assert.equal(categoryGroup!.querySelectorAll('input[type="radio"]').length,7);
     assert(document.body.textContent?.includes('共 7 类'));
-    const toolbar=[...document.querySelectorAll('div')].find(node=>node.querySelector('input[placeholder^="搜索序号"]') && node.textContent?.includes('重置筛选') && node.textContent?.includes('标准总数：808 条') && !node.querySelector('table'));
+    const toolbar=[...document.querySelectorAll('div')].find(node=>node.querySelector('input[placeholder^="搜索内部料号"]') && node.textContent?.includes('重置筛选') && node.textContent?.includes('标准总数：808 条') && !node.querySelector('table'));
     assert(toolbar,'totals belong in the filter toolbar instead of a separate row');
     const triggers=[...document.querySelectorAll('.ant-table-header .ant-table-filter-trigger')];
-    assert.equal(triggers.length,4);
+    assert.equal(triggers.length,5);
     for(let index=0;index<triggers.length;index++) {
-      const placeholders=['筛选客户名','筛选项目代号','筛选型号','筛选客户料号'];
+      const placeholders=['筛选内部料号','筛选客户名','筛选项目代号','筛选型号','筛选客户料号'];
       for(let attempt=0;attempt<2;attempt++) {
         await click(triggers[index]);await wait(50);
         const input=document.querySelector<HTMLInputElement>(`input[placeholder="${placeholders[index]}"]`);
         assert(input,`missing popup for column ${index}, attempt ${attempt}; header ${triggers[index].closest('th')?.textContent}; inputs ${[...document.querySelectorAll('input')].map(element=>element.placeholder).filter(Boolean).join(',')}`);assert.equal(document.activeElement===input,true,`column ${index}, attempt ${attempt}: expected ${placeholders[index]}, focused ${(document.activeElement as HTMLInputElement)?.placeholder}`);
         await click(triggers[index]);await wait(30);
-        await act(()=>document.querySelector<HTMLInputElement>('input[placeholder^="搜索序号"]')?.focus());
+        await act(()=>document.querySelector<HTMLInputElement>('input[placeholder^="搜索内部料号"]')?.focus());
       }
     }
     const sanitary=categoryGroup!.querySelector<HTMLInputElement>('input[value="category-6"]')!;
@@ -282,7 +282,7 @@ test('pending overview is independent of table filters and clears them when open
     assert(document.querySelector('[aria-label="齿条阻尼器待审2项"]'));
     const overviewReads = () => requests.filter(url => url.startsWith('/api/standards/pending-reviews')).length;
     assert.equal(overviewReads(), 1);
-    await setInput(document.querySelector<HTMLInputElement>('input[placeholder^="搜索序号"]')!, 'unrelated'); await wait(260);
+    await setInput(document.querySelector<HTMLInputElement>('input[placeholder^="搜索内部料号"]')!, 'unrelated'); await wait(260);
     assert.equal(overviewReads(), 1, 'table filters must not redownload the global pending list');
     const trigger = document.querySelector('[aria-label="全部待审2项"]')!;
     await act(() => trigger.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }))); await wait(60);
@@ -299,4 +299,41 @@ test('pending overview is independent of table filters and clears them when open
     assert(!document.body.textContent?.includes('CROSS-CATEGORY'));
     assert(!document.querySelector('[aria-label="齿条阻尼器待审2项"]'));
   } finally { await act(() => root.unmount()); api.get = originalGet; await act(() => useAuthStore.setState({ user: null })); clearStandardQueryCache(); }
+});
+
+test('internal number column submits its own filter and reset clears it', async () => {
+  clearStandardQueryCache();
+  const originalGet = api.get;
+  const requests: URLSearchParams[] = [];
+  const source = [item('0001', '客户甲'), item('0002', '客户乙')];
+  api.get = withOverview((async (url: string) => {
+    if (url.endsWith('categories')) return { ok: true, data: categories };
+    const params = new URL(url, 'http://local').searchParams;
+    requests.push(params);
+    const search = (params.get('serialNo') ?? '').toLowerCase();
+    const data = source.filter(record => record.serialNo.toLowerCase().includes(search));
+    return { ok: true, data, total: data.length, version: 'serial-filter-v1' };
+  }) as typeof api.get);
+  const root = createRoot(document.getElementById('root')!);
+  try {
+    await act(async () => root.render(createElement(MemoryRouter, null, createElement(ProductStandardPage))));
+    await wait(20);
+    const header = [...document.querySelectorAll('th')].find(th => th.textContent?.includes('内部料号'))!;
+    await click(header.querySelector('.ant-table-filter-trigger')!);
+    await wait(30);
+    await setInput(document.querySelector<HTMLInputElement>('input[placeholder="筛选内部料号"]')!, 'sn-0001');
+    await wait(240);
+    await wait(20);
+    assert.equal(requests.at(-1)?.get('serialNo'), 'sn-0001');
+    assert.equal(rows().length, 1);
+    assert.ok(rows()[0]?.includes('SN-0001'));
+    await click([...document.querySelectorAll('button')].find(button => button.textContent?.includes('重置筛选'))!);
+    await wait(30);
+    assert.equal(requests.at(-1)?.has('serialNo'), false);
+    assert.equal(rows().length, 2);
+  } finally {
+    await act(() => root.unmount());
+    api.get = originalGet;
+    clearStandardQueryCache();
+  }
 });

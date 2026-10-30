@@ -1,11 +1,11 @@
-import { useState } from "react";
+import {useTabState} from "../../lib/tabPageContext";
 import { Button, Popover, Tag } from "antd";
 import { ClockCircleOutlined } from "@ant-design/icons";
 import type { StandardPendingOverviewProps } from "../../types/standard";
 import styles from "./StandardPendingOverview.module.css";
 
 export function StandardPendingOverview({ data, loading, error, admin, onRetry, onOpen, onViewAll }: StandardPendingOverviewProps) {
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useTabState("standard:pending-preview",false);
   const viewAll = (category?: string) => { setPreviewOpen(false); onViewAll(category); };
   if (error) return <Button size="small" type="text" danger onClick={onRetry}>待审加载失败 · 重试</Button>;
   if (!data?.overallTotal) return null;

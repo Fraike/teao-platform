@@ -128,6 +128,10 @@
 }
 
 @media (max-width: 600px) {
+  .tableWrap {
+    /* The mobile page grows with its contents, so only the viewport is bounded. */
+    --table-height-boundary: none;
+  }
   .container {
     height: auto;
     min-height: 100%;
@@ -203,7 +207,8 @@
 
 
 
-.tableWrap :global(.ant-table.ant-table-small .ant-table-tbody > tr.ant-table-row > td.ant-table-cell) {
+.tableWrap :global(.ant-table.ant-table-small .ant-table-tbody > tr.ant-table-row > td.ant-table-cell),
+.tableWrap :global(.ant-table.ant-table-small .ant-table-tbody-virtual .ant-table-row > .ant-table-cell) {
   height: var(--standard-row-height);
   padding: 10px 8px;
   box-sizing: border-box;
@@ -235,3 +240,5 @@
   padding-top: 4px;
   border-top: 1px solid #e8edf3;
 }
+.productDrawingLink {display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+.productDrawingLink :global(.ant-tag) {margin:0;font-size:11px;line-height:18px;}

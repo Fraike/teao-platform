@@ -75,10 +75,10 @@ test('static release refuses raw spreadsheets that bypass gitignore through publ
   assert.throws(()=>packageRelease(repo,path.join(f.root,'rejected-stage')),/原始表格/);
 });
 
-test('nginx replaces existing proxy, sets 20m/IP/long timeout and maintenance', () => {
+test('nginx replaces existing proxy, sets 30m/IP/long timeout and maintenance', () => {
   const source = 'server { root /var/www/teao-platform; location /api/ { proxy_read_timeout 5s; } location / { try_files $uri /index.html; } }';
   const config = nginxConfig(source, '/var/lib/teao-platform/releases/maintenance');
-  assert(config.includes('client_max_body_size 20m;')); assert(config.includes('X-Real-IP $remote_addr'));
+  assert(config.includes('client_max_body_size 30m;')); assert(config.includes('X-Real-IP $remote_addr'));
   assert(config.includes('X-Forwarded-For $remote_addr')); assert(config.includes('proxy_read_timeout 600s;'));
   assert(config.includes('return 503')); assert(config.includes('try_files $uri /index.html'));
   assert.equal(nginxConfig(config, '/var/lib/teao-platform/releases/maintenance'), config);

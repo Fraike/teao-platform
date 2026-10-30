@@ -1,4 +1,5 @@
 import express from "express";
+import { registerProductRoutes } from "./routes/products.ts";
 import cron from "node-cron";
 import { PORT, readConfig } from "./config.js";
 import { getDB as getStandardDB } from "./services/standard-store.js";
@@ -42,6 +43,7 @@ registerProductionEntryInjectionRoutes(app);
 registerStandardRoutes(app);
 registerNotificationRoutes(app);
 registerFeedbackRoutes(app);
+const productServices = registerProductRoutes(app);
 
 // ---- cron: daily push ----
 
@@ -63,6 +65,7 @@ const standardPublicationWorker = createPublicationWorker(getStandardDB(), readC
   app.listen(PORT, "127.0.0.1", () => {
     console.log(`teao-api running on port ${PORT}`);
     productionScheduler.start();
+    productServices.start(cron);
     if (process.env.STANDARD_REVIEW_REMINDERS_ENABLED === "true") standardReviewReminders.start(cron);
     else console.log("[standards-reminder] 定时催审未启用，需显式设置 STANDARD_REVIEW_REMINDERS_ENABLED=true");
     standardPublicationWorker.start(cron);

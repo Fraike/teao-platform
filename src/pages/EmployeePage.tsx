@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect } from "../lib/tabPageContext";
+import { useCallback } from "react";
 import {
   Button, Tag, Input, Select, Space, Typography,
   Popconfirm, message, Tabs, Alert,
@@ -22,38 +23,47 @@ const DEPARTMENT_OPTIONS = [
 ];
 
 export function EmployeePage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("active");
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [reminders, setReminders] = useState<{ expired: number; expiring: number } | null>(null);
+  const [employees, setEmployees] = useTabState<Employee[]>("EmployeePage.employees", []);
+  const [loaded, setLoaded] = useTabState("EmployeePage.loaded", false);
+  useTabPageAdapter(loaded);
+  const [loading, setLoading] = useTabState("EmployeePage.loading", false);
+  const [activeTab, setActiveTab] = useTabState<string>("EmployeePage.activeTab", "active");
+  const [search, setSearch] = useTabState("EmployeePage.search", "");
+  const [deptFilter, setDeptFilter] = useTabState<string | null>("EmployeePage.deptFilter", null);
+  const [modalOpen, setModalOpen] = useTabState("EmployeePage.modalOpen", false);
+  const [editingEmployee, setEditingEmployee] = useTabState<Employee | null>("EmployeePage.editingEmployee", null);
+  const [importOpen, setImportOpen] = useTabState("EmployeePage.importOpen", false);
+  const [reminders, setReminders] = useTabState<{ expired: number; expiring: number } | null>("EmployeePage.reminders", null);
 
-  useEffect(() => {
+  const [remindersPending, setRemindersPending] = useTabState("employee.reminders.pending", true);
+  const [deleting, setDeleting] = useTabState("employee.deleting", false);
+  useTabBusy(remindersPending || deleting);
+  useTabInitialEffect("employees.reminders", () => {
     api.get<{ expired: { length: number }; expiring: { length: number } }>("/api/employees/reminders")
       .then((r) => setReminders({ expired: r.expired.length, expiring: r.expiring.length }))
-      .catch((err) => console.error("获取合同提醒失败:", err));
-  }, []);
+      .catch((err) => console.error("获取合同提醒失败:", err))
+      .finally(() => setRemindersPending(false));
+  }, [], !remindersPending);
+
+  useTabBusy(loading);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get<Employee[]>("/api/employees");
       setEmployees(data);
+      setLoaded(true);
     } catch (err) {
       message.error((err as Error).message);
     } finally {
+      setLoaded(true);
       setLoading(false);
     }
-  }, []);
+  }, [setEmployees, setLoaded, setLoading]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  useTabInitialEffect("employees.initial", () => {
     fetchEmployees();
-  }, [fetchEmployees]);
+  }, [], loaded);
 
   const handleAdd = () => {
     setEditingEmployee(null);
@@ -66,13 +76,14 @@ export function EmployeePage() {
   };
 
   const handleDelete = async (id: string) => {
+    setDeleting(true);
     try {
       await api.delete(`/api/employees/${id}`);
       message.success("已标记为离职");
       fetchEmployees();
     } catch (err) {
       message.error((err as Error).message);
-    }
+    } finally { setDeleting(false); }
   };
 
   const handleModalClose = () => {

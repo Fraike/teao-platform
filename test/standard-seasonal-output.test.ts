@@ -43,7 +43,7 @@ test('Excel has distinct seasonal columns, complete winter values and no duplica
   assert.equal(definitions.filter(f => f.key === 'winter_test_standard').length, 1);
   assert.equal(definitions.find(f => f.key === 'winter_test_standard')?.label, '冬季测试标准');
   const book = await buildStandardWorkbook([product], [category], '2026-10-19');
-  const rows = XLSX.utils.sheet_to_json<string[]>(book.Sheets[category.name], { header: 1 });
+  const rows = XLSX.utils.sheet_to_json<string[]>(book.Sheets['齿轮阻尼器'], { header: 1 });
   assert.equal(rows[1][rows[0].indexOf('冬季测试标准')], product.version.fields.winter_test_standard);
   assert(!rows[0].includes('winter_test_standard'));
   assert(rows[1].includes('原样保留'));

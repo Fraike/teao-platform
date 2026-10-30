@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import {useTabState,useTabInitialEffect,useTabBusy,useTabDirty} from "../../lib/tabPageContext";
+import { useRef, useState } from "react";
 import { Alert, Button, Input, Popconfirm, Space, Tag, message } from "antd";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../lib/authStore";
@@ -9,15 +10,18 @@ interface Props { standardId: string; versionKey: string; canRetire: boolean; on
 const labels = { pending: "停用待审", approved: "已批准停用", rejected: "已驳回", invalidated: "已失效" };
 
 export function StandardRetirementPanel({ standardId, versionKey, canRetire, onPendingChange, onChanged }: Props) {
-  const [requests, setRequests] = useState<StandardRetirementRequest[]>([]);
-  const [error, setError] = useState("");
-  useEffect(() => {
+  const [requests, setRequests] = useTabState<StandardRetirementRequest[]>(`standard:StandardRetirementPanel:${standardId}:requests`,[]);
+  const [error, setError] = useTabState(`standard:StandardRetirementPanel:${standardId}:error`,"");
+  const completionQuery = JSON.stringify([standardId,versionKey]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:retirement:${standardId}:completion`,null);
+  useTabInitialEffect(`StandardRetirementPanel:load:${standardId}`, () => {
+    setCompletedQuery(null);
     const controller = new AbortController();
     api.get<{data:StandardRetirementRequest[]}>(`/api/standards/${standardId}/retirement-requests`,{signal:controller.signal})
-      .then(result => { if (!controller.signal.aborted) { const next = Array.isArray(result.data) ? result.data : []; setRequests(next); onPendingChange?.(next.some(request => request.status === "pending")); setError(""); } })
+      .then(result => { if (!controller.signal.aborted) { const next = Array.isArray(result.data) ? result.data : []; setRequests(next); setCompletedQuery(completionQuery); onPendingChange?.(next.some(request => request.status === "pending")); setError(""); } })
       .catch(() => { if (!controller.signal.aborted) setError("停用申请记录加载失败，请重新打开详情重试"); });
     return () => controller.abort();
-  }, [standardId,versionKey,onPendingChange]);
+  }, [standardId,versionKey], completedQuery===completionQuery);
   if (!requests.length && !error) return null;
   return <section className={styles.panel} aria-label="停用申请记录">
     <h4>停用申请</h4>
@@ -32,8 +36,10 @@ function RetirementCard({ request, standardId, canRetire, onReviewed }: {
   onReviewed:(detail:StandardDetail,request:StandardRetirementRequest)=>void;
 }) {
   const user = useAuthStore(state=>state.user);
-  const [comment,setComment] = useState("");
+  const [comment,setComment] = useTabState(`standard:StandardRetirementPanel:${standardId}:${request.id}:comment`,"");
   const [saving,setSaving] = useState(false);
+  useTabBusy(saving);
+  useTabDirty(!!comment.trim());
   const busy = useRef(false);
   const own = request.applicantId===user?.id;
   const designated = request.reviewerId===user?.id;

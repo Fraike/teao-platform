@@ -14,7 +14,7 @@ interface StandardFilterInputProps extends Omit<InputProps, "value" | "defaultVa
 export const StandardFilterInput = memo(function StandardFilterInput({
   initialValue = "", resetVersion, onApply, inputRef, ...props
 }: StandardFilterInputProps) {
-  const { inputProps, reset } = useImeSafeFilter(initialValue, 180, onApply);
+  const { inputProps, reset } = useImeSafeFilter(initialValue, 180, onApply, `standard:filter:${props.placeholder ?? "search"}`);
   const previousReset = useRef(resetVersion);
   useEffect(() => {
     if (previousReset.current === resetVersion) return;

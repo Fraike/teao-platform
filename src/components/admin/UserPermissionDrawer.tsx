@@ -1,3 +1,4 @@
+import { useTabPage, useTabBusy } from "../../lib/tabPageContext";
 import { useRef, useState } from "react";
 import { Alert, Button, Drawer, Switch, Tag, message } from "antd";
 import type { User } from "../../types/auth";
@@ -14,6 +15,8 @@ interface UserPermissionDrawerProps {
 export function UserPermissionDrawer({ open, user, onClose, onChange }: UserPermissionDrawerProps) {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const saving = useRef(false);
+  const tab = useTabPage();
+  useTabBusy(savingKey !== null);
   const change = async (key: string, enabled: boolean) => {
     if (saving.current || !user || user.role === "admin" || user.status !== "active") return;
     saving.current = true;
@@ -24,7 +27,7 @@ export function UserPermissionDrawer({ open, user, onClose, onChange }: UserPerm
   };
 
   return (
-    <Drawer title="配置权限" open={open} width={560} rootClassName={styles.drawer}
+    <Drawer getContainer={tab.container ?? undefined} title="配置权限" open={open} width={560} rootClassName={styles.drawer}
       onClose={() => { if (!saving.current) onClose(); }}
       footer={<div className={styles.footer}><span>{savingKey ? "正在保存…" : "开关变更后自动保存"}</span><Button disabled={savingKey !== null} onClick={onClose}>完成</Button></div>}>
       {user && <>

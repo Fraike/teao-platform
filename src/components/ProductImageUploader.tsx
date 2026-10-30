@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabBusy } from "../lib/tabPageContext";
 import { Button, Tooltip, message } from "antd";
 import { CameraOutlined, DeleteOutlined } from "@ant-design/icons";
 import { isSupportedImageFile, scaleImage } from "../lib/imageUtils";
@@ -12,6 +13,8 @@ interface ProductImageUploaderProps {
 
 export function ProductImageUploader({ image, onChange, uploadLabel }: ProductImageUploaderProps) {
   const [dragging, setDragging] = useState(false);
+  const [pending, setPending] = useState(0);
+  useTabBusy(pending > 0);
 
   const upload = (file?: File) => {
     if (!file) return;
@@ -19,9 +22,11 @@ export function ProductImageUploader({ image, onChange, uploadLabel }: ProductIm
       message.error("请上传图片文件");
       return;
     }
+    setPending(value => value + 1);
     const reader = new FileReader();
+    reader.onerror = reader.onabort = () => setPending(value => value - 1);
     reader.onload = () => {
-      void scaleImage(String(reader.result), 200).then(onChange);
+      void scaleImage(String(reader.result), 200).then(onChange).catch(() => message.error("图片读取失败")).finally(() => setPending(value => value - 1));
     };
     reader.readAsDataURL(file);
   };

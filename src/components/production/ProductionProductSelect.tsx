@@ -1,4 +1,5 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useTabState } from "../../lib/tabPageContext";
+import { useDeferredValue, useMemo } from "react";
 import { Button, Select } from "antd";
 import type { ProductionProductOption } from "../../lib/productionProductSearch";
 import { filterProductionProductOptions, getProductionProductSelectedValue, resolveProductionProductOption } from "../../lib/productionProductSearch";
@@ -29,8 +30,8 @@ export function ProductionProductSelect({
   productNumber,
   value,
 }: ProductionProductSelectProps) {
-  const [searchValue, setSearchValue] = useState("");
-  const [selectedOptionId, setSelectedOptionId] = useState<string>();
+  const [searchValue, setSearchValue] = useTabState("productSelect.search", "");
+  const [selectedOptionId, setSelectedOptionId] = useTabState<string | undefined>("productSelect.selected", undefined);
   const deferredSearchValue = useDeferredValue(searchValue);
   const filteredOptions = useMemo(
     () => filterProductionProductOptions(options, deferredSearchValue),

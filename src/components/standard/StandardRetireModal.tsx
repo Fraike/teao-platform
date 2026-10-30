@@ -1,5 +1,6 @@
+import {useTabState,useTabInitialEffect,useTabPage,useTabBusy,useTabDirty} from "../../lib/tabPageContext";
 import styles from "./StandardRetireModal.module.css";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Alert, Input, Modal, Select, message } from "antd";
 import { api } from "../../lib/api";
 import type { StandardDetail, StandardRetireTarget, StandardVersion } from "../../types/standard";
@@ -12,16 +13,22 @@ interface StandardRetireModalProps {
 }
 
 export function StandardRetireModal({ target, direct = true, onClose, onRetired }: StandardRetireModalProps) {
-  const [reviewers, setReviewers] = useState<{id:string;name:string}[]>([]);
-  const [reviewerId, setReviewerId] = useState<string>();
-  const [reason, setReason] = useState("");
-  const [version, setVersion] = useState<StandardVersion | null>(null);
-  const [error, setError] = useState("");
+  const tab=useTabPage();
+  const [reviewers, setReviewers] = useTabState<{id:string;name:string}[]>(`standard:StandardRetireModal:${target.id}:reviewers`,[]);
+  const [reviewerId, setReviewerId] = useTabState<string|undefined>(`standard:StandardRetireModal:${target.id}:reviewerId`,undefined);
+  const [reason, setReason] = useTabState(`standard:StandardRetireModal:${target.id}:reason`,"");
+  const [version, setVersion] = useTabState<StandardVersion | null>(`standard:StandardRetireModal:${target.id}:version`,null);
+  const [error, setError] = useTabState(`standard:StandardRetireModal:${target.id}:error`,"");
   const [saving, setSaving] = useState(false);
   const submitting = useRef(false);
   const reasonCountId = useId();
 
-  useEffect(() => {
+  const completionQuery = JSON.stringify([target.id, target.versionNo, target.versionId, target.revision, direct]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:StandardRetireModal:${target.id}:completion`,null);
+  useTabBusy(saving);
+  useTabDirty(!!reason.trim());
+  useTabInitialEffect(`StandardRetireModal:load:${target.id}`, () => {
+    setCompletedQuery(null);
     let disposed = false;
     Promise.all([
       api.get<{ data: StandardDetail }>(`/api/standards/${target.id}?summary=true`),
@@ -35,9 +42,11 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
         else if (latest.id !== target.versionId || latest.revision !== target.revision) setError("标准版本已变化，请关闭并刷新后重试。");
         else setVersion(latest);
       })
-      .catch(() => { if (!disposed) setError("标准加载失败，请关闭弹窗后重试。"); });
+      .catch(() => { if (!disposed) setError("标准加载失败，请关闭弹窗后重试。"); })
+      .finally(() => { if (!disposed) setCompletedQuery(completionQuery); });
+    // Existing error results are terminal for this exact target query too.
     return () => { disposed = true; };
-  }, [target.id, target.versionNo, target.versionId, target.revision, direct]);
+  }, [target.id, target.versionNo, target.versionId, target.revision, direct], completedQuery===completionQuery);
 
   const retire = async () => {
     if (!version || error || !reason.trim() || (!direct && !reviewerId) || submitting.current) return;
@@ -60,7 +69,7 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
     }
   };
 
-  return <Modal open title={`${direct ? "停用标准" : "申请停用"} · ${target.serialNo}`} okText={direct ? "确认停用" : "提交申请"} cancelText="取消"
+  return <Modal getContainer={tab.container ?? undefined} open title={`${direct ? "停用标准" : "申请停用"} · ${target.serialNo}`} okText={direct ? "确认停用" : "提交申请"} cancelText="取消"
     okButtonProps={{ danger: true, disabled: !version || Boolean(error) || !reason.trim() || (!direct && !reviewerId) }}
     confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving}
     cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!submitting.current) onClose(); }} onOk={() => void retire()}>

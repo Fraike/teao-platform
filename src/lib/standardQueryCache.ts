@@ -1,3 +1,4 @@
+import {clearStandardPageSession} from './standardPageSession';
 import { api } from "./api";
 import { getToken } from "./api";
 import type { StandardCategory } from "../types/standard";
@@ -6,7 +7,7 @@ let generation = 0;
 let cached: { session: string | null; expiresAt: number; data: StandardCategory[] } | null = null;
 let pending: { session: string | null; promise: Promise<StandardCategory[]> } | null = null;
 
-export function clearStandardQueryCache() { generation++; cached = null; pending = null; }
+export function clearStandardQueryCache() { generation++; cached = null; pending = null; clearStandardPageSession(); }
 
 export async function loadStandardCategories(force = false): Promise<StandardCategory[]> {
   const session = getToken();

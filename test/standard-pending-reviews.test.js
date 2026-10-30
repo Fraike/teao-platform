@@ -54,7 +54,7 @@ try {
   assert.equal(new Set([...first.body.data, ...second.body.data].map(item => item.taskId)).size, 27);
   const filtered = await call(users[2], '?category=barrel_damper&pageSize=3');
   assert.equal(filtered.body.total, 1); assert.equal(filtered.body.overallTotal, 27); assert.equal(filtered.body.categories.length, 3);
-  assert.equal(filtered.body.data[0].kind, 'retirement'); assert.equal(filtered.body.data[0].categoryName, '筒型阻尼器');
+  assert.equal(filtered.body.data[0].kind, 'retirement'); assert.equal(filtered.body.data[0].categoryName, '圆筒阻尼器');
   const own = await call(users[3]); assert.equal(own.body.total, 1); assert.equal(own.body.data[0].id, assigned.id);
   assert.equal(own.body.data[0].categoryKey, 'barrel_damper', 'category comes from the pending version');
   assert.equal((await call(users[4])).body.overallTotal, 0);

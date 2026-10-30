@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useTabState, useTabBusy, useTabDispose } from "./tabPageContext";
+import { useCallback, useRef } from "react";
 import { message } from "antd";
 import { api } from "./api";
 import type { ProductionHistoryCacheEntry } from "../types/productionScale";
@@ -7,41 +8,42 @@ const HISTORY_TTL = 5 * 60 * 1000;
 const HISTORY_CAPACITY = 100;
 
 export function useProductionHistory<T>(entriesUrl: string) {
-  const [open, setOpen] = useState(false);
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState(false);
-  const cache = useRef(new Map<number, ProductionHistoryCacheEntry<T>>());
+  const [open, setOpen] = useTabState(`history:${entriesUrl}:open`, false);
+  const [data, setData] = useTabState<T[]>(`history:${entriesUrl}:data`, []);
+  const [loading, setLoading] = useTabState(`history:${entriesUrl}:loading`, false);
+  const [cacheRef] = useTabState(`history:${entriesUrl}:cache`, () => ({ current: new Map<number, ProductionHistoryCacheEntry<T>>() }));
   const sequence = useRef(0);
   const controller = useRef<AbortController | null>(null);
-  const activeId = useRef<number | null>(null);
+  const [activeIdRef] = useTabState(`history:${entriesUrl}:activeIdRef`, () => ({ current: null as number | null }));
 
   const cancel = useCallback(() => {
     sequence.current++;
     controller.current?.abort();
     controller.current = null;
   }, []);
-  useEffect(() => cancel, [cancel]);
+  useTabBusy(loading);
+  useTabDispose(cancel,'production-history:cancel');
 
   const close = useCallback(() => {
-    cancel(); activeId.current = null;
+    cancel(); activeIdRef.current = null;
     setOpen(false); setLoading(false); setData([]);
-  }, [cancel]);
+  }, [cancel, activeIdRef, setData, setLoading, setOpen]);
 
   const invalidate = useCallback((id?: number) => {
-    if (id === undefined) cache.current.clear();
-    else cache.current.delete(id);
-    if (id === undefined || activeId.current === id) {
+    if (id === undefined) cacheRef.current.clear();
+    else cacheRef.current.delete(id);
+    if (id === undefined || activeIdRef.current === id) {
       cancel(); setLoading(false); setData([]);
     }
-  }, [cancel]);
+  }, [cancel, activeIdRef, cacheRef, setData, setLoading]);
 
   const show = useCallback(async (id: number) => {
-    cancel(); activeId.current = id;
+    cancel(); activeIdRef.current = id;
     const requestSequence = sequence.current;
     setOpen(true); setData([]); setLoading(false);
     const now = Date.now();
-    for (const [key, entry] of cache.current) if (entry.expiresAt <= now) cache.current.delete(key);
-    const cached = cache.current.get(id);
+    for (const [key, entry] of cacheRef.current) if (entry.expiresAt <= now) cacheRef.current.delete(key);
+    const cached = cacheRef.current.get(id);
     if (cached) { setData(cached.data); return; }
     const requestController = new AbortController();
     controller.current = requestController;
@@ -51,15 +53,15 @@ export function useProductionHistory<T>(entriesUrl: string) {
       const response = await api.get<{ ok: boolean; data: T[] }>(`${entriesUrl}/${id}/history`, { signal: requestController.signal });
       if (!isCurrent()) return;
       if (!response.ok) throw new Error("加载失败");
-      cache.current.set(id, { data: response.data, expiresAt: Date.now() + HISTORY_TTL });
-      while (cache.current.size > HISTORY_CAPACITY) cache.current.delete(cache.current.keys().next().value!);
+      cacheRef.current.set(id, { data: response.data, expiresAt: Date.now() + HISTORY_TTL });
+      while (cacheRef.current.size > HISTORY_CAPACITY) cacheRef.current.delete(cacheRef.current.keys().next().value!);
       setData(response.data);
     } catch {
       if (isCurrent()) message.error("加载失败");
     } finally {
       if (isCurrent()) { controller.current = null; setLoading(false); }
     }
-  }, [cancel, entriesUrl]);
+  }, [cancel, entriesUrl, activeIdRef, cacheRef, setData, setLoading, setOpen]);
 
   return { open, data, loading, show, close, invalidate };
 }

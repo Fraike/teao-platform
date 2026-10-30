@@ -1,3 +1,4 @@
+import {useTabState,useTabBusy,useTabPage} from "../../lib/tabPageContext";
 import { useEffect, useState } from "react";
 import { BellOutlined } from "@ant-design/icons";
 import { Button, message, Tooltip } from "antd";
@@ -11,13 +12,15 @@ interface StandardRemindButtonProps {
 }
 
 export function StandardRemindButton({ standardId, versionNo, serialNo }: StandardRemindButtonProps) {
+  const {active}=useTabPage();
   const [loading, setLoading] = useState(false);
-  const [retryAt, setRetryAt] = useState(0);
+  const [retryAt, setRetryAt] = useTabState(`standard:remind:${standardId}:${versionNo}`,0);
+  useTabBusy(loading);
   useEffect(() => {
-    if (!retryAt) return;
+    if (!active||!retryAt) return;
     const timer = window.setTimeout(() => setRetryAt(0), Math.max(0, retryAt - Date.now()));
     return () => window.clearTimeout(timer);
-  }, [retryAt]);
+  }, [retryAt,setRetryAt,active]);
 
   const remind = async () => {
     setLoading(true);

@@ -1,3 +1,4 @@
+import {useTabState,useTabInitialEffect,useTabPage,useTabBusy,useTabDirty} from "../../lib/tabPageContext";
 import { groupStandardFields, activeStandardFields } from "../../lib/standardFieldGroups";
 import { SeasonalTestStandard } from "./SeasonalTestStandard";
 import { StandardDraftActionButton } from "./StandardDraftActionButton";
@@ -7,7 +8,7 @@ import { StopOutlined } from "@ant-design/icons";
 import { StandardRetirementPanel } from "./StandardRetirementPanel";
 import { StandardRetireModal } from "./StandardRetireModal";
 import { GearSpecification } from "./GearSpecification";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Drawer, Descriptions, Tag, Space, Button, Input, message, Popconfirm, Empty, Spin, Alert, Table, Select } from "antd";
 import { useAuthStore } from "../../lib/authStore";
 import { standardVersionDiff } from "../../lib/standardVersionDiff";
@@ -46,29 +47,35 @@ export function StandardDetailDrawer({
 }: StandardDetailDrawerProps) {
   const user = useAuthStore(s => s.user);
   const canRetire = retirePermission ?? (user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_retire")));
-  const [detail, setDetail] = useState<StandardDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewers, setReviewers] = useState<{id:string;name:string}[]>([]);
-  const [reviewerId, setReviewerId] = useState<string>();
+  const tab=useTabPage();
+  const [detail, setDetail] = useTabState<StandardDetail | null>(`standard:StandardDetailDrawer:${standardId}:detail`,null);
+  const [loading, setLoading] = useTabState(`standard:StandardDetailDrawer:${standardId}:loading`,false);
+  const [reviewComment, setReviewComment] = useTabState(`standard:StandardDetailDrawer:${standardId}:reviewComment`,"");
+  const [reviewers, setReviewers] = useTabState<{id:string;name:string}[]>(`standard:StandardDetailDrawer:${standardId}:reviewers`,[]);
+  const [reviewerId, setReviewerId] = useTabState<string|undefined>(`standard:StandardDetailDrawer:${standardId}:reviewerId`,undefined);
   const [acting, setActing] = useState(false);
-  const [pendingAction, setPendingAction] = useState<StandardPendingActionTarget | null>(null);
-  const [retireOpen, setRetireOpen] = useState(false);
-  const [retirementRefresh, setRetirementRefresh] = useState(0);
-  const [hasRetirementRequest, setHasRetirementRequest] = useState(false);
+  const [pendingAction, setPendingAction] = useTabState<StandardPendingActionTarget | null>(`standard:StandardDetailDrawer:${standardId}:pendingAction`,null);
+  const [retireOpen, setRetireOpen] = useTabState(`standard:StandardDetailDrawer:${standardId}:retireOpen`,false);
+  const [retirementRefresh, setRetirementRefresh] = useTabState(`standard:StandardDetailDrawer:${standardId}:retirementRefresh`,0);
+  const [hasRetirementRequest, setHasRetirementRequest] = useTabState(`standard:StandardDetailDrawer:${standardId}:hasRetirementRequest`,false);
 
-  useEffect(() => {
+  const completionQuery = JSON.stringify([open, standardId, user?.role]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:StandardDetailDrawer:${standardId}:completion`,null);
+  useTabBusy(acting||loading);
+  useTabDirty(open&&!!reviewComment.trim());
+  useTabInitialEffect(`StandardDetailDrawer:load:${standardId}`, () => {
+    setCompletedQuery(null);
     if (!open || !standardId) return;
     let disposed = false;
     queueMicrotask(() => { if (!disposed) { setDetail(null); setRetireOpen(false); setRetirementRefresh(0); setHasRetirementRequest(false); setPendingAction(null); setReviewComment(""); setLoading(true); } });
     Promise.all([
       api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${standardId}?summary=true${user?.role === "admin" ? "&includeDeleted=true" : ""}`),
       api.get<{ok:boolean;data:{id:string;name:string}[]}>("/api/standards/reviewers"),
-    ]).then(([res,list]) => { if (!disposed) { setDetail(res.data); setReviewers(list.data); setReviewerId(undefined); } })
+    ]).then(([res,list]) => { if (!disposed) { setDetail(res.data); setReviewers(list.data); setReviewerId(undefined); setCompletedQuery(completionQuery); } })
       .catch((err) => { if (!disposed) message.error((err as Error).message || "加载详情失败"); })
       .finally(() => { if (!disposed) setLoading(false); });
     return () => { disposed = true; };
-  }, [open, standardId, user?.role]);
+  }, [open, standardId, user?.role], completedQuery===completionQuery);
 
   const category = useMemo(
     () => categories.find((c) => c.key === detail?.categoryKey),
@@ -147,7 +154,7 @@ export function StandardDetailDrawer({
 
   return (
     <>
-    <Drawer
+    <Drawer getContainer={tab.container ?? undefined}
       title={canReviewThis ? "审核产品标准" : "产品标准详情"}
       open={open}
       onClose={onClose}
@@ -207,7 +214,7 @@ export function StandardDetailDrawer({
       ) : (
         <>
           <Descriptions column={2} size="small" bordered>
-            <Descriptions.Item label="序号">{detail.serialNo}</Descriptions.Item>
+            <Descriptions.Item label="内部料号">{detail.serialNo}</Descriptions.Item>
             <Descriptions.Item label="分类">{detail.categoryName}</Descriptions.Item>
             <Descriptions.Item label="客户">
               <CustomerName value={current.customer} />

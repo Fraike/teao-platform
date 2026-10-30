@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext,useEffect,useMemo,useRef,useState } from "react";
 import { Alert, Button, Checkbox, Modal, Progress, Segmented, Select, Space, Table, Tag, message } from "antd";
 import { FileExcelOutlined, PrinterOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
@@ -11,6 +11,7 @@ import type { StandardListItem, StandardPageResponse } from "../../types/standar
 import type { StandardPrintModalProps, StandardPrintDetailResponse, StandardOutputAction } from "../../types/standardPrint";
 import { StandardFilterInput } from "./StandardFilterInput";
 import styles from "./StandardPrintModal.module.css";
+import {TabPageContext,useTabState,useTabBusy,useTabPage} from "../../lib/tabPageContext";
 
 function activatePrinting(preview: Window) {
   const document = preview.document;
@@ -25,16 +26,24 @@ function activatePrinting(preview: Window) {
 }
 
 export function StandardPrintModal({ categories, currentCategory, currentRows, onClose }: StandardPrintModalProps) {
-  const [initialRows] = useState(currentRows);
-  const [scope, setScope] = useState("current");
-  const [mode, setMode] = useState("all");
-  const [rows, setRows] = useState(currentRows);
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const tab=useTabPage();
+  const context=useContext(TabPageContext);
+  const close=()=>{
+    const snapshot=context?.record.snapshot;
+    if(snapshot)for(const key of snapshot.keys())if(key.startsWith('standard:print:')||key==='standard:filter:搜索内部料号、客户、型号')snapshot.delete(key);
+    onClose();
+  };
+  const [initialRows] = useTabState('standard:print:initial',currentRows);
+  const [scope, setScope] = useTabState('standard:print:scope',"current");
+  const [mode, setMode] = useTabState('standard:print:mode',"all");
+  const [rows, setRows] = useTabState('standard:print:rows',currentRows);
+  const [query, setQuery] = useTabState('standard:print:query',"");
+  const [selected, setSelected] = useTabState<string[]>('standard:print:selected',[]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [action, setAction] = useState<StandardOutputAction | null>(null);
   const generating = action !== null;
+  useTabBusy(loading||generating);
   const [progress, setProgress] = useState(0);
   const listRequest = useRef<AbortController | null>(null);
   const printRequest = useRef<AbortController | null>(null);
@@ -91,7 +100,7 @@ export function StandardPrintModal({ categories, currentCategory, currentRows, o
         const html = buildStandardPrintHtml(products, categories, { generatedAt: new Date().toISOString(), styleUrl: new URL("../../lib/standardPrint.css", import.meta.url).href });
         preview.document.open();preview.document.write(html);preview.document.close();activatePrinting(preview);
       }
-      preparingWindow.current = null;onClose();
+      preparingWindow.current = null;close();
     } catch (error) {
       controller.abort();preview?.close();
       if (!(error instanceof DOMException && error.name === "AbortError")) message.error(error instanceof Error ? error.message : "导出或打印失败");
@@ -103,13 +112,13 @@ export function StandardPrintModal({ categories, currentCategory, currentRows, o
     return [...ids];
   });
   const columns: TableColumnsType<StandardListItem> = [
-    { title: "序号", dataIndex: "serialNo", width: 150 }, { title: "客户", dataIndex: "customer" },
+    { title: "内部料号", dataIndex: "serialNo", width: 150 }, { title: "客户", dataIndex: "customer" },
     { title: "产品型号", dataIndex: "model", width: 170 },
     ...(scope === "all" ? [{ title: "分类", dataIndex: "categoryName", width: 120 }] : []),
     { title: "版本 / 状态", width: 150, render: (_, row) => <Space size={4}>V{row.versionNo}<Tag color={standardStatusColor(row.status)}>{STANDARD_STATUS_LABELS[row.status]}</Tag></Space> },
   ];
-  return <Modal open title="导出 / 打印产品标准" width={960} onCancel={onClose} footer={<Space wrap>
-    <Button onClick={onClose}>{generating ? "取消生成" : "取消"}</Button>
+  return <Modal open getContainer={tab.container??undefined} title="导出 / 打印产品标准" width={960} onCancel={close} footer={<Space wrap>
+    <Button onClick={close}>{generating ? "取消生成" : "取消"}</Button>
     <Button icon={<PrinterOutlined />} loading={action === "print"} disabled={loading || Boolean(loadError) || !chosen.length || action === "excel"} onClick={() => void generate("print")}>打印 / PDF（{chosen.length} 条）</Button>
     <Button type="primary" icon={<FileExcelOutlined />} loading={action === "excel"} disabled={loading || Boolean(loadError) || !chosen.length || action === "print"} onClick={() => void generate("excel")}>导出 Excel（{chosen.length} 条）</Button>
   </Space>}>
@@ -133,7 +142,7 @@ export function StandardPrintModal({ categories, currentCategory, currentRows, o
     {loadError && <Alert type="error" message={loadError} action={<Button size="small" onClick={() => void changeScope(scope)}>重试</Button>} />}
     {mode === "selected" ? <>
       <div className={styles.selection}>
-        <StandardFilterInput className={styles.search} allowClear placeholder="搜索序号、客户、型号" onApply={setQuery} initialValue={query} resetVersion={scope === "current" ? 0 : 1} />
+        <StandardFilterInput className={styles.search} allowClear placeholder="搜索内部料号、客户、型号" onApply={setQuery} initialValue={query} resetVersion={scope === "current" ? 0 : 1} />
         <Checkbox checked={Boolean(searched.length) && checkedCount === searched.length} indeterminate={checkedCount > 0 && checkedCount < searched.length} disabled={generating || loading} onChange={event => toggleSearch(event.target.checked)}>全选搜索结果</Checkbox>
         <span className={styles.count}>已选 {chosen.length} / {rows.length} 条</span>
       </div>

@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {useTabState} from "./tabPageContext";
+import { useCallback, useEffect, useRef } from "react";
 import { api } from "./api";
 import type { StandardPendingReviewPage } from "../types/standard";
 
 export function usePendingReviewOverview(scope: string) {
-  const [snapshot, setSnapshot] = useState<{ scope: string; data?: StandardPendingReviewPage; loading: boolean; error: string }>({ scope, loading: true, error: "" });
+  const [snapshot, setSnapshot] = useTabState<{ scope: string; data?: StandardPendingReviewPage; loading: boolean; error: string }>("standard:pending-overview",{ scope, loading: true, error: "" });
   const request = useRef<AbortController | null>(null);
   const knownVersion = useRef({ scope: "", version: "" });
   useEffect(() => () => {
     request.current?.abort();
     knownVersion.current = { scope: "", version: "" };
-  }, [scope]);
+  }, [scope,setSnapshot]);
   const refresh = useCallback(async (version = "", force = false) => {
     if (!force && version && knownVersion.current.scope === scope && knownVersion.current.version === version) return;
     request.current?.abort();
@@ -24,6 +25,6 @@ export function usePendingReviewOverview(scope: string) {
       if (!controller.signal.aborted && request.current === controller) setSnapshot(previous => ({ ...previous, scope, loading: false,
         error: error instanceof Error ? error.message : "待审概览加载失败" }));
     }
-  }, [scope]);
+  }, [scope,setSnapshot]);
   return { ...(snapshot.scope === scope ? snapshot : { data: undefined, loading: true, error: "" }), refresh };
 }

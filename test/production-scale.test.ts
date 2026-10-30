@@ -20,6 +20,7 @@ async function saveOnPage(page: string, groups: DailyGroup[], record: Production
   let result = groups;
   const dependencies: Record<string, unknown> = {
     saveQueue: createProductionSaveQueue(),
+    setPendingWrites: () => {},
     api: { put: async () => ({ ok: true, data: record }) },
     historyCacheRef: { current: new Map() }, invalidateHistory: () => {},
     setGroups: (update: (current: DailyGroup[]) => DailyGroup[]) => { result = update(result); },

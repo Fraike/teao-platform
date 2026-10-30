@@ -8,6 +8,8 @@ import { createRoot } from 'react-dom/client';
 import { api } from '../src/lib/api.ts';
 import { StandardPrintModal } from '../src/components/standard/StandardPrintModal.tsx';
 import type { StandardListItem, StandardVersion } from '../src/types/standard.ts';
+import {TabPageContext} from '../src/lib/tabPageContext.tsx';
+import {getTabPage,startTabInstance,clearTabScope} from '../src/lib/tabPageCache.ts';
 const row=(id:string,customer:string):StandardListItem=>({id,serialNo:`SP-${id}`,customer,model:`RD-${id}`,categoryKey:'gear_damper',categoryName:'齿形阻尼器',versionNo:1,status:'published',standardType:'formal',fields:{gear_spec:`${id}齿轮\n第二种齿轮`},vehicleModel:'',customerPartNo:'',hasPending:false,updatedAt:'2026-10-19',updatedBy:'工程',reviewComment:''});
 const categories=[{key:'gear_damper',name:'齿形阻尼器',fields:[{key:'gear_spec',label:'齿轮规格'}]}];
 const wait=(ms=0)=>act(async()=>{await new Promise(resolve=>setTimeout(resolve,ms));});
@@ -22,22 +24,25 @@ test('checkbox selection prints only selected production specifications and hide
  window.open=(()=>popup.window) as unknown as typeof window.open;
  api.get=(async(url:string)=>{calls.push(url);const selected=rows.find(r=>url.includes(`/standards/${r.id}?`))!;return {currentCommentsIncluded:true,data:{id:selected.id,serialNo:selected.serialNo,categoryKey:selected.categoryKey,categoryName:selected.categoryName,versions:[{...selected,id:`v-${selected.id}`,fields:selected.fields,createdBy:'工程',createdAt:'',publishedAt:'2026-10-19'} as StandardVersion],sourceComments:[{versionId:`v-${selected.id}`,fieldLabel:'齿轮',text:'完整批注'}],changes:[]}};}) as typeof api.get;
  const root=createRoot(document.getElementById('root')!);let closes=0;
+ const record=getTabPage('print-success','page');record.active=true;const instance=startTabInstance(record);
  try {
-  await act(async()=>root.render(createElement(StandardPrintModal,{categories,currentCategory:'gear_damper',currentRows:rows,onClose:()=>{closes++;}})));
+  await act(async()=>root.render(createElement(TabPageContext.Provider,{value:{record,instance,active:true,restored:false,container:document.getElementById('root')}},createElement(StandardPrintModal,{categories,currentCategory:'gear_damper',currentRows:rows,onClose:()=>{closes++;}}))));
+  assert(record.snapshot.has('standard:print:rows'));
   await click(radio('勾选指定产品'));assert(button('打印 / PDF').disabled);
   await click(document.querySelector('[data-row-key="a"] input')!);
-  const input=document.querySelector<HTMLInputElement>('input[placeholder="搜索序号、客户、型号"]')!;
+  const input=document.querySelector<HTMLInputElement>('input[placeholder="搜索内部料号、客户、型号"]')!;
   await act(()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')!.set!.call(input,'Beta');input.dispatchEvent(new window.Event('input',{bubbles:true}));});await wait(230);
   assert(!document.querySelector('[data-row-key="a"]'));
   await click(document.querySelector('[data-row-key="b"] input')!);
   assert(document.body.textContent?.includes('已选 2 / 3 条'));
   await click(button('打印 / PDF'));await wait();
   assert.equal(closes,1);assert.equal(calls.length,2);assert(calls.every(url=>url.endsWith('?summary=true')));
+  assert.equal([...record.snapshot.keys()].some(key=>key.startsWith('standard:print:')),false,'successful print clears the session just like cancellation');
   const printed=popup.window.document.body.textContent!;
   for(const value of ['SP-a','SP-b','a齿轮','b齿轮','第二种齿轮'])assert(printed.includes(value),value);
   assert(!printed.includes('SP-c'));assert(!printed.includes('完整批注'));assert(!printed.includes('创建人'));
   assert(document.querySelector('[aria-label="分类范围"]'));assert(document.querySelector('.ant-segmented'));assert(!document.querySelector('.ant-radio-group'));assert(button('导出 Excel'));
- } finally {await act(()=>root.unmount());api.get=originalGet;window.open=originalOpen;popup.window.close();}
+ } finally {await act(()=>root.unmount());clearTabScope('print-success');api.get=originalGet;window.open=originalOpen;popup.window.close();}
 });
 
 test('switching category range clears selected products and only loads visible lists',async()=>{

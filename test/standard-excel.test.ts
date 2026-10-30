@@ -7,7 +7,7 @@ const product={standard:{id:'a',serialNo:'SP-A',categoryKey:'gear_damper',source
 test('Excel preserves every specification, audit and source comments as typed text',async()=>{
  const wb=await buildStandardWorkbook([product],[{key:'gear_damper',name:'齿形阻尼器',fields:[{key:'gear_spec',label:'齿轮规格'},{key:'remark',label:'备注'},{key:'import_note',label:'附加说明'}]}],'2026-10-19T00:00:00Z');
  const bytes=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});const parsed=XLSX.read(bytes,{type:'buffer'});
- const sheet=parsed.Sheets['齿形阻尼器'];const rows=XLSX.utils.sheet_to_json<string[]>(sheet,{header:1});
+ const sheet=parsed.Sheets['齿轮阻尼器'];const rows=XLSX.utils.sheet_to_json<string[]>(sheet,{header:1});
  const all=rows.flat().join('\n');
  for(const expected of ['齿轮A\n齿轮B','来源附加说明','未知属性完整值','提交人甲','审核通过意见'])assert(all.includes(expected),expected);
  const gear=rows[0].findIndex(label=>label==='齿轮规格');assert.equal(sheet[XLSX.utils.encode_cell({r:1,c:gear})].c?.[0].t,'原始批注\n完整保留');
@@ -18,7 +18,7 @@ test('Excel preserves every specification, audit and source comments as typed te
 test('Excel creates independent category sheets, and sanitary has no unrelated identity columns',async()=>{
  const sanitary={...product,standard:{...product.standard,serialNo:'SP-G',sourceComments:[]},version:{...product.version,categoryKey:'sanitary_damper',categoryName:'智能卫浴',fields:{part_type:'盖',product_standard:'CCW25'}}};
  const wb=await buildStandardWorkbook([product,sanitary],[{key:'sanitary_damper',name:'智能卫浴',fields:[{key:'part_type',label:'产品部位'},{key:'product_standard',label:'产品标准'}]}],'2026-10-19');
- assert(wb.SheetNames.includes('齿形阻尼器'));const rows=XLSX.utils.sheet_to_json<string[]>(wb.Sheets['智能卫浴'],{header:1});
+ assert(wb.SheetNames.includes('齿轮阻尼器'));const rows=XLSX.utils.sheet_to_json<string[]>(wb.Sheets['马桶座盖'],{header:1});
  assert(!rows[0].includes('客户料号'));assert(!rows[0].includes('项目代号'));assert(rows[1].includes('盖'));assert(rows[1].includes('CCW25'));
 });
 test('long source comments are split losslessly within Excel cell limits',async()=>{

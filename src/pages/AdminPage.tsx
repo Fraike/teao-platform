@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect, useTabForm, useTabPage, useTabDirty } from "../lib/tabPageContext";
+import { useCallback } from "react";
 import { Button, Tag, message, Popconfirm, Typography, Tooltip, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
@@ -11,40 +12,52 @@ import { summarizeUserPermissions } from "../lib/userPermissions";
 const { Title } = Typography;
 
 export function AdminPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [resetTarget, setResetTarget] = useState<User | null>(null);
-  const [resetting, setResetting] = useState(false);
+  const [users, setUsers] = useTabState<User[]>("AdminPage.users", []);
+  const [loaded, setLoaded] = useTabState("AdminPage.loaded", false);
+  useTabPageAdapter(loaded);
+  const [loading, setLoading] = useTabState("AdminPage.loading", false);
+  const [resetTarget, setResetTarget] = useTabState<User | null>("AdminPage.resetTarget", null);
+  const [resetting, setResetting] = useTabState("AdminPage.resetting", false);
   const [resetForm] = Form.useForm<{ newPassword: string; confirmPassword: string }>();
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [permissionTargetId, setPermissionTargetId] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useTabState<string | null>("AdminPage.reviewingId", null);
+  const [permissionTargetId, setPermissionTargetId] = useTabState<string | null>("AdminPage.permissionTargetId", null);
   const permissionUser = users.find(user => user.id === permissionTargetId) ?? null;
+
+  const tab = useTabPage();
+  const [wecomDrafts, setWecomDrafts] = useTabState<Record<string, string>>("admin.wecom.drafts", {});
+  const [resetDirty, setResetDirty] = useTabState("admin.reset.dirty", false);
+  const [writing, setWriting] = useTabState("admin.writing", 0);
+  useTabForm(resetForm, "admin.reset", {dirty: !!resetTarget && resetDirty});
+  useTabDirty(Object.keys(wecomDrafts).some(id => wecomDrafts[id] !== (users.find(user => user.id === id)?.wecomUserid || "")));
+  useTabBusy(loading || resetting || reviewingId !== null || writing > 0);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get<User[]>("/api/admin/users");
       setUsers(data);
+      setLoaded(true);
     } catch (err) {
       message.error((err as Error).message);
     } finally {
+      setLoaded(true);
       setLoading(false);
     }
-  }, []);
+  }, [setLoaded, setLoading, setUsers]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  useTabInitialEffect("AdminPage.initial", () => {
     fetchUsers();
-  }, [fetchUsers]);
+  }, [], loaded);
 
   const handleApprove = async (id: string) => {
+    setWriting(count => count + 1);
     try {
       await api.post(`/api/admin/users/${id}/approve`);
       message.success("已通过审核");
       fetchUsers();
     } catch (err) {
       message.error((err as Error).message);
-    }
+    } finally { setWriting(count => count - 1); }
   };
 
   const handleRecoveryReview = async (record: User, approve: boolean) => {
@@ -63,13 +76,14 @@ export function AdminPage() {
   };
 
   const handleReject = async (id: string) => {
+    setWriting(count => count + 1);
     try {
       await api.post(`/api/admin/users/${id}/reject`);
       message.success("已驳回");
       fetchUsers();
     } catch (err) {
       message.error((err as Error).message);
-    }
+    } finally { setWriting(count => count - 1); }
   };
 
   const handleTogglePermission = async (id: string, permission: string, enabled: boolean) => {
@@ -78,15 +92,23 @@ export function AdminPage() {
   };
 
   const handleUpdateWecom = async (id: string, value: string) => {
+    setWriting(count => count + 1);
     try {
       await api.put(`/api/admin/users/${id}/wecom`, { wecomUserid: value.trim() });
-      fetchUsers();
+      await fetchUsers();
+      setWecomDrafts(current => {
+        if (current[id]?.trim() !== value.trim()) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
     } catch (err) {
       message.error((err as Error).message);
-    }
+    } finally { setWriting(count => count - 1); }
   };
 
   const openResetModal = (user: User) => {
+    setResetDirty(false);
     resetForm.resetFields();
     setResetTarget(user);
   };
@@ -102,6 +124,7 @@ export function AdminPage() {
     try {
       await api.post(`/api/admin/users/${resetTarget.id}/reset-password`, { newPassword: values.newPassword });
       message.success("密码已重置");
+      setResetDirty(false);
       setResetTarget(null);
     } catch (err) {
       message.error((err as Error).message);
@@ -141,7 +164,8 @@ export function AdminPage() {
       render: (_: React.Key, record: User) => (
         <Input
           key={`${record.id}-${record.wecomUserid || ""}`}
-          defaultValue={record.wecomUserid || ""}
+          value={wecomDrafts[record.id] ?? record.wecomUserid ?? ""}
+          onChange={event => setWecomDrafts(current => ({...current, [record.id]: event.target.value}))}
           placeholder="用于审核@提醒"
           size="small"
           onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
@@ -247,6 +271,7 @@ export function AdminPage() {
           if (permissionUser) await handleTogglePermission(permissionUser.id, permission, enabled);
         }} />
       <Modal
+        getContainer={tab.container ?? undefined}
         title={`重置密码：${resetTarget?.name || ""}`}
         open={!!resetTarget}
         confirmLoading={resetting}
@@ -255,7 +280,7 @@ export function AdminPage() {
         okText="确认重置"
         cancelText="取消"
       >
-        <Form form={resetForm} layout="vertical">
+        <Form onValuesChange={() => setResetDirty(true)} form={resetForm} layout="vertical">
           <Form.Item
             name="newPassword"
             label="新密码"

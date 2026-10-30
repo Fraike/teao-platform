@@ -52,7 +52,7 @@ export function parseSanitaryImportRows(rows: unknown[][], options: { mergedRang
     for (const c of comments.filter(c => c.fieldKey.endsWith('_length'))) warnings.push(`${c.cell} 长度含历史批注，请核对正文“${fields[c.fieldKey]}”与原始批注。`);
     records.push({ sourceRow: r + 1, serialNo: '', customer, model, customerPartNo: '', categoryKey: 'sanitary_damper', standardType: 'formal', fields, comments });
   }
-  if (!records.length) errors.push('未识别到智能卫浴数据，请核查工作表及表头。');
+  if (!records.length) errors.push('未识别到马桶座盖数据，请核查工作表及表头。');
   return { records, errors, warnings };
 }
 function columnName(column: number): string {

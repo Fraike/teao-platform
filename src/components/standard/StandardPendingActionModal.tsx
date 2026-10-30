@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import {useTabState,useTabInitialEffect,useTabPage,useTabBusy,useTabDirty} from "../../lib/tabPageContext";
+import { useRef, useState } from "react";
 import { Alert, Checkbox, Input, Modal, message } from "antd";
 import { api } from "../../lib/api";
 import type { StandardDetail, StandardPendingActionTarget, StandardReviewResponse, StandardVersion } from "../../types/standard";
@@ -12,14 +13,20 @@ interface StandardPendingActionModalProps {
 export function StandardPendingActionModal({ target, onClose, onCompleted }: StandardPendingActionModalProps) {
   const deleting = target.action === "delete";
   const label = deleting ? "删除" : "驳回";
-  const [reason, setReason] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [version, setVersion] = useState<StandardVersion | null>(null);
-  const [error, setError] = useState("");
+  const tab=useTabPage();
+  const [reason, setReason] = useTabState(`standard:StandardPendingActionModal:${target.id}:reason`,"");
+  const [confirmed, setConfirmed] = useTabState(`standard:StandardPendingActionModal:${target.id}:confirmed`,false);
+  const [version, setVersion] = useTabState<StandardVersion | null>(`standard:StandardPendingActionModal:${target.id}:version`,null);
+  const [error, setError] = useTabState(`standard:StandardPendingActionModal:${target.id}:error`,"");
   const [saving, setSaving] = useState(false);
   const submitting = useRef(false);
 
-  useEffect(() => {
+  const completionQuery = JSON.stringify([target.id, target.versionNo, target.versionId, target.revision]);
+  const [completedQuery,setCompletedQuery] = useTabState<string|null>(`standard:StandardPendingActionModal:${target.id}:completion`,null);
+  useTabBusy(saving);
+  useTabDirty(!!reason.trim());
+  useTabInitialEffect(`StandardPendingActionModal:load:${target.id}`, () => {
+    setCompletedQuery(null);
     let disposed = false;
     api.get<{ data: StandardDetail }>(`/api/standards/${target.id}?summary=true`)
       .then(({ data }) => {
@@ -28,9 +35,11 @@ export function StandardPendingActionModal({ target, onClose, onCompleted }: Sta
         if (!latest || latest.versionNo !== target.versionNo || latest.id !== target.versionId || latest.revision !== target.revision) setError("标准版本已变化，请关闭后刷新列表重试。");
         else if (latest.status !== "pending_review") setError("该内容已不在待审核状态，请刷新后查看。");
         else setVersion(latest);
-      }).catch(() => { if (!disposed) setError("加载失败，请关闭弹窗后重试。"); });
+      }).catch(() => { if (!disposed) setError("加载失败，请关闭弹窗后重试。"); })
+      .finally(() => { if (!disposed) setCompletedQuery(completionQuery); });
+    // Existing error results are terminal for this exact target query too.
     return () => { disposed = true; };
-  }, [target.id, target.versionNo, target.versionId, target.revision]);
+  }, [target.id, target.versionNo, target.versionId, target.revision], completedQuery===completionQuery);
 
   const submit = async () => {
     if (!version || error || !reason.trim() || (deleting && !confirmed) || submitting.current) return;
@@ -51,7 +60,7 @@ export function StandardPendingActionModal({ target, onClose, onCompleted }: Sta
     } finally { submitting.current = false; setSaving(false); }
   };
 
-  return <Modal open title={`管理员${label} · ${target.serialNo}`} okText={`确认${label}`} cancelText="取消"
+  return <Modal getContainer={tab.container ?? undefined} open title={`管理员${label} · ${target.serialNo}`} okText={`确认${label}`} cancelText="取消"
     okButtonProps={{ danger: true, disabled: !version || Boolean(error) || !reason.trim() || (deleting && !confirmed) }}
     confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving}
     cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!submitting.current) onClose(); }} onOk={() => void submit()}>

@@ -1,3 +1,8 @@
+import {useTabPageSession,useTabState,useTabPageAdapter,useTabBusy,useTabInitialEffect} from "../lib/tabPageContext";
+import {openStandardPageSession,initialStandardPageView,standardPageRequestQuery} from '../lib/standardPageSession';
+import {useStandardPageMemory} from '../lib/useStandardPageMemory';
+import {StandardDrawingBadge} from "../components/standard/StandardDrawingBadge";
+import {useStandardDrawingStatus} from '../lib/useStandardDrawingStatus';
 import { groupStandardFields, activeStandardFields } from "../lib/standardFieldGroups";
 import { SeasonalTestStandard } from "../components/standard/SeasonalTestStandard";
 import { GearSpecification } from "../components/standard/GearSpecification";
@@ -5,14 +10,14 @@ import { StandardUsageGuide } from "../components/standard/StandardUsageGuide";
 import { StandardDraftActionButton } from "../components/standard/StandardDraftActionButton";
 import { getStandardDraftAction } from "../lib/standardDraftActions";
 import { StandardRemindButton } from "../components/standard/StandardRemindButton";
-import { createRef, lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRef, lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button, Select, Tag, Typography, Empty, message, Space, Tooltip, Modal } from "antd";
 import type { InputRef } from "antd";
 import { StandardCategoryTabs } from "../components/standard/StandardCategoryTabs";
 import { StandardPendingOverview } from "../components/standard/StandardPendingOverview";
 import { StandardPendingReviewDrawer } from "../components/standard/StandardPendingReviewDrawer";
 import { usePendingReviewOverview } from "../lib/standardPendingReviews";
-import { useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { PlusOutlined, SearchOutlined, ReloadOutlined, ClearOutlined, HistoryOutlined, EyeOutlined, CopyOutlined, EditOutlined, PrinterOutlined, StopOutlined } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { loadStandardCategories } from "../lib/standardQueryCache";
@@ -27,7 +32,7 @@ import { StandardHistoryDrawer } from "../components/standard/StandardHistoryDra
 import { StandardPendingActionModal } from "../components/standard/StandardPendingActionModal";
 import { StandardRetireModal } from "../components/standard/StandardRetireModal";
 import { StandardFormModal } from "../components/standard/StandardFormModal";
-import { StandardRowSelectionProvider, StandardSelectableRow } from "../components/standard/StandardSelectableRow";
+import { StandardRowSelectionProvider, StandardSelectableRow,StandardVirtualRow } from "../components/standard/StandardSelectableRow";
 import { CustomerName } from "../components/standard/CustomerName";
 import type {
   StandardPendingActionTarget,
@@ -88,46 +93,59 @@ const TYPE_OPTIONS: { value: StandardType | "all"; label: string }[] = [
 ];
 
 const tableComponents = { body: { row: StandardSelectableRow } };
+const virtualTableComponents = { body: { row: StandardVirtualRow } };
 const StandardPrintModal = lazy(() => import("../components/standard/StandardPrintModal").then(module => ({ default: module.StandardPrintModal })));
 
 function ProductStandardPageContent() {
+  const tab=useTabPageSession();
   const user = useAuthStore((s) => s.user);
   const currentUserId = user?.id;
   const authScope = `${user?.id ?? ""}:${user?.role ?? ""}:${user?.permissions?.join(",") ?? ""}`;
+  const location=useLocation();
+  const [searchParams]=useSearchParams();
+  const [initial]=useTabState("standard:initial",()=>{
+    const session=tab.managed?{scope:authScope,generation:0,snapshot:null}:openStandardPageSession(authScope);
+    const view=initialStandardPageView(session.snapshot,searchParams,location.key);
+    const cached=session.snapshot?.cache;
+    const cache=cached?.query===standardPageRequestQuery(view,user?.role==='admin')?cached:null;
+    return {session,view,cache,resume:view===session.snapshot?.view,entryKey:location.key};
+  });
   const { data: pendingData, loading: pendingLoading, error: pendingError, refresh: refreshPending } = usePendingReviewOverview(authScope);
-  const [pendingDrawer, setPendingDrawer] = useState<{ scope: string; category: string } | null>(null);
-  const [access, setAccess] = useState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean } | null>(null);
+  const [pendingDrawer, setPendingDrawer] = useTabState<{ scope: string; category: string } | null>("standard:pendingDrawer",null);
+  const [access, setAccess] = useTabState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean } | null>("standard:access",()=>initial.cache&&typeof initial.cache.response.canEdit==='boolean'&&typeof initial.cache.response.canReview==='boolean'?{scope:authScope,canEdit:initial.cache.response.canEdit,canReview:initial.cache.response.canReview,canRetire:initial.cache.response.canRetire}:null);
   const canEdit = access?.scope === authScope ? access.canEdit : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_submit"));
   const canReview = access?.scope === authScope ? access.canReview : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_review"));
 
   const canDirectPublish = user?.role === "admin";
   const canRetire = access?.scope === authScope && typeof access.canRetire === "boolean" ? access.canRetire : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_retire"));
 
-  const [categories, setCategories] = useState<StandardCategory[]>([]);
-  const [standardsScope, setStandardsScope] = useState("");
-  const [total, setTotal] = useState(0);
-  const [overallTotal, setOverallTotal] = useState<number | null>(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState("");
-  const [standards, setStandards] = useState<StandardListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshedAt, setRefreshedAt] = useState("");
+  const [categories, setCategories] = useTabState<StandardCategory[]>("standard:categories",initial.session.snapshot?.cache?.categories||[]);
+  const [standardsScope, setStandardsScope] = useTabState("standard:standardsScope",initial.cache?authScope:"");
+  const [total, setTotal] = useTabState("standard:total",initial.cache?.response.total??initial.cache?.response.data.length??0);
+  const [overallTotal, setOverallTotal] = useTabState<number | null>("standard:overallTotal",initial.cache?.response.overallTotal??null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useTabState("standard:lastUpdatedAt",initial.cache?.response.updatedAt||"");
+  const [standards, setStandards] = useTabState<StandardListItem[]>("standard:standards",initial.cache?.response.data||[]);
+  const [preparing,setPreparing]=useTabState("standard:preparing",false);
+  const [loading, setLoading] = useTabState("standard:loading",false);
+  const [refreshedAt, setRefreshedAt] = useTabState("standard:refreshedAt",initial.cache?.refreshedAt||"");
+  useStandardDrawingStatus(standards.map(s=>({number:s.serialNo,standardId:s.id})),refreshedAt);
 
-  const [activeCategory, setActiveCategory] = useState<string>("gear_damper");
-  const [activeStatus, setActiveStatus] = useState<StandardStatus | "all">("all");
+  const [activeCategory, setActiveCategory] = useTabState<string>("standard:activeCategory",initial.view.category);
+  const [activeStatus, setActiveStatus] = useTabState<StandardStatus | "all">("standard:activeStatus",initial.view.status);
   const visibleStatus = activeStatus === "deleted" && !canDirectPublish ? "all" : activeStatus;
-  const [activeType, setActiveType] = useState<StandardType | "all">("all");
-  const [filters, setFilters] = useState({ search: "", customer: "", model: "", customerPartNo: "", vehicleModel: "" });
-  const [resetVersion, setResetVersion] = useState(0);
-  const filterControls = useMemo(() => ({ customer: createColumnFilterControl(), model: createColumnFilterControl(),
+  const [activeType, setActiveType] = useTabState<StandardType | "all">("standard:activeType",initial.view.standardType);
+  const [filters, setFilters] = useTabState("standard:filters",initial.view.filters);
+  const [resetVersion, setResetVersion] = useTabState("standard:resetVersion",0);
+  const filterControls = useMemo(() => ({ serialNo: createColumnFilterControl(), customer: createColumnFilterControl(), model: createColumnFilterControl(),
     customerPartNo: createColumnFilterControl(), vehicleModel: createColumnFilterControl() }), []);
   useEffect(() => () => Object.values(filterControls).forEach(control => control.cancelFocus()), [filterControls]);
   const applyFilters = useMemo(() => {
     const apply = (key: keyof typeof filters) => (value: string) => {
       setFilters((current) => current[key] === value ? current : { ...current, [key]: value });
     };
-    return { search: apply("search"), customer: apply("customer"), model: apply("model"),
+    return { search: apply("search"), serialNo: apply("serialNo"), customer: apply("customer"), model: apply("model"),
       customerPartNo: apply("customerPartNo"), vehicleModel: apply("vehicleModel") };
-  }, []);
+  }, [setFilters]);
   // 普通输入及防抖提交不会改变下拉渲染函数，避免 rc-table 重挂载输入框。
   const filterDropdowns = useMemo(() => {
     const dropdown = (key: keyof typeof filterControls, placeholder: string) =>
@@ -137,54 +155,58 @@ function ProductStandardPageContent() {
             initialValue={String(selectedKeys[0] ?? "")} resetVersion={resetVersion} onApply={applyFilters[key]} />
         </div>
       );
-    return { customer: dropdown("customer", "筛选客户名"), model: dropdown("model", "筛选型号"),
+    return { serialNo: dropdown("serialNo", "筛选内部料号"), customer: dropdown("customer", "筛选客户名"), model: dropdown("model", "筛选型号"),
       customerPartNo: dropdown("customerPartNo", "筛选客户料号"), vehicleModel: dropdown("vehicleModel", "筛选项目代号") };
   }, [applyFilters, resetVersion, filterControls]);
 
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [historyId, setHistoryId] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<StandardPendingActionTarget | null>(null);
-  const [retireTarget, setRetireTarget] = useState<StandardRetireTarget | null>(null);
-  const [printOpen, setPrintOpen] = useState(false);
-  const [formInitial, setFormInitial] = useState<StandardDetail | null>(null);
-  const [copySource, setCopySource] = useState<StandardDetail | null>(null);
-  const [searchParams] = useSearchParams();
+  const [detailId, setDetailId] = useTabState<string | null>("standard:detailId",null);
+  const [detailOpen, setDetailOpen] = useTabState("standard:detailOpen",false);
+  const [historyId, setHistoryId] = useTabState<string | null>("standard:historyId",null);
+  const [historyOpen, setHistoryOpen] = useTabState("standard:historyOpen",false);
+  const [formOpen, setFormOpen] = useTabState("standard:formOpen",false);
+  const [pendingAction, setPendingAction] = useTabState<StandardPendingActionTarget | null>("standard:pendingAction",null);
+  const [retireTarget, setRetireTarget] = useTabState<StandardRetireTarget | null>("standard:retireTarget",null);
+  const [printOpen, setPrintOpen] = useTabState("standard:printOpen",false);
+  const [formInitial, setFormInitial] = useTabState<StandardDetail | null>("standard:formInitial",null);
+  const [copySource, setCopySource] = useTabState<StandardDetail | null>("standard:copySource",null);
 
-  const requestQuery = useMemo(() => {
-    const params = new URLSearchParams({ category: activeCategory, all: "true", includeObsolete: "true" });
-    if (visibleStatus !== "all") params.set("status", visibleStatus); else params.set("excludeObsolete", "true");
-    if (activeType !== "all") params.set("standardType", activeType);
-    for (const [key, value] of Object.entries(filters)) {
-      if (activeCategory === "sanitary_damper" && (key === "vehicleModel" || key === "customerPartNo")) continue;
-      if (value.trim()) params.set(key, value.trim());
-    }
-    return params.toString();
-  }, [activeCategory, visibleStatus, activeType, filters]);
+  const view=useMemo(()=>({category:activeCategory,status:activeStatus,standardType:activeType,filters}),[activeCategory,activeStatus,activeType,filters]);
+  const requestQuery=useMemo(()=>standardPageRequestQuery(view,canDirectPublish),[view,canDirectPublish]);
+  const completionQuery=JSON.stringify([requestQuery,authScope]);
+  const [completedQuery,setCompletedQuery]=useTabState<string|null>("standard:completedQuery",null);
+  const memory=useStandardPageMemory({scope:authScope,initial:initial.session,initialCache:initial.cache,view,
+    entryKey:location.key,query:requestQuery,rows:standards,loading,resume:initial.resume});
+  const {root:pageRoot,readCache,writeCache,rememberRow,queueRestore,capturePosition}=memory;
+  useTabPageAdapter(true,{effectMode:'managed'});
+  // Nested dialogs retain their mounted form and expansion state while open.
+  useTabBusy(loading || preparing || printOpen);
+  const restoringHistoryEntry=initial.resume&&initial.session.snapshot?.entryKey===initial.entryKey&&location.key===initial.entryKey;
 
   const fetchVersion = useRef(0);
   const invalidateFetch = useCallback(() => { ++fetchVersion.current; }, []);
   const requestController = useRef<AbortController | null>(null);
   const checkController = useRef<AbortController | null>(null);
-  const successfulAt = useRef(0);
-  const collectionVersion = useRef("");
+  const successfulAt = useRef(initial.cache?.fetchedAt||0);
+  const collectionVersion = useRef(initial.cache?.response.version||"");
   const fetchData = useCallback(async (force = true) => {
     const version = ++fetchVersion.current;
     requestController.current?.abort();
     const controller = new AbortController();
     requestController.current = controller;
-    setLoading(true);
+    setLoading(force||readCache()?.query!==requestQuery);
     try {
       const [categoryData, response] = await Promise.all([
         loadStandardCategories(force),
         api.get<StandardPageResponse>(`/api/standards?${requestQuery}`, { signal: controller.signal }),
       ]);
       if (version !== fetchVersion.current || controller.signal.aborted) return;
+      const position=readCache()?.query===requestQuery?capturePosition():null;
+      if(position)queueRestore(position,requestQuery);
+      writeCache({query:requestQuery,response,categories:categoryData,fetchedAt:Date.now(),refreshedAt:new Date().toISOString()});
       setCategories(categoryData);
       setStandards(response.data);
       setStandardsScope(authScope);
+      setCompletedQuery(completionQuery);
       void refreshPending(response.version ?? "", force);
       if (typeof response.canEdit === "boolean" && typeof response.canReview === "boolean") {
         setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canRetire: response.canRetire });
@@ -203,13 +225,18 @@ function ProductStandardPageContent() {
     } finally {
       if (version === fetchVersion.current && !controller.signal.aborted) setLoading(false);
     }
-  }, [requestQuery, authScope, refreshPending]);
+  }, [requestQuery, authScope, refreshPending,capturePosition,queueRestore,readCache,writeCache,setAccess,setCategories,setLastUpdatedAt,setLoading,setOverallTotal,setRefreshedAt,setStandards,setStandardsScope,setTotal,completionQuery,setCompletedQuery]);
 
-  useEffect(() => {
-    const initialTimer = setTimeout(() => { void fetchData(false); }, 0);
+  useTabInitialEffect("standard:load", () => {
+    setCompletedQuery(null);
+    const initialTimer = setTimeout(() => {
+      const cached=readCache();
+      if(cached?.query===requestQuery){setCompletedQuery(completionQuery);if(tab.managed)return;void refreshPending(cached.response.version||'',false);refreshWhenVisible();}
+      else void fetchData(false);
+    }, 0);
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const refreshWhenVisible = () => {
-      if (document.visibilityState !== "visible" || Date.now() - successfulAt.current < 30_000) return;
+      if (tab.managed || document.visibilityState !== "visible" || Date.now() - successfulAt.current < 30_000) return;
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(async () => {
         if (document.visibilityState !== "visible") return;
@@ -221,7 +248,8 @@ function ProductStandardPageContent() {
           const response = await api.get<{ version: string }>("/api/standards/version", { signal: controller.signal });
           if (controller.signal.aborted || version !== fetchVersion.current) return;
           if (response.version !== collectionVersion.current) await fetchData(false);
-          else { successfulAt.current = Date.now(); setRefreshedAt(new Date().toISOString()); }
+          else { successfulAt.current = Date.now(); const now=new Date().toISOString();setRefreshedAt(now);
+            const cached=readCache();if(cached?.query===requestQuery)writeCache({...cached,fetchedAt:successfulAt.current,refreshedAt:now}); }
         } catch { if (!controller.signal.aborted && version === fetchVersion.current) void fetchData(false); }
       }, 50);
     };
@@ -234,42 +262,52 @@ function ProductStandardPageContent() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.removeEventListener("focus", refreshWhenVisible);
     };
-  }, [fetchData, invalidateFetch]);
+  }, [requestQuery,authScope], completedQuery===completionQuery);
+
+  useEffect(()=>{
+    if(location.key===initial.entryKey||!['category','status','standardId'].some(key=>searchParams.has(key)))return;
+    let cancelled=false;
+    queueMicrotask(()=>{if(!cancelled){setFilters({search:'',serialNo:'',customer:'',model:'',customerPartNo:'',vehicleModel:''});setActiveStatus('all');setActiveType('all');setResetVersion(value=>value+1);}});
+    return ()=>{cancelled=true;};
+  },[location.key,initial.entryKey,searchParams,setActiveStatus,setActiveType,setFilters,setResetVersion]);
 
   const urlStandardId = searchParams.get("standardId");
   useEffect(() => {
-    if (!urlStandardId) return;
+    if (!urlStandardId||restoringHistoryEntry) return;
     let cancelled = false;
     queueMicrotask(() => { if (!cancelled) { setDetailId(urlStandardId); setDetailOpen(true); } });
     return () => { cancelled = true; };
-  }, [urlStandardId]);
+  }, [urlStandardId,restoringHistoryEntry,location.key,setDetailId,setDetailOpen]);
 
   // 从 URL 参数初始化状态筛选（消息提醒「去审核」跳转）
   const urlStatus = searchParams.get("status");
   useEffect(() => {
+    if(restoringHistoryEntry)return;
     if (urlStatus !== "draft" && urlStatus !== "pending_review" && urlStatus !== "published" && urlStatus !== "obsolete" && !(urlStatus === "deleted" && canDirectPublish)) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) { setActiveStatus((current) => current === urlStatus ? current : urlStatus); }
     });
     return () => { cancelled = true; };
-  }, [urlStatus, canDirectPublish]);
+  }, [urlStatus, canDirectPublish,restoringHistoryEntry,location.key,setActiveStatus]);
 
   // 从 URL 参数初始化分类（通知「去处理」跳转到对应分类）
   const urlCategory = searchParams.get("category");
   const appliedCategoryParam = useRef<string | null>(null);
   useEffect(() => {
+    if(restoringHistoryEntry)return;
     if (!urlCategory) { appliedCategoryParam.current = null; return; }
-    if (appliedCategoryParam.current === urlCategory || !categories.some((category) => category.key === urlCategory)) return;
+    if (appliedCategoryParam.current === `${location.key}:${urlCategory}` || !categories.some((category) => category.key === urlCategory)) return;
     let cancelled = false;
     queueMicrotask(() => {
-      if (!cancelled) { appliedCategoryParam.current = urlCategory; setActiveCategory((current) => current === urlCategory ? current : urlCategory); }
+      if (!cancelled) { appliedCategoryParam.current = `${location.key}:${urlCategory}`; setActiveCategory((current) => current === urlCategory ? current : urlCategory); }
     });
     return () => { cancelled = true; };
-  }, [urlCategory, categories]);
+  }, [urlCategory, categories,restoringHistoryEntry,location.key,setActiveCategory]);
 
   // 超过 1 小时无操作提示刷新，避免使用旧数据（仅本页面生效）
   useEffect(() => {
+    if(tab.managed)return;
     let timer: ReturnType<typeof setTimeout>;
     const showStaleWarning = () => {
       Modal.confirm({
@@ -291,7 +329,7 @@ function ProductStandardPageContent() {
       clearTimeout(timer);
       events.forEach((event) => window.removeEventListener(event, resetTimer));
     };
-  }, []);
+  }, [tab.managed]);
 
   const activeCategoryObj = useMemo(
     () => categories.find((c) => c.key === activeCategory),
@@ -307,17 +345,20 @@ function ProductStandardPageContent() {
       return rank(a) - rank(b) || a.serialNo.localeCompare(b.serialNo, "zh-CN", { numeric: true }) || a.id.localeCompare(b.id);
     });
   }, [standardsScope, authScope, standards, activeCategory]);
+  const [virtualized,setVirtualized]=useTabState('standard:virtualized',false);
+  const virtualTable=virtualized||filtered.length>=100||(overallTotal??0)>=100;
+  useEffect(()=>{if(virtualTable&&!virtualized)setVirtualized(true)},[virtualTable,virtualized,setVirtualized]);
   const visibleTotal = standardsScope === authScope ? total : 0;
 
   const openDetail = useCallback((id: string) => {
     setDetailId(id);
     setDetailOpen(true);
-  }, []);
+  }, [setDetailId,setDetailOpen]);
 
   const openHistory = useCallback((id: string) => {
     setHistoryId(id);
     setHistoryOpen(true);
-  }, []);
+  }, [setHistoryId,setHistoryOpen]);
 
   const openCreate = () => {
     setFormInitial(null);
@@ -333,6 +374,7 @@ function ProductStandardPageContent() {
   };
 
   const copyStandard = useCallback(async (id: string) => {
+    setPreparing(true);
     try {
       const res = await api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${id}?summary=true`);
       setDetailOpen(false);
@@ -341,10 +383,11 @@ function ProductStandardPageContent() {
       setFormOpen(true);
     } catch (err) {
       message.error((err as Error).message || "加载失败");
-    }
-  }, []);
+    } finally {setPreparing(false);}
+  }, [setCopySource,setDetailOpen,setFormInitial,setFormOpen,setPreparing]);
 
   const editStandard = useCallback(async (id: string) => {
+    setPreparing(true);
     try {
       const res = await api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${id}?summary=true`);
       setDetailOpen(false);
@@ -353,8 +396,8 @@ function ProductStandardPageContent() {
       setFormOpen(true);
     } catch (err) {
       message.error((err as Error).message || "加载失败");
-    }
-  }, []);
+    } finally {setPreparing(false);}
+  }, [setCopySource,setDetailOpen,setFormInitial,setFormOpen,setPreparing]);
 
   const columns = useMemo<TableColumnsType<StandardListItem>>(() => {
     const isMyReview = (record: StandardListItem) => record.status === "pending_review" && Boolean(currentUserId && record.submittedById && record.submittedById !== currentUserId)
@@ -376,12 +419,16 @@ function ProductStandardPageContent() {
 
     const result: TableColumnsType<StandardListItem> = [
       {
-        title: "序号",
+        title: "内部料号",
         dataIndex: "serialNo",
+        filterDropdown: filterDropdowns.serialNo,
+        filterDropdownProps: filterControls.serialNo.dropdownProps,
+        filterIcon: (filtered: boolean) => <SearchOutlined className={filtered ? styles.filterIconActive : styles.filterIcon} />,
+        filteredValue: filters.serialNo ? [filters.serialNo] : null,
         width: 110,
         fixed: "left",
         render: (value: string, record: StandardListItem) => (
-          <a className={styles.serialValue} title={value} onClick={() => record.status === "deleted" ? openHistory(record.id) : openDetail(record.id)}>{value}</a>
+          <div className={styles.productDrawingLink}><Link className={styles.serialValue} title={`查看商品 ${value}`} onClick={()=>rememberRow(record.id)} to={`/materials/number?${new URLSearchParams({number:value,standardId:record.id,returnTo:'/product-standards'})}`}>{value}</Link><StandardDrawingBadge id={`${record.id}:${value}`} /></div>
         ),
       },
       {
@@ -511,8 +558,8 @@ function ProductStandardPageContent() {
     ];
     return result.filter(column => activeCategoryObj?.key !== "sanitary_damper" || !("dataIndex" in column && (column.dataIndex === "vehicleModel" || column.dataIndex === "customerPartNo")))
       .map((column) => ({ ...column, shouldCellUpdate: (record, previous) => record !== previous }));
-  }, [activeCategoryObj, filterDropdowns, filterControls, filters.customer, filters.vehicleModel, filters.model,
-    filters.customerPartNo, canEdit, canReview, canRetire, canDirectPublish, currentUserId, user, fetchData, openDetail, openHistory, copyStandard, editStandard]);
+  }, [rememberRow,filters.serialNo, activeCategoryObj, filterDropdowns, filterControls, filters.customer, filters.vehicleModel, filters.model,
+    filters.customerPartNo, canEdit, canReview, canRetire, canDirectPublish, currentUserId, user, fetchData, openDetail, openHistory, copyStandard, editStandard,setPendingAction,setRetireTarget]);
 
   const handleSaved = (detail: StandardDetail) => {
     setFormOpen(false);
@@ -530,7 +577,7 @@ function ProductStandardPageContent() {
   const resetFilters = () => {
     setActiveStatus("all");
     setActiveType("all");
-    setFilters({ search: "", customer: "", model: "", customerPartNo: "", vehicleModel: "" });
+    setFilters({ search: "", serialNo: "", customer: "", model: "", customerPartNo: "", vehicleModel: "" });
     setResetVersion((version) => version + 1);
   };
 
@@ -542,7 +589,7 @@ function ProductStandardPageContent() {
   };
 
   return (
-    <div className={styles.container}>
+    <div ref={pageRoot} className={styles.container}>
       <div className={styles.header}>
         <Title level={4} className={styles.title}>产品标准</Title>
         <StandardUsageGuide />
@@ -595,7 +642,7 @@ function ProductStandardPageContent() {
         <StandardFilterInput
           size="small"
           className={styles.searchInput}
-          placeholder={activeCategory === "sanitary_damper" ? "搜索序号、客户、产品型号、客户型号" : "搜索序号、客户、型号、客户料号"}
+          placeholder={activeCategory === "sanitary_damper" ? "搜索内部料号、客户、产品型号、客户型号" : "搜索内部料号、客户、型号、客户料号"}
           prefix={<SearchOutlined />}
           allowClear
           initialValue={filters.search}
@@ -608,14 +655,16 @@ function ProductStandardPageContent() {
         <div className={styles.standardCount}>标准总数：{standardsScope === authScope && overallTotal !== null ? overallTotal : "—"} 条 · 当前筛选：{visibleTotal} 条</div>
       </div>
 
-      <div className={styles.tableWrap}>
-        <StandardRowSelectionProvider>
+      <div className={styles.tableWrap} data-table-height-boundary>
+        <StandardRowSelectionProvider selectionKey={requestQuery}>
         <ResponsiveTable
           columns={columns}
           loading={loading}
           fitViewport
           bottomScrollbar={false}
-          components={tableComponents}
+          virtual={virtualTable}
+          listItemHeight={64}
+          components={virtualTable?virtualTableComponents:tableComponents}
           locale={{ emptyText: <Empty description="没有匹配的标准" /> }}
           dataSource={filtered}
           rowKey="id"

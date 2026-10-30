@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button, Space, message, Modal } from "antd";
 import {
@@ -16,12 +16,14 @@ import TermsCard from "../components/TermsCard";
 import MoldCard from "../components/MoldCard";
 import ExportSettingsCard from "../components/ExportSettingsCard";
 import PreviewPanel from "../components/PreviewPanel";
-import { prepareQuotationCopy, useQuotationStore } from "../lib/store";
+import { useQuotationStore } from "../lib/store";
 import { exportPDF } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
 import { confirmTierPricing } from "../components/confirmTierPricing";
+
+import { useQuotationDraftTab } from "../lib/useDraftTab";
 
 interface Props {
   headerHeight: number;
@@ -42,33 +44,15 @@ export default function QuotationPage({ headerHeight }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [editingId, setEditingId] = useState<string | null>(null);
   const editingQueryId = searchParams.get("id");
   const copyingQueryId = searchParams.get("copyId");
   const loadingQueryId = editingQueryId ?? copyingQueryId;
+  const { tab, busy, run, markSaved, saved, editingId, setEditingId } = useQuotationDraftTab(quotation, loadingQueryId, copyingQueryId, "domestic", replaceQuotation, (error) => messageApi.error(error));
   const activeEditingId = editingQueryId ? editingId : null;
 
-  useEffect(() => {
-    if (!loadingQueryId) {
-      return;
-    }
-    let active = true;
-    void api.get<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(loadingQueryId)}`)
-      .then((result) => {
-        if (!active) return;
-        if (result.data.market !== "domestic") throw new Error("该报价不属于国内报价");
-        replaceQuotation(copyingQueryId ? prepareQuotationCopy(result.data.quotation) : result.data.quotation);
-        setEditingId(copyingQueryId ? null : result.data.id);
-      })
-      .catch((err: unknown) => {
-        if (active) messageApi.error(err instanceof Error ? err.message : "报价读取失败");
-      });
-    return () => { active = false; };
-  }, [copyingQueryId, loadingQueryId, messageApi, replaceQuotation]);
-
   const confirmTierValidation = useCallback(async (): Promise<boolean> => {
-    return confirmTierPricing(quotation.products, "zh");
-  }, [quotation.products]);
+    return confirmTierPricing(quotation.products, "zh", tab.container);
+  }, [quotation.products, tab.container]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;
@@ -79,6 +63,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       : (p.price ?? 0) > 0);
     if (!hasCustomer || !hasPrice) {
       Modal.warning({
+        getContainer: tab.container ?? undefined,
         title: "报价信息不完整",
         content: [!hasCustomer && "客户名称不能为空", !hasPrice && "至少需要一个产品单价大于 0"]
           .filter(Boolean)
@@ -98,7 +83,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       const msg = err instanceof Error ? err.message : "PDF 导出失败，请重试";
       messageApi.error(msg);
     }
-  }, [confirmTierValidation, quotation, messageApi]);
+  }, [confirmTierValidation, quotation, messageApi, tab.container]);
 
   const handleSubmit = async () => {
     const hasCustomer = quotation.customer.name.trim() !== "";
@@ -106,6 +91,7 @@ export default function QuotationPage({ headerHeight }: Props) {
     const hasProduct = quotation.products.length > 0 && quotation.products.every((product) => product.name.trim() !== "");
     if (!hasCustomer || !hasQuoteNo || !hasProduct) {
       Modal.warning({
+        getContainer: tab.container ?? undefined,
         title: "报价信息不完整",
         content: [!hasQuoteNo && "报价单号不能为空", !hasCustomer && "客户名称不能为空", !hasProduct && "产品名称不能为空"]
           .filter(Boolean)
@@ -120,7 +106,7 @@ export default function QuotationPage({ headerHeight }: Props) {
       const result = activeEditingId
         ? await api.put<{ ok: true; data: ManagedQuotation }>(`/api/quotations/${encodeURIComponent(activeEditingId)}`, payload)
         : await api.post<{ ok: true; data: ManagedQuotation }>("/api/quotations", payload);
-      setEditingId(result.data.id);
+      saved(result.data.id, quotation);
       setSearchParams({ id: result.data.id });
       messageApi.success(activeEditingId ? "报价已更新并提交后台" : "报价已提交后台");
     } catch (err) {
@@ -130,6 +116,7 @@ export default function QuotationPage({ headerHeight }: Props) {
 
   const handleSave = () => {
     exportJSON();
+    markSaved(quotation);
     messageApi.success("草稿已保存到本地浏览器");
   };
 
@@ -209,10 +196,10 @@ export default function QuotationPage({ headerHeight }: Props) {
           <Button size="small" icon={<SaveOutlined />} onClick={handleSave}>
             {!isMobile && "保存草稿"}
           </Button>
-          <Button type="primary" size="small" icon={<CloudUploadOutlined />} onClick={() => void handleSubmit()}>
+          <Button type="primary" size="small" icon={<CloudUploadOutlined />} loading={busy} onClick={() => void run(handleSubmit)}>
             {!isMobile && (activeEditingId ? "更新报价" : "提交报价")}
           </Button>
-          <Button type="primary" size="small" icon={<FilePdfOutlined />} onClick={handleExportPDF}>
+          <Button type="primary" size="small" icon={<FilePdfOutlined />} loading={busy} onClick={() => void run(handleExportPDF)}>
             {!isMobile && "导出 PDF"}
           </Button>
         </Space>

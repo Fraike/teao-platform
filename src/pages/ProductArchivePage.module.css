@@ -1,0 +1,31 @@
+.page { padding:24px;min-height:100%;background:#fff; }
+.header { display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap; }
+.header h4 {margin:0 0 8px;}
+.sync { color:#667085;font-size:13px;margin:16px 0;line-height:1.9; }
+.quickStats {display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0;}
+.filters { display:flex;gap:12px;flex-wrap:wrap;margin:20px 0; }
+.search {width:360px;max-width:100%;} .select {min-width:170px;}
+.loading {padding:100px;text-align:center;}.notice{margin:16px 0;}
+@media(max-width:768px){.page{padding:16px;}.search{width:100%;}.select{flex:1;}}
+.catalogLayout {display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start;margin-top:20px;}
+.categories {border:1px solid #e4e7ec;background:#fafbfc;padding:14px 10px;border-radius:8px;min-width:0;}
+.categories h3 {font-size:15px;margin:0 8px 12px;}
+.categories :global(.ant-tree) {background:transparent;margin-top:12px;font-size:13px;}
+.categories :global(.ant-tree-node-content-wrapper) {min-height:36px;line-height:36px;}
+.categories :global(.ant-tree-switcher) {line-height:36px;}
+.categoryLabel {display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.count {font-size:12px;color:#667085;font-variant-numeric:tabular-nums;}
+.results {min-width:0;}
+.sectionTitle {display:flex;align-items:baseline;gap:12px;}
+.sectionTitle h5 {margin:0;}
+.categoryLink {padding:0;white-space:normal;text-align:left;height:auto;}
+@media(max-width:768px){.catalogLayout{grid-template-columns:1fr;gap:16px;}.categories{max-height:300px;overflow:auto;}.categories :global(.ant-tree){font-size:14px;}}
+.seriesGrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+.seriesCard {display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-height:175px;padding:20px;border:1px solid #e4e7ec;border-radius:10px;background:#fff;text-align:left;cursor:pointer;font:inherit;transition:border-color .15s,box-shadow .15s;overflow-wrap:anywhere;}
+.seriesCard:hover {border-color:#1677ff;box-shadow:0 4px 14px #1677ff12;}
+.seriesCard:focus-visible {outline:2px solid #1677ff;outline-offset:3px;}
+.seriesName {font-size:22px;font-weight:650;color:#182230;}
+.seriesMeta {font-size:13px;color:#475467;}
+.seriesExamples {font-size:12px;color:#667085;line-height:1.7;}
+.seriesAction {margin-top:auto;color:#1677ff;font-size:13px;}
+@media(max-width:480px){.seriesGrid{grid-template-columns:1fr;}}

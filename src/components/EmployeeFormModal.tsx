@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useTabState, useTabPage, useTabForm, useTabBusy, useTabInitialEffect } from "../lib/tabPageContext";
 import {
   Modal, Form, Input, Select, DatePicker, Radio, Button, message,
   Row, Col, Divider,
@@ -40,10 +40,15 @@ export function EmployeeFormModal({
   open, employee, onClose, onSuccess,
 }: EmployeeFormModalProps) {
   const [form] = Form.useForm();
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useTabState("employee.form.saving", false);
+  const [dirty, setDirty] = useTabState("employee.form.dirty", false);
+  const tab = useTabPage();
+  useTabForm(form, "employee.editor", { dirty: open && dirty });
+  useTabBusy(saving);
   const isEdit = !!employee;
 
-  useEffect(() => {
+  useTabInitialEffect("employee.editor.initialize", () => {
+    setDirty(false);
     if (open) {
       if (employee) {
         form.setFieldsValue({
@@ -57,7 +62,7 @@ export function EmployeeFormModal({
         form.resetFields();
       }
     }
-  }, [open, employee, form]);
+  }, [open, employee?.id], true, { synchronous: true });
 
   const handleIdCardBlur = () => {
     const idCard: string = form.getFieldValue("idCard") || "";
@@ -98,6 +103,7 @@ export function EmployeeFormModal({
         await api.post("/api/employees", data);
         message.success("员工已添加");
       }
+      setDirty(false);
       onSuccess();
     } catch (err) {
       message.error((err as Error).message);
@@ -108,6 +114,7 @@ export function EmployeeFormModal({
 
   return (
     <Modal
+      getContainer={tab.container ?? undefined}
       title={isEdit ? "编辑员工" : "新增员工"}
       open={open}
       onCancel={onClose}
@@ -116,6 +123,7 @@ export function EmployeeFormModal({
       destroyOnHidden
     >
       <Form
+        onValuesChange={() => setDirty(true)}
         form={form}
         layout="vertical"
         onFinish={onFinish}

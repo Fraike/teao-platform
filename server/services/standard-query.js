@@ -48,7 +48,7 @@ function filters(options) {
     const value=text(options[name],name);
     if (value && value !== 'all') { where.push(`${column}=@${name}`); params[name]=value; }
   }
-  for (const [name,column] of Object.entries({customer:'customer',model:'model',customerPartNo:'customer_part_no',vehicleModel:'vehicle_model'})) {
+  for (const [name,column] of Object.entries({serialNo:'standard_serial',customer:'customer',model:'model',customerPartNo:'customer_part_no',vehicleModel:'vehicle_model'})) {
     const value=text(options[name],name);
     if (value) { where.push(`instr(lower(COALESCE(${column},'')),lower(@${name}))>0`); params[name]=value; }
   }
