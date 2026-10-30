@@ -12,6 +12,12 @@
 @media(max-width:768px) { .viewer {height:60vh;min-height:340px;} .toolbar {align-items:flex-start;} }
 
 .canvas{display:block;margin:0 auto;background:white;}
+.viewer{position:relative;}
+.pannable canvas{cursor:grab;touch-action:none;user-select:none;}
+.dragging canvas{cursor:grabbing;}
+.failedCanvas{display:none;}
+.previewError{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;overflow:auto;text-align:center;}
+.previewError :global(.ant-alert){max-width:100%;}
 .pdfControls{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;background:#f5f6f8;border:1px solid #e4e7ec;border-top:0;font-size:13px;}
 
 .printFrame{width:100%;height:72vh;border:0;background:#f5f6f8;}

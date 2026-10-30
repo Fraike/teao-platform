@@ -40,6 +40,7 @@ function validateInput(product:ProductArchive,input:ProductDrawingInput,bytes:Bu
   if(typeof input.drawingNo!=='string'||!DRAWING_NUMBER_PATTERN.test(input.drawingNo)||!input.drawingNo.trim()) throw productError('图号应为1至100字的中文、字母、数字、空格、括号、点、下划线或短横线');
   if(typeof input.version!=='string'||!/^[A-Za-z0-9_.-]{1,40}$/.test(input.version)) throw productError('版本仅支持字母、数字、点、下划线和短横线');
   if(typeof input.filename!=='string'||input.filename.length>200||(/[\\/]/.test(input.filename)||[...input.filename].some(c=>c.charCodeAt(0)<32))) throw productError('文件名无效');
+  if(product.group==='semi'&&(!Array.isArray(input.standardIds)||input.standardIds.length))throw productError('半成品图纸不允许关联客户标准');
   if(!Array.isArray(input.standardIds)||input.standardIds.some(id=>!product.standards.some(s=>s.id===id))) throw productError('适用客户标准不属于本产品或已失效');
   if(input.role!==undefined&&!['primary','supplement'].includes(input.role)||input.structure!==undefined&&!['geared','gearless','unspecified'].includes(input.structure))throw productError('图纸主次或结构类型无效');
   const ext=path.extname(input.filename).toLowerCase();
@@ -91,6 +92,7 @@ export function createProductDrawings(store:ProductCatalog,currentUser:(user:Pro
     const file=row(product.id,id);
     if(file.status!=='draft') throw productError('仅未发布文件可以发布',409);
     const refs:string[]=JSON.parse(file.standard_ids);
+    if(product.group==='semi'&&refs.length)throw productError('半成品图纸不允许关联客户标准');
     if(refs.some(key=>!product.standards.some(s=>s.id===key))) throw productError('适用客户标准已失效，不能发布');
     read(product.id,id,user);
     const current=store.db.prepare("SELECT * FROM product_files WHERE product_id=? AND drawing_no=? AND kind=? AND status='published'").all(product.id,file.drawing_no,file.kind) as FileRow[];

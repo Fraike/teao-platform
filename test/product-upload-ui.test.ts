@@ -68,3 +68,18 @@ test('non-gear categories hide structure selection and upload unspecified struct
   assert.equal(metadata?.structure,'unspecified');assert.equal(metadata?.role,'primary');
  }finally{await act(()=>root.unmount());globalThis.fetch=original;}
 });
+
+test('semi upload hides customer standards and always submits an empty scope',async()=>{
+ const original=globalThis.fetch;let metadata:ProductDrawingInput|undefined;
+ globalThis.fetch=(async(url)=>{metadata=JSON.parse(new URL(String(url),'http://local').searchParams.get('metadata')!);return new Response('{}',{status:201});}) as typeof fetch;
+ const root=createRoot(document.getElementById('root')!);
+ try {
+  await act(()=>root.render(createElement(ProductDrawingUpload,{product:{...product,name:'RD-T008 下盖黑色 POM',group:'semi',categoryId:'2314559979366968320',standards:[{id:'s1',serialNo:'SP0015-A',customer:'客户',customerPartNo:'CP1',model:'M1',categoryKey:'gear',categoryName:'成品',versionNo:1,fields:{}}]},open:true,onClose(){},onSaved(){}})));await wait();
+  assert(!document.querySelector('#standardIds'));
+  const input=document.querySelector<HTMLInputElement>('#drawing-file')!;
+  Object.defineProperty(input,'files',{configurable:true,value:[new File(['%PDF-'],'semi.pdf')]});
+  await act(()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));await wait();
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='确认上传并发布')!.click());await wait();
+  assert(metadata);assert.deepEqual(metadata.standardIds,[]);
+ }finally{await act(()=>root.unmount());globalThis.fetch=original;}
+});

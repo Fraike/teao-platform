@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import {test,mock} from 'node:test';
+import ts from 'typescript';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {registerHooks} from 'node:module';
+import './standard-frontend-dom.ts';
+import {act,createElement} from 'react';
+import {createRoot} from 'react-dom/client';
+import {Link} from 'react-router-dom';
+import {useTabStore} from '../src/lib/tabStore.ts';
+import {useAuthStore} from '../src/lib/authStore.ts';
+import {api} from '../src/lib/api.ts';
+registerHooks({load(url,context,next){if(url.startsWith('file:')&&/\.tsx?(?:\?|$)/.test(url))return {format:'module',source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX}}).outputText,shortCircuit:true};if(url.endsWith('.css')&&!url.endsWith('.module.css'))return {format:'module',source:'',shortCircuit:true};return next(url,context);}});
+for(const [path,name] of [['../src/components/NotificationBell.tsx','NotificationBell'],['../src/components/AdminPasswordModal.tsx','AdminPasswordModal'],['../src/components/feedback/FeedbackEntry.tsx','FeedbackEntry']])mock.module(new URL(path,import.meta.url).href,{namedExports:{[name]:()=>null}});
+mock.module(new URL('../src/components/AuthGuard.tsx',import.meta.url).href,{namedExports:{AuthGuard:({children}:{children:React.ReactNode})=>children}});
+mock.module(new URL('../src/pages/Dashboard.tsx',import.meta.url).href,{namedExports:{Dashboard:()=>createElement('div',null,createElement('input',{'data-draft':true,defaultValue:'draft'}),...['/admin','/materials/number?number=existing','/materials/number?number=new'].map(to=>createElement(Link,{key:to,to},to)))}});
+mock.module(new URL('../src/pages/MaterialDetailPage.tsx',import.meta.url).href,{namedExports:{MaterialDetailPage:()=>createElement('div',null,'detail')}});
+const {App}=await import('../src/App.tsx');
+test('full tabs reject Link and history routes without replacing draft DOM; resolver reuses existing tabs',async()=>{
+ useAuthStore.setState({user:{id:'admin',role:'admin',name:'Admin',permissions:[]} as never});
+ useTabStore.getState().resetForAuthentication();
+ for(let i=1;i<10;i++)useTabStore.getState().openTab({key:`/materials/${i}`,label:String(i)});
+ useTabStore.getState().setActiveKey('/');
+ window.history.replaceState(null,'','/');
+ const original=api.get;
+ api.get=(async<T>(url:string)=>{if(url.includes('failure'))throw new Error('解析服务暂不可用');return {data:{id:url.includes('existing')?'1':'new'}} as T;}) as typeof api.get;
+ const root=createRoot(document.getElementById('root')!);
+ const settle=()=>act(async()=>{await new Promise(resolve=>setTimeout(resolve,80))});
+ try{
+ await act(async()=>root.render(createElement(App)));await settle();
+ const draft=document.querySelector('[data-draft]');assert(draft);
+ await act(async()=>{(document.querySelector('a[href="/admin"]') as HTMLElement).click()});await settle();
+ assert.equal(window.location.pathname,'/');assert.equal(document.querySelector('[data-draft]'),draft);assert.equal(useTabStore.getState().tabs.length,10);
+ await act(async()=>{window.history.pushState(null,'','/customers');window.dispatchEvent(new window.PopStateEvent('popstate'))});await settle();
+ assert.equal(window.location.pathname,'/');assert.equal(document.querySelector('[data-draft]'),draft);
+ await act(async()=>{(document.querySelector('a[href="/materials/number?number=new"]') as HTMLElement).click()});await settle();
+ assert.equal(window.location.pathname,'/');assert.equal(document.querySelector('[data-draft]'),draft);
+ await act(async()=>{window.history.pushState(null,'','/materials/number?number=failure');window.dispatchEvent(new window.PopStateEvent('popstate'))});await settle();
+ assert.equal(window.location.pathname,'/');assert.equal(document.querySelector('[data-draft]'),draft);
+ assert(document.body.textContent?.includes('解析服务暂不可用'));
+ let resolveSlow:((value:unknown)=>void)|undefined;let slowSignal:AbortSignal|undefined;
+ api.get=((_url:string,options?:{signal?:AbortSignal})=>{slowSignal=options?.signal;return new Promise(resolve=>{resolveSlow=resolve;});}) as typeof api.get;
+ await act(async()=>{window.history.pushState(null,'','/materials/number?number=slow');window.dispatchEvent(new window.PopStateEvent('popstate'))});await settle();
+ await act(async()=>{window.history.pushState(null,'','/');window.dispatchEvent(new window.PopStateEvent('popstate'))});await settle();
+ assert.equal(slowSignal?.aborted,true);
+ await act(async()=>resolveSlow?.({data:{id:'1'}}));await settle();
+ assert.equal(window.location.pathname,'/');assert.equal(document.querySelector('[data-draft]'),draft);
+ api.get=(async<T>()=>({data:{id:'1'}} as T)) as typeof api.get;
+ // A concrete existing destination is permitted; prevent loading the business page in this test.
+ await act(async()=>{(document.querySelector('a[href="/materials/number?number=existing"]') as HTMLElement).click()});await settle();
+ assert.equal(window.location.pathname,'/materials/1');assert.equal(window.location.search,'?number=existing');assert.equal(useTabStore.getState().tabs.length,10);
+ }finally{await act(async()=>root.unmount());api.get=original;}
+});

@@ -46,7 +46,7 @@ export function ProductDrawingUpload({ product, open, onClose, onSaved }: Drawin
     if (file.size > 25 * 1024 * 1024) { message.warning('文件不能超过25MiB'); return; }
     setSaving(true);
     try {
-      await uploadProductFile(product.id, { ...values, structure:showStructure?values.structure:'unspecified', kind:'pdf', standardIds: values.standardIds || [], filename: file.name }, file);
+      await uploadProductFile(product.id, { ...values, structure:showStructure?values.structure:'unspecified', kind:'pdf', standardIds: product.group === 'semi' ? [] : values.standardIds || [], filename: file.name }, file);
       productPdfResources.clear(); setDirty(false); message.success('图纸已上传并发布'); form.resetFields(); setFile(null); onSaved(); onClose();
     } catch (error) { message.error(error instanceof Error ? error.message : '上传失败'); }
     finally { setSaving(false); }
@@ -59,7 +59,7 @@ export function ProductDrawingUpload({ product, open, onClose, onSaved }: Drawin
       {showStructure&&<Form.Item name="structure" label="图纸结构"><Select options={[{value:'geared',label:'有齿轮'},{value:'gearless',label:'无齿轮'},{value:'unspecified',label:'未区分结构'}]} /></Form.Item>}
       <Form.Item name="drawingNo" label="图号" rules={[{ required: true }, { pattern: DRAWING_NUMBER_PATTERN, message: '支持中文、字母、数字、空格、括号、点、下划线和短横线' }]}><Input placeholder="例如 RD-T008，可追加说明文字" maxLength={100} /></Form.Item>
       <Form.Item name="version" label="版本" rules={[{ required: true }, { pattern: /^[A-Za-z0-9_.-]{1,40}$/, message: '使用字母、数字、点、下划线或短横线' }]}><Input placeholder="例如 A1、A2" maxLength={40} /></Form.Item>
-      <Form.Item name="standardIds" label="适用客户标准（不选即通用）"><Select mode="multiple" allowClear optionFilterProp="label" options={product.standards.map(s => ({ value: s.id, label: `${s.customer} · ${s.customerPartNo || s.model} · 标准V${s.versionNo}` }))} /></Form.Item>
+      {product.group !== 'semi' && <Form.Item name="standardIds" label="适用客户标准（不选即通用）"><Select mode="multiple" allowClear optionFilterProp="label" options={product.standards.map(s => ({ value: s.id, label: `${s.customer} · ${s.customerPartNo || s.model} · 标准V${s.versionNo}` }))} /></Form.Item>}
       <div className={styles.fileInput}><label htmlFor="drawing-file">选择文件（最大25MiB）</label><input id="drawing-file" type="file" disabled={saving} onChange={event => void chooseFile(event.target.files?.[0] || null)} accept=".pdf,application/pdf" /></div>
       {checking && <Alert type="info" message="正在逐页检查PDF方向…" />}
       {fileError && <Alert type="error" showIcon message={fileError} />}

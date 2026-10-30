@@ -12,3 +12,5 @@
 .loading{padding:120px;text-align:center;}.notice{margin-top:12px;}
 @media(max-width:1024px){.layout{grid-template-columns:210px minmax(0,1fr);gap:16px;}}
 @media(max-width:768px){.page{padding:16px;}.layout{grid-template-columns:1fr;}.aside{border-right:0;border-bottom:1px solid #eee;padding-right:0;}.header{align-items:flex-start;flex-direction:column;}.sync{text-align:left;}.customer{margin:16px 0;padding:16px 0;}}
+
+.headerActions{display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;}

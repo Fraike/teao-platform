@@ -1,3 +1,4 @@
+import {ProductDrawingGuide} from '../components/ProductDrawingGuide';
 import {useTabState,useTabPage,useTabPageAdapter,useTabInitialEffect} from '../lib/tabPageContext';
 import {resolveProductBusinessFields,formatProductWeight} from '../lib/productBusinessFields';
 import {useTabStore} from '../lib/tabStore';
@@ -75,29 +76,30 @@ export function ProductArchiveDetailPage() {
   if (!result) return <div className={styles.loading}><Spin aria-label="加载商品档案" /></div>;
   const product = result.data, material = kingdee?.data || product.material;
   const businessFields=resolveProductBusinessFields(kingdee?.data||null,product.material);
-  const selectedStandard = product.standards.find(s => s.id === standardId);
+  const isSemi = product.group === 'semi';
+  const selectedStandard = isSemi ? undefined : product.standards.find(s => s.id === standardId);
   const refresh = () => { void load(); };
   return <div className={styles.page}>
     <div className={styles.breadcrumb}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(returnTo)} aria-label={`返回${returnLabel}`} /><Link to={returnTo}>{returnLabel}</Link><span>/ {product.internalNumber}</span></div>
-    <header className={styles.header}><div><div className={styles.title}><Typography.Title level={3}>{product.internalNumber}</Typography.Title><Typography.Text type="secondary">内部料号</Typography.Text><Tag color={product.kingdeeId ? 'blue' : 'default'}>{product.kingdeeId ? '已关联金蝶' : '未关联金蝶'}</Tag></div><Typography.Text>{product.name}</Typography.Text></div><div className={styles.sync}>金蝶每小时同步<br />最近成功：{result.sync.lastSuccessAt ? new Date(result.sync.lastSuccessAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未同步'}<br /><Link to="/materials">查看同步状态</Link></div></header>
+    <header className={styles.header}><div><div className={styles.title}><Typography.Title level={3}>{product.internalNumber}</Typography.Title><Typography.Text type="secondary">内部料号</Typography.Text><Tag color={product.kingdeeId ? 'blue' : 'default'}>{product.kingdeeId ? '已关联金蝶' : '未关联金蝶'}</Tag></div><Typography.Text>{product.name}</Typography.Text></div><div className={styles.headerActions}><ProductDrawingGuide /><div className={styles.sync}>金蝶每小时同步<br />最近成功：{result.sync.lastSuccessAt ? new Date(result.sync.lastSuccessAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未同步'}<br /><Link to="/materials">查看同步状态</Link></div></div></header>
     {(error || result.sync.error) && <Alert type="warning" message={error || `金蝶同步异常：${result.sync.error}`} className={styles.notice} />}
     {product.issues.map(issue => <Alert key={issue} type="warning" message={issue} className={styles.notice} />)}
     {product.kingdeeMissing && <Alert type="warning" message="金蝶最近一次完整同步未返回该商品，已保留原档案及图纸，请核对。" className={styles.notice} />}
     <div className={styles.layout}><aside className={styles.aside}>
       <h3>产品资料</h3><Descriptions column={1} size="small" items={[
         { key: 'number', label: '内部料号', children: product.internalNumber }, { key: 'name', label: '产品名称', children: product.name },
-        { key: 'model', label: '规格型号', children: product.model || '按客户标准查看' }, { key: 'category', label: '产品分类', children: product.category },
+        { key: 'model', label: '规格型号', children: product.model || (isSemi ? '未维护' : '按客户标准查看') }, { key: 'category', label: '产品分类', children: product.category },
         { key: 'unit', label: '基本单位', children: product.unit || '未维护' },
         { key: 'package', label: '最小包装量', children: businessFields.packageQuantity!==null ? `${businessFields.packageQuantity.toLocaleString('zh-CN')} ${material?.base_unit_name || product.unit}` : '未维护 / 未获取' },
         { key: 'warehouse', label: '默认仓库', children: businessFields.warehouseName || '未维护 / 未获取' },
         { key: 'weight', label: '重量', children: formatProductWeight(businessFields) },
       ]} />
       <div className={styles.sourceNote}>经营资料来源：金蝶<br />{kingdee && <>详情更新时间：{new Date(kingdee.fetchedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}{kingdee.stale && <Tag color="orange">离线缓存</Tag>}</>}{detailError && <span>{detailError}</span>}</div>
-      <div className={styles.customer}><h3>适用客户</h3><Select className={styles.customerSelect} aria-label="适用客户标准" value={selectedStandard?.id || ''} onChange={value => { const next = new URLSearchParams(params); if (value) next.set('standardId', value); else next.delete('standardId'); setParams(next, { replace: true }); }} options={[{ value: '', label: '通用图纸（全部客户）' }, ...product.standards.map(s => ({ value: s.id, label: `${s.customer} · ${s.customerPartNo || s.model}` }))]} /><p>无客户专用图时使用通用图；均无则提示缺图。</p>{standardId && !selectedStandard && <Alert type="warning" message="链接中的客户标准已失效，当前显示通用图。" />}</div>
-      <Link to={`/product-standards${selectedStandard ? `?standardId=${selectedStandard.id}` : ''}`}>查看关联产品标准（{product.standards.length}）</Link>
-    </aside><main className={styles.main}><Tabs activeKey={innerTab} onChange={setInnerTab} destroyOnHidden items={[
+      {!isSemi && <div className={styles.customer}><h3>适用客户</h3><Select className={styles.customerSelect} aria-label="适用客户标准" value={selectedStandard?.id || ''} onChange={value => { const next = new URLSearchParams(params); if (value) next.set('standardId', value); else next.delete('standardId'); setParams(next, { replace: true }); }} options={[{ value: '', label: '通用图纸（全部客户）' }, ...product.standards.map(s => ({ value: s.id, label: `${s.customer} · ${s.customerPartNo || s.model}` }))]} /><p>无客户专用图时使用通用图；均无则提示缺图。</p>{standardId && !selectedStandard && <Alert type="warning" message="链接中的客户标准已失效，当前显示通用图。" />}</div>}
+      {!isSemi && <Link to={`/product-standards${selectedStandard ? `?standardId=${selectedStandard.id}` : ''}`}>查看关联产品标准（{product.standards.length}）</Link>}
+    </aside><main className={styles.main}><Tabs activeKey={isSemi && innerTab === 'standards' ? 'drawings' : innerTab} onChange={setInnerTab} destroyOnHidden items={[
       { key: 'drawings', label: '生产图纸', children: <ProductDrawings product={product} drawings={result.drawings} standardId={selectedStandard?.id || ''} canManage={result.canManage} onChanged={refresh} /> },
-      { key: 'standards', label: `客户标准（${product.standards.length}）`, children: <ProductStandards standards={product.standards} /> },
+      ...(!isSemi ? [{ key: 'standards', label: `客户标准（${product.standards.length}）`, children: <ProductStandards standards={product.standards} /> }] : []),
       { key: 'sources', label: '工程源文件', children: result.canManage ? <><Alert type="info" message="DWG / 三维等原件仅供授权工程人员下载，第一期不提供在线预览。" /><ProductFileManagement product={product} drawings={result.drawings.filter(d => d.kind === 'source' && d.status !== 'retired')} onChanged={refresh} />{!result.drawings.some(d => d.kind === 'source') && <Empty description="暂无工程源文件，可在生产图纸页签上传" />}</> : <Empty description="工程源文件仅向授权工程人员开放" /> },
       { key: 'history', label: '历史版本', children: result.canManage ? <><Alert type="info" message="停用版本仅供工程追溯，不作为产线生产依据。" /><ProductFileManagement product={product} drawings={result.drawings.filter(d => d.status === 'retired')} onChanged={refresh} /><ProductFileManagement product={product} drawings={result.drawings.filter(d => d.status === 'published')} onChanged={refresh} /></> : <Empty description="历史文件仅供授权工程人员追溯；生产请使用当前有效版本" /> },
       { key: 'kingdee', label: '金蝶资料', children: <Descriptions column={1} bordered size="small" items={[

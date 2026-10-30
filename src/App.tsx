@@ -1,9 +1,10 @@
 import type {Location} from 'react-router-dom';
 import {TabPageHost} from './components/TabPageHost';
 import {guardTabClose,disposeTabPage,getTabPage} from './lib/tabPageCache';
+import {api} from './lib/api';
 import {productPdfResources} from './lib/productPdfResources';
-import { useState, useEffect, Suspense, lazy, useMemo } from "react";
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect, useContext, Suspense, lazy, useMemo } from "react";
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, UNSAFE_LocationContext } from "react-router-dom";
 import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip, Space } from "antd";
 import {
   HomeOutlined,
@@ -22,7 +23,7 @@ import {
 import { useIsMobile } from "./lib/useIsMobile";
 import { AuthGuard } from "./components/AuthGuard";
 import { useAuthStore } from "./lib/authStore";
-import { useTabStore } from "./lib/tabStore";
+import { MAX_OPEN_TABS, useTabStore } from "./lib/tabStore";
 import { AdminPasswordModal } from "./components/AdminPasswordModal";
 import { NotificationBell } from "./components/NotificationBell";
 import { AppLocaleProvider } from "./components/AppLocaleProvider";
@@ -98,7 +99,8 @@ function renderTabPage(location:Location) {
 }
 
 function AppLayout() {
-  const location = useLocation();
+  const requestedLocation = useLocation();
+  const routerContext = useContext(UNSAFE_LocationContext);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(isMobile);
@@ -107,6 +109,43 @@ function AppLayout() {
   const logout = useAuthStore((s) => s.logout);
   const { tabs, activeKey, openTab, closeTab, closeOthers, setActiveKey } = useTabStore();
   const {modal,message:appMessage}=AntApp.useApp();
+  // Reject before the host sees the route: even a temporary switch can evict an edited page.
+  const [acceptedLocation, setAcceptedLocation] = useState<Location>(() => {
+    const tab = tabs.find(tab => tab.key === activeKey);
+    return tab?.location ?? { ...requestedLocation, pathname: tab?.key ?? '/', search: '', hash: '', state: null };
+  });
+  const routeBlocked = !!getNavigationItem(requestedLocation.pathname)
+    && !tabs.some(tab => tab.key === requestedLocation.pathname)
+    && tabs.length >= MAX_OPEN_TABS;
+  if (!routeBlocked && acceptedLocation !== requestedLocation) setAcceptedLocation(requestedLocation);
+  const location = routeBlocked ? acceptedLocation : requestedLocation;
+  const showTabLimit = () => appMessage.info({ key: 'tab-limit', content: '最多打开 10 个标签页（含首页），请先关闭一个标签页再打开新页面' });
+  useEffect(() => {
+    if (!routeBlocked) return;
+    const controller = new AbortController();
+    const restore = () => navigate(acceptedLocation.pathname + acceptedLocation.search + acceptedLocation.hash, { replace: true, state: acceptedLocation.state });
+    const reject = () => {
+      void appMessage.info({ key: 'tab-limit', content: '最多打开 10 个标签页（含首页），请先关闭一个标签页再打开新页面' });
+      restore();
+    };
+    // At capacity resolve only the ID; keep the current page mounted until admission succeeds.
+    if (requestedLocation.pathname === '/materials/number') {
+      const number = new URLSearchParams(requestedLocation.search).get('number') ?? '';
+      void api.get<{ data: { id: string } }>(`/api/products/resolve?number=${encodeURIComponent(number)}`, { signal: controller.signal }).then(result => {
+        if (controller.signal.aborted) return;
+        const key = `/materials/${encodeURIComponent(result.data.id)}`;
+        const current = useTabStore.getState();
+        if (current.tabs.some(tab => tab.key === key) || current.tabs.length < MAX_OPEN_TABS) {
+          navigate(key + requestedLocation.search + requestedLocation.hash, { replace: true, state: requestedLocation.state });
+        } else reject();
+      }).catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        void appMessage.error(error instanceof Error ? error.message : '获取商品详情失败');
+        restore();
+      });
+    } else reject();
+    return () => controller.abort();
+  }, [routeBlocked, requestedLocation, acceptedLocation, navigate, appMessage]);
   const cacheScope=`${user?.id||''}:${user?.role||''}:${[...(user?.permissions||[])].sort().join(',')}`;
   const cachedTabs=useMemo(()=>tabs.flatMap(tab=>{
     const saved=tab.key===location.pathname?location:tab.location;
@@ -196,6 +235,7 @@ function AppLayout() {
   const sidebarLayout = getSidebarLayout(isMobile);
 
   return (
+    <UNSAFE_LocationContext.Provider value={{ ...routerContext, location }}>
     <Layout className={styles.rootLayout}>
       {/* 左侧菜单 */}
       <Sider
@@ -225,7 +265,7 @@ function AppLayout() {
           onClick={({ key }) => {
             const item = getNavigationItem(key);
             if (!item?.menu) return;
-            openTab({ key, label: item.title });
+            if (!openTab({ key, label: item.title })) { void showTabLimit(); return; }
             navigate(key);
           }}
           className={styles.menu}
@@ -332,6 +372,7 @@ function AppLayout() {
         </Footer>
       </Layout>
     </Layout>
+    </UNSAFE_LocationContext.Provider>
   );
 }
 

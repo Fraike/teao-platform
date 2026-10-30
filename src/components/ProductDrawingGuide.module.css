@@ -1,0 +1,9 @@
+.content{max-height:65dvh;overflow:auto;padding-right:8px;line-height:1.8;}
+.content h3{font-size:15px;margin:8px 0 12px;}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:0 0 16px;padding-left:22px;}
+.steps p{margin:6px 0 0;line-height:1.8;}
+.note{color:#667085;font-size:13px;}
+.graphic{max-width:720px;margin:16px auto 0;}
+.graphic :global(.ant-image){width:100%;}
+.graphic img{display:block;width:100%;height:auto;}
+@media(max-width:768px){.steps{grid-template-columns:1fr;gap:12px;}}

@@ -13,7 +13,7 @@ export interface Tab {
 interface TabState {
   tabs: Tab[];
   activeKey: string;
-  openTab: (tab: Tab) => void;
+  openTab: (tab: Tab) => boolean;
   renameTab:(key:string,label:string,subtitle?:string)=>void;
   closeTab: (key: string) => void;
   closeOthers: (key: string) => void;
@@ -21,6 +21,8 @@ interface TabState {
   setActiveKey: (key: string) => void;
   resetForAuthentication: () => void;
 }
+
+export const MAX_OPEN_TABS = 10;
 
 const STORAGE_KEY = "teao_tabs_v2";
 const LEGACY_STORAGE_KEY = "teao_tabs";
@@ -35,9 +37,15 @@ function loadTabs(): { tabs: Tab[]; activeKey: string } {
         const item = getNavigationItem(tab.key);
         return item&&tab.key!=='/materials/number' ? [{ key: tab.key, label: item.key==='/materials/:id'&&typeof tab.label==='string' ? tab.label.slice(0,200) : item.title, ...(item.key==='/materials/:id'&&typeof tab.subtitle==='string'?{subtitle:tab.subtitle.slice(0,200)}:{}) }] : [];
       });
-      const withHome = tabs.some((tab) => tab.key === "/") ? tabs : [HOME_TAB, ...tabs];
+      const unique = tabs.filter((tab, index) => tabs.findIndex(item => item.key === tab.key) === index);
+      const withHome = [HOME_TAB, ...unique.filter(tab => tab.key !== "/")];
       const activeKey = withHome.some((tab) => tab.key === parsed.activeKey) ? parsed.activeKey! : "/";
-      return { tabs: withHome, activeKey };
+      const limited = withHome.slice(0, MAX_OPEN_TABS);
+      if (!limited.some(tab => tab.key === activeKey)) {
+        limited[MAX_OPEN_TABS - 1] = withHome.find(tab => tab.key === activeKey)!;
+      }
+      saveTabs(limited, activeKey);
+      return { tabs: limited, activeKey };
     }
   } catch { /* ignore */ }
   return { tabs: [HOME_TAB], activeKey: "/" };
@@ -56,6 +64,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     const { tabs } = get();
     const exists = tabs.find((t) => t.key === tab.key);
     if (!exists) {
+      if (tabs.length >= MAX_OPEN_TABS) return false;
       const next = [...tabs, tab];
       set({ tabs: next, activeKey: tab.key });
       saveTabs(next, tab.key);
@@ -64,6 +73,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       set({ tabs:next,activeKey: tab.key });
       saveTabs(next, tab.key);
     }
+    return true;
   },
 
   renameTab:(key,label,subtitle)=>{

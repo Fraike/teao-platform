@@ -11,7 +11,7 @@ export function ProductDrawingImport({open,onClose}:{open:boolean;onClose:()=>vo
  const [view,setView]=useState<ProductImportView|null>(null),[active,setActive]=useState<ProductImportEntry|null>(null);
  const [busy,setBusy]=useState(false),[progress,setProgress]=useState({done:0,total:0,skipped:0,failed:[] as string[]});
  const [error,setError]=useState(''),[name,setName]=useState('成品图纸导入');
- useEffect(()=>{if(!open)return;const abort=new AbortController();void api.get<{data:ProductImportBatch[]}>('/api/products/imports',{signal:abort.signal}).then(r=>{if(!abort.signal.aborted)setBatches(r.data);}).catch(e=>{if(!abort.signal.aborted)setError(e.message);});return()=>abort.abort();},[open]);
+ useEffect(()=>{if(!open)return;const abort=new AbortController();void api.get<{data:ProductImportBatch[]}>('/api/products/imports',{signal:abort.signal}).then(r=>{if(!abort.signal.aborted)setBatches(r.data.filter(batch=>!batch.kind||batch.kind==='finished'));}).catch(e=>{if(!abort.signal.aborted)setError(e.message);});return()=>abort.abort();},[open]);
  useEffect(()=>{if(!batchId)return;const abort=new AbortController();setView(null);void api.get<{data:ProductImportView}>(`/api/products/imports/${batchId}`,{signal:abort.signal}).then(r=>{if(!abort.signal.aborted)setView(r.data);}).catch(e=>{if(!abort.signal.aborted)setError(e.message);});return()=>abort.abort();},[batchId]);
  async function reload(id=batchId){const r=await api.get<{data:ProductImportView}>(`/api/products/imports/${id}`);setView(r.data);}
  async function scan(files:File[]) {

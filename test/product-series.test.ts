@@ -14,7 +14,8 @@ assert.equal(groupProductSeries([...rows,p('RD-T001-120')]).find(g=>g.key==='gea
 assert.equal(groupProductSeries([...rows,p('RD-T999-10')]).length,3);
 console.log('product series grouping passed');
 const { SERIES_CATEGORY_IDS, productSpecification } = await import('../src/lib/productSeries.ts');
-assert.equal(SERIES_CATEGORY_IDS.length,4);
+assert.equal(SERIES_CATEGORY_IDS.length,6);
+assert(!SERIES_CATEGORY_IDS.includes('2314560542703938560'));
 for (const categoryId of SERIES_CATEGORY_IDS) {
  const group=groupProductSeries([{...p('RD-T001-15'),categoryId},{...p('RD-T001-80'),categoryId}]);
  assert.equal(group.length,1);assert.equal(group[0].name,'T001');

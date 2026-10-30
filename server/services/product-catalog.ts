@@ -47,6 +47,14 @@ export function createProductCatalog(directory: string) {
     CREATE TABLE IF NOT EXISTS product_file_events (
       id TEXT PRIMARY KEY,file_id TEXT NOT NULL REFERENCES product_files(id), action TEXT NOT NULL,
       actor_id TEXT NOT NULL,actor_name TEXT NOT NULL,created_at TEXT NOT NULL);`);
+  db.transaction(()=>{
+    db.exec("CREATE TABLE IF NOT EXISTS product_import_batch_types (batch_id TEXT PRIMARY KEY REFERENCES product_import_batches(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('finished','semi-parts')))");
+    const columns=db.prepare('PRAGMA table_info(product_import_batches)').all() as {name:string}[];
+    if(columns.some(column=>column.name==='kind')){
+      db.exec('INSERT OR IGNORE INTO product_import_batch_types(batch_id,kind) SELECT id,kind FROM product_import_batches');
+      db.exec('ALTER TABLE product_import_batches DROP COLUMN kind');
+    }
+  })();
   const fileColumns=new Set((db.prepare('PRAGMA table_info(product_files)').all() as {name:string}[]).map(c=>c.name));
   db.transaction(()=>{
     if(!fileColumns.has('drawing_role'))db.exec("ALTER TABLE product_files ADD COLUMN drawing_role TEXT NOT NULL DEFAULT 'primary' CHECK(drawing_role IN ('primary','supplement'))");

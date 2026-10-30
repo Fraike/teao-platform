@@ -1,3 +1,4 @@
+import {ProductDrawingGuide} from '../components/ProductDrawingGuide';
 import {useTabState,useTabPage,useTabPageAdapter,useTabInitialEffect,useTabBusy} from '../lib/tabPageContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Empty, Input, Select, Space, Spin, Table, Tag, Tree, Typography, message } from 'antd';
@@ -10,6 +11,7 @@ import type { ProductArchive, ProductCategoryNode, ProductListResponse } from '.
 import { PRODUCT_CATEGORY_IDS, buildProductCategoryTree, countProductCategories, indexProductCategories } from '../../server/shared/product-classification';
 import { filterProductArchives, needsKingdeeEntry, productInCategory } from '../lib/productCategoryFilters';
 import { groupProductSeries, SERIES_CATEGORY_IDS, productFullModels, productSpecification } from '../lib/productSeries';
+import { SEMI_DRAWING_CATEGORY_IDS, isManagedSemiProduct, parseSemiProductName } from '../../server/shared/semi-product-series';
 import styles from './ProductArchivePage.module.css';
 
 export function ProductArchivePage() {
@@ -59,12 +61,13 @@ export function ProductArchivePage() {
   const categoryIndex = useMemo(() => indexProductCategories(taxonomy), [taxonomy]);
   const selectedNode = categoryIndex.get(category);
   const isSemi = selectedNode?.group === 'semi';
-  const scope = isSemi && requestedScope === 'missing' ? 'all' : requestedScope;
+  const managedSemi = isSemi && SEMI_DRAWING_CATEGORY_IDS.includes(category);
+  const scope = isSemi && !managedSemi && requestedScope === 'missing' ? 'all' : requestedScope;
   const unlinkedCount = useMemo(() => new Set((result?.data || []).filter(needsKingdeeEntry).map(product => product.internalNumber)).size, [result]);
   function selectCategory(id: string) {
-    updateQuery({ category: id, series: '', seriesPage: '', scope: categoryIndex.get(id)?.group === 'semi' && scope === 'missing' ? 'all' : scope });
+    updateQuery({ category: id, series: '', seriesPage: '', scope: categoryIndex.get(id)?.group === 'semi' && !SEMI_DRAWING_CATEGORY_IDS.includes(id) && scope === 'missing' ? 'all' : scope });
   }
-  const scoped = useMemo(() => filterProductArchives(result?.data || [], { search, scope }), [result, search, scope]);
+  const scoped = useMemo(() => filterProductArchives(result?.data || [], { search, scope,missingGroup:managedSemi?'semi':'finished' }), [result, search, scope,managedSemi]);
   const categories = useMemo(() => countProductCategories(taxonomy, scoped), [taxonomy, scoped]);
   const rows = useMemo(() => scoped.filter(product => productInCategory(product, category, categoryIndex)), [scoped, category, categoryIndex]);
   const seriesEnabled = SERIES_CATEGORY_IDS.includes(category);
@@ -78,7 +81,7 @@ export function ProductArchivePage() {
     key: node.id, title: <span className={styles.categoryLabel}><span>{node.name}</span><span className={styles.count}>{node.count}</span></span>, children: treeNodes(node.children),
   }));
   return <div className={styles.page}>
-    <header className={styles.header}><div><Typography.Title level={4}>商品资料</Typography.Title><Typography.Text type="secondary">按内部料号汇总金蝶商品与已发布产品标准 · {result?.data.length || 0} 个档案</Typography.Text></div><Space><Button onClick={() => void load()}>刷新页面</Button>{canSync && <Button icon={<ReloadOutlined />} loading={syncing || result?.sync.running} onClick={() => void sync()}>立即同步金蝶</Button>}</Space></header>
+    <header className={styles.header}><div><Typography.Title level={4}>商品资料</Typography.Title><Typography.Text type="secondary">按内部料号汇总金蝶商品与已发布产品标准 · {result?.data.length || 0} 个档案</Typography.Text></div><Space wrap><ProductDrawingGuide /><Button onClick={() => void load()}>刷新页面</Button>{canSync && <Button icon={<ReloadOutlined />} loading={syncing || result?.sync.running} onClick={() => void sync()}>立即同步金蝶</Button>}</Space></header>
     <div className={styles.sync}>每小时自动同步 · 最近成功：{result?.sync.lastSuccessAt ? new Date(result.sync.lastSuccessAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未成功同步'}{result?.sync.lastSuccessAt && checkedAt - Date.parse(result.sync.lastSuccessAt) > 7200000 && <Tag color="orange">资料超过2小时未更新</Tag>} · 新增 {result?.sync.added || 0} / 更新 {result?.sync.updated || 0}</div>
     {(error || result?.sync.error) && <Alert className={styles.notice} type="warning" showIcon message={error || `金蝶同步失败：${result?.sync.error}。当前保留上次成功资料。`} />}
     <div className={styles.quickStats}>
@@ -95,8 +98,8 @@ export function ProductArchivePage() {
     </aside><main className={styles.results}>
     {seriesEnabled && seriesKey && <Button onClick={() => updateQuery({ series: '', page: '' }, false)}>返回系列</Button>}
     <div className={styles.sectionTitle}><Typography.Title level={5}>{title}{seriesKey ? ` / ${selectedSeries?.name || '系列暂无匹配商品'}` : ''}</Typography.Title><Typography.Text type="secondary">{visibleRows.length} 个商品</Typography.Text></div>
-    {isSemi && <Alert className={styles.notice} type="info" showIcon message="半成品资料查询：本期优先管理成品图纸，半成品不纳入缺图待办。" />}
-    <div className={styles.filters}><Input prefix={<SearchOutlined />} placeholder="搜索内部料号、名称、型号、客户料号" value={search} onChange={event => updateQuery({ q: event.target.value })} allowClear className={styles.search} /><Select aria-label="档案状态" value={scope} onChange={value => updateQuery({ scope: value })} options={[{ value: 'all', label: '全部档案' }, { value: 'unlinked', label: '未关联金蝶' }, ...(!isSemi ? [{ value: 'missing', label: '成品缺少有效图纸' }] : []), { value: 'issues', label: '需要核对' }, { value: 'inactive', label: '停用 / 历史档案' }]} className={styles.select} /></div>
+    {isSemi && !managedSemi && <Alert className={styles.notice} type="info" showIcon message="半成品资料查询：塑胶配件、弹簧五金支持系列展示；绳子、O型圈直接展示物料列表，均支持缺图筛选。" />}
+    <div className={styles.filters}><Input prefix={<SearchOutlined />} placeholder="搜索内部料号、名称、型号、客户料号" value={search} onChange={event => updateQuery({ q: event.target.value })} allowClear className={styles.search} /><Select aria-label="档案状态" value={scope} onChange={value => updateQuery({ scope: value })} options={[{ value: 'all', label: '全部档案' }, { value: 'unlinked', label: '未关联金蝶' }, ...(!isSemi || managedSemi ? [{ value: 'missing', label: managedSemi ? '缺少有效图纸' : '成品缺少有效图纸' }] : []), { value: 'issues', label: '需要核对' }, { value: 'inactive', label: '停用 / 历史档案' }]} className={styles.select} /></div>
     {loading ? <div className={styles.loading}><Spin /></div> : seriesEnabled && !seriesKey ? <>
       <div className={styles.seriesGrid}>{groups.map(group => <button key={group.key} className={styles.seriesCard} onClick={() => updateQuery({ series: group.key })}>
         <span className={styles.seriesName}>{group.name}</span>
@@ -108,10 +111,16 @@ export function ProductArchivePage() {
       {!groups.length && <Empty description="没有匹配的商品系列" />}
     </> : !visibleRows.length ? <Empty description="没有匹配的商品档案" /> : <Table<ProductArchive> rowKey="id" dataSource={visibleRows} size="small" scroll={{ x: 1000 }} pagination={false} columns={[
       { title: '内部料号', dataIndex: 'internalNumber', width: 160, fixed: 'left', render: (value, p) => <Link to={`/materials/${p.id}?${new URLSearchParams({ returnTo })}`}>{value}</Link> },
-      { title: seriesEnabled ? '完整型号' : '名称', dataIndex: 'name', ellipsis: true, width: 260, render: (value, p) => seriesEnabled ? productFullModels(p).join(' / ') || value : value }, { title: seriesEnabled ? '金蝶规格 / 测试范围' : '规格型号', dataIndex: 'model', ellipsis: true, width: 160, render: (value, p) => seriesEnabled ? productSpecification(p) : value },
+      { title: seriesEnabled && !isSemi ? '完整型号' : '名称', dataIndex: 'name', ellipsis: true, width: 260, render: (value, p) => seriesEnabled && p.group !== 'semi' ? productFullModels(p).join(' / ') || value : value }, { title: seriesEnabled && !isSemi ? '金蝶规格 / 测试范围' : '规格型号', dataIndex: 'model', ellipsis: true, width: 160, render: (value, p) => seriesEnabled && p.group !== 'semi' ? productSpecification(p) : value },
       { title: '分类', dataIndex: 'category', width: 150, render: (value, p) => <Button type="link" className={styles.categoryLink} onClick={() => selectCategory(p.categoryId)}>{value}</Button> }, { title: '单位', dataIndex: 'unit', width: 70 },
-      { title: '客户标准', width: 90, render: (_, p) => p.standards.length },
-      { title: '生产图纸', width: 130, render: (_, p) => p.drawingCount ? <Tag color="green">{p.drawingCount} 份有效图纸</Tag> : p.group === 'semi' ? <Tag>后续阶段</Tag> : <Tag color="orange">缺少有效图纸</Tag> },
+      ...(!isSemi ? [{ title: '客户标准', width: 90, render: (_: unknown, p: ProductArchive) => p.group === 'semi' ? '—' : p.standards.length }] : []),
+      ...(managedSemi && seriesEnabled ? [
+        { title: '零件', width: 100, render: (_: unknown, p: ProductArchive) => parseSemiProductName(p.name).partName || '待确认' },
+        { title: '材料', width: 140, render: (_: unknown, p: ProductArchive) => parseSemiProductName(p.name).material || '未识别' },
+        { title: '颜色 / 结构', width: 180, render: (_: unknown, p: ProductArchive) => { const identity = parseSemiProductName(p.name); return [identity.color, identity.structure].filter(Boolean).join(' / ') || '未识别'; } },
+        { title: '共用系列', width: 160, render: (_: unknown, p: ProductArchive) => parseSemiProductName(p.name).series.join(' / ') || '待确认' },
+      ] : []),
+      { title: '生产图纸', width: 130, render: (_, p) => p.drawingCount ? <Tag color="green">{p.drawingCount} 份有效图纸</Tag> : p.group === 'semi' && !isManagedSemiProduct(p) ? <Tag>后续阶段</Tag> : <Tag color="orange">缺少有效图纸</Tag> },
       { title: '关联状态', width: 180, render: (_, p) => <Space wrap>{!p.kingdeeId && <Tag>未关联金蝶</Tag>}{p.kingdeeMissing && <Tag color="orange">金蝶本次未返回</Tag>}{p.issues.length > 0 && <Tag color="red">需核对</Tag>}{p.kingdeeId && !p.kingdeeMissing && !p.issues.length && <Tag color="blue">已关联金蝶</Tag>}</Space> },
     ]} />}
     </main></div>

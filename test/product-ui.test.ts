@@ -22,6 +22,10 @@ test('standard-only product resolves by internal number and reader sees missing 
   const print=[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('打印图纸'))!;assert(print.disabled);
   assert(![...document.querySelectorAll('button')].some(button=>button.textContent?.includes('上传图纸')));
   assert(document.querySelector('a[href="/product-standards?standardId=s1"]'));
+  const guide=[...document.querySelectorAll<HTMLButtonElement>('header button')].find(button=>button.textContent?.includes('使用指南'));assert(guide);
+  assert(!document.querySelector('.ant-collapse'));
+  await act(()=>guide.click());await wait();assert(document.querySelector('[role="dialog"]'));
+  assert.match(document.querySelector('[role="dialog"]')!.textContent!,/T001-15/);
  }finally{await act(()=>root.unmount());api.get=original;}
 });
 
@@ -40,6 +44,7 @@ test('catalog defaults to gear; category clicks filter locally and retain list U
  try {
   await act(()=>root.render(createElement(MemoryRouter,{initialEntries:['/materials']},createElement(Routes,null,createElement(Route,{path:'/materials',element:createElement(ProductArchivePage)}),createElement(Route,{path:'/materials/:id',element:createElement(ProductArchiveDetailPage)})))));await wait();
   assert.match(document.body.textContent!,/T001/);
+  assert([...document.querySelectorAll('header button')].some(button=>button.textContent?.includes('使用指南')));
   assert(!document.body.textContent!.includes('批量导入成品PDF'));
   assert(!document.querySelector('a[href^="/materials/gear"]'));
   await act(()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.includes('查看具体规格'))!.click());await wait();
@@ -49,7 +54,7 @@ test('catalog defaults to gear; category clicks filter locally and retain list U
   const semi=[...document.querySelectorAll('.ant-tree-title')].find(el=>el.textContent?.startsWith('半成品'))!;
   await act(()=>semi.dispatchEvent(new window.MouseEvent('click',{bubbles:true})));await wait();
   assert.match(document.body.textContent!,/SEMI-ONLY/);assert(!document.body.textContent!.includes('GEAR-ONLY'));
-  assert.match(document.body.textContent!,/后续阶段/);assert(!document.body.textContent!.includes('缺少有效图纸'));
+  assert.match(document.body.textContent!,/缺少有效图纸/);assert(!document.body.textContent!.includes('客户标准'));
   assert.equal(calls.length,1);
   assert(document.querySelector('a')?.getAttribute('href')?.includes(encodeURIComponent(ids.semi)));
   await act(()=>document.querySelector<HTMLAnchorElement>('a')!.click());await wait();
@@ -128,5 +133,50 @@ test('global unlinked quick count opens the PMC queue across categories without 
   assert.equal(params.get('category'),'all');assert.equal(params.get('scope'),'unlinked');
   for(const key of ['q','series','page','seriesPage'])assert(!params.has(key));
   assert.equal(calls.length,1,'quick entry must reuse the loaded product list');
+ }finally{await act(()=>root.unmount());api.get=original;}
+});
+
+ test('semi detail ignores URL customer context and hides every standard entry',async()=>{
+ const original=api.get;
+ api.get=(async<T>()=>({data:{...product,group:'semi',categoryId:'2314559979366968320'},drawings:[],canManage:false,sync:{}} as T)) as typeof api.get;
+ const root=createRoot(document.getElementById('root')!);
+ try{
+ await act(()=>root.render(createElement(MemoryRouter,{initialEntries:['/materials/local-1?standardId=s1']},createElement(Routes,null,createElement(Route,{path:'/materials/:id',element:createElement(ProductArchiveDetailPage)})))));await wait();
+ assert(!document.querySelector('[aria-label="适用客户标准"]'));
+ assert(!document.querySelector('a[href^="/product-standards"]'));
+ assert(!document.querySelector('[data-node-key="standards"]'));
+ }finally{await act(()=>root.unmount());api.get=original;}
+ });
+
+test('managed semi category shows local series, original fields and missing drawings without finished products',async()=>{
+ const {ProductArchivePage}=await import('../src/pages/ProductArchivePage.tsx');
+ const {buildProductCategoryTree,PRODUCT_CATEGORY_IDS:ids}=await import('../server/shared/product-classification.ts');
+ const original=api.get;
+ const semi={...product,id:'plastic',name:'RD-T008 下盖黑色 POM',model:'原规格',group:'semi' as const,categoryId:ids.plastic,category:'塑胶配件',kingdeeId:'k-semi',standards:[]};
+ api.get=(async<T>()=>({data:[product,semi],categories:buildProductCategoryTree([]),sync:{}} as T)) as typeof api.get;
+ const root=createRoot(document.getElementById('root')!);
+ try{
+ await act(()=>root.render(createElement(MemoryRouter,{initialEntries:[`/materials?category=${ids.plastic}&scope=missing`]},createElement(ProductArchivePage))));await wait();
+ const cards=[...document.querySelectorAll<HTMLButtonElement>('button')].filter(b=>b.textContent?.includes('查看具体规格'));
+ assert.equal(cards.length,1);assert.match(cards[0].textContent!,/T008/);assert(!document.querySelector('.ant-pagination'));
+ await act(()=>cards[0].click());await wait();
+ const body=document.querySelector('tbody')!.textContent!;
+ assert.match(body,/RD-T008 下盖黑色 POM/);assert.match(body,/原规格/);assert.match(body,/缺少有效图纸/);assert(!body.includes('无金蝶商品'));
+ assert.match(document.body.textContent!,/共用系列/);assert(!document.body.textContent!.includes('客户标准'));
+ }finally{await act(()=>root.unmount());api.get=original;}
+});
+
+test('rope category directly lists materials and ignores old series URLs',async()=>{
+ const {ProductArchivePage}=await import('../src/pages/ProductArchivePage.tsx');
+ const {buildProductCategoryTree}=await import('../server/shared/product-classification.ts');
+ const original=api.get;
+ const rope={...product,id:'rope',internalNumber:'S0001',name:'145MM硬拉绳-18.5MM',model:'原规格',group:'semi' as const,categoryId:'2314560542703938560',category:'绳子',kingdeeId:'rope',standards:[]};
+ api.get=(async<T>()=>({data:[rope],categories:buildProductCategoryTree([]),sync:{}} as T)) as typeof api.get;
+ const root=createRoot(document.getElementById('root')!);
+ try{
+  await act(()=>root.render(createElement(MemoryRouter,{initialEntries:['/materials?category=2314560542703938560&series=old&scope=missing']},createElement(ProductArchivePage))));await wait();
+  assert.match(document.querySelector('tbody')?.textContent||'',/145MM硬拉绳/);
+  assert(!document.body.textContent?.includes('查看具体规格'));assert(!document.body.textContent?.includes('未识别系列'));
+  assert(!document.body.textContent?.includes('共用系列'));assert(!document.querySelector('.ant-pagination'));
  }finally{await act(()=>root.unmount());api.get=original;}
 });

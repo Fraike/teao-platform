@@ -1,17 +1,18 @@
 import { identifyProductSeries } from './productSeries.ts';
 import type { ProductArchive, ProductCategoryNode } from '../types/product.ts';
+import {isManagedSemiProduct,parseSemiProductName} from '../../server/shared/semi-product-series.ts';
 
 export function needsKingdeeEntry(product: ProductArchive) {
   return product.standards.length > 0 && (!product.kingdeeId || product.kingdeeMissing);
 }
 
-export function filterProductArchives(products: ProductArchive[], options: { search: string; scope: string }) {
+export function filterProductArchives(products: ProductArchive[], options: { search: string; scope: string; missingGroup?:'finished'|'semi' }) {
   const keyword = options.search.trim().toLowerCase();
   return products.filter(p => {
     const active = options.scope === 'inactive' ? !p.productionAvailable : options.scope === 'unlinked' ? needsKingdeeEntry(p) : options.scope === 'issues' || p.productionAvailable;
-    const matches = !keyword || [p.internalNumber, p.name, p.model, identifyProductSeries(p).name, ...p.standards.flatMap(s => [s.customer, s.customerPartNo, s.model])].some(value => value.toLowerCase().includes(keyword));
+    const matches = !keyword || [p.internalNumber, p.name, p.model, identifyProductSeries(p).name,...(isManagedSemiProduct(p)?parseSemiProductName(p.material?.name||p.name).series:[]), ...p.standards.flatMap(s => [s.customer, s.customerPartNo, s.model])].some(value => value.toLowerCase().includes(keyword));
     return active && matches
-      && (options.scope !== 'missing' || p.group === 'finished' && !p.drawingCount)
+      && (options.scope !== 'missing' || p.group===(options.missingGroup||'finished') && (p.group==='finished'||isManagedSemiProduct(p)) && !p.drawingCount)
       && (options.scope !== 'issues' || p.issues.length > 0 || p.kingdeeMissing);
   });
 }

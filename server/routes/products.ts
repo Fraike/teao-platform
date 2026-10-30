@@ -78,7 +78,7 @@ export function registerProductRoutes(app:Express,options:RouteOptions={}) {
     res.json({ok:true,sync:await get().sync.run()});
   }));
   const importServices=()=>{const {svc}=catalog();return createProductImports(svc.store,svc.drawings,()=>svc.store.list(references()));};
-  app.post('/api/products/imports',jwtAuth,manager,route((req,res)=>res.status(201).json({ok:true,data:importServices().create(req.body?.name,userOf(req))})));
+  app.post('/api/products/imports',jwtAuth,manager,route((req,res)=>res.status(201).json({ok:true,data:importServices().create(req.body?.name,userOf(req),req.body?.kind)})));
   app.post('/api/products/imports/:batchId/scan',jwtAuth,manager,express.raw({type:'application/octet-stream',limit:'25mb'}),route(async(req,res)=>{
     const data=await importServices().scan(String(req.params.batchId),String(req.query.path||''),req.body,userOf(req));
     res.json({ok:true,data});
