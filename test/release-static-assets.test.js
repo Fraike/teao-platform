@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+import {test} from 'node:test';
+import {digest} from '../server/scripts/release-common.js';
+import {retainPreviousStaticAssets} from '../server/scripts/release-static-assets.js';
+test('retain two prior resource manifests without replacing new assets or keeping unlimited stale files',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'static-history-')),site=path.join(root,'site'),incoming=path.join(root,'new');
+ fs.mkdirSync(path.join(site,'assets'),{recursive:true});fs.mkdirSync(path.join(incoming,'assets'),{recursive:true});
+ const write=(name,value)=>fs.writeFileSync(path.join(site,'assets',name),value);
+ for(const name of ['page-A.js','page-B.js','page-C.js','unused.js','shared.js'])write(name,name);
+ fs.writeFileSync(path.join(incoming,'assets/shared.js'),'new shared');
+ const third=path.join(root,'third.json'),second=path.join(root,'second.json'),first=path.join(root,'first.json');
+ const state=(file,names,previousStateFile)=>fs.writeFileSync(file,JSON.stringify({manifest:names.map(name=>({name:`dist/assets/${name}`,sha256:digest(name)})),previousStateFile}));
+ state(third,['page-C.js'],null);state(second,['page-B.js'],third);state(first,['page-A.js','shared.js'],second);
+ const retained=retainPreviousStaticAssets(site,incoming,first);
+ assert.deepEqual(retained.map(f=>f.name).sort(),['dist/assets/page-A.js','dist/assets/page-B.js']);
+ assert.equal(fs.readFileSync(path.join(incoming,'assets/shared.js'),'utf8'),'new shared');
+ assert(!fs.existsSync(path.join(incoming,'assets/page-C.js')));assert(!fs.existsSync(path.join(incoming,'assets/unused.js')));
+ assert.equal(fs.statSync(path.join(incoming,'assets/page-A.js')).mode&0o777,0o644);
+ write('page-A.js','corrupted');fs.renameSync(path.join(incoming,'assets/page-A.js'),path.join(root,'kept-A.js'));
+ assert.throws(()=>retainPreviousStaticAssets(site,incoming,first),/校验/);
+});

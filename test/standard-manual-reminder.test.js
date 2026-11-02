@@ -7,10 +7,10 @@ process.env.JWT_SECRET = "manual-reminder-tests-secret-at-least-32-characters";
 const store = await import("../server/services/standard-store.js"); store.initDB();
 const { createStandardReviewReminders } = await import("../server/services/standard-review-reminders.js");
 const editor = { id: "editor", name: "提交人", role: "user" }, admin = { id: "admin", role: "admin" };
-const reviewer = { id: "reviewer", name: "审核人", status: "active", wecomUserid: "reviewer-wecom" };
+const reviewer = { id: "reviewer", name: "审核人", status: "active", permissions: ["engineering_review"], wecomUserid: "reviewer-wecom" };
 let now = Date.parse("2026-10-19T22:00:00+08:00"), configured = true, failure = null, calls = [];
-const dependencies = { now: () => now, users: () => [reviewer], config: () => ({ wecomWebhook: configured ? "https://example.invalid/mock" : "" }),
-  send: async (_webhook, content, mentions) => { calls.push({ content, mentions }); if (failure) throw failure; } };
+const dependencies = { now: () => now, users: () => [reviewer], config: () => ({ app: {corpId: "test",agentId: "1",secret: configured ? "mock" : ""} }),
+  send: async (userid, content) => { calls.push({ content, userid }); if (failure) throw failure; } };
 const service = createStandardReviewReminders(dependencies);
 let detail = store.createStandard({ serialNo: "MANUAL-TEST", customer: "客户", model: "RD-TEST", categoryKey: "gear_damper", fields: {} }, editor);
 const expected = () => ({ versionNo: detail.versions[0].versionNo });
@@ -23,16 +23,17 @@ configured = false; assert.equal((await service.remind(detail.id, editor, expect
 configured = true;
 const concurrent = await Promise.all([service.remind(detail.id, editor, expected()), createStandardReviewReminders(dependencies).remind(detail.id, admin, expected())]);
 assert.deepEqual(concurrent.map(result => result.status), ["sent", "cooldown"]); assert.equal(calls.length, 1);
-assert.deepEqual(calls[0].mentions, ["reviewer-wecom"]);
+assert.equal(calls[0].userid, "reviewer-wecom");
 assert(calls[0].content.includes('分类：齿轮阻尼器'));
-assert(calls[0].content.includes(`standardId=${detail.id}`));
+assert(calls[0].content.includes("MANUAL-TEST") && !calls[0].content.includes("查看并审核"));
 now += 5 * 60000 - 1; assert.equal((await service.remind(detail.id, admin, expected())).status, "cooldown");
 now++; failure = Object.assign(new Error("uncertain"), { code: "SEND_RESULT_UNCERTAIN" });
 assert.equal((await service.remind(detail.id, editor, expected())).status, "unknown");
 assert.equal((await service.remind(detail.id, editor, expected())).status, "cooldown");
 failure = null; now += 5 * 60000; reviewer.wecomUserid = "";
 const withoutMention = await service.remind(detail.id, admin, expected());
-assert.equal(withoutMention.status, "sent"); assert.equal(withoutMention.mentionedReviewer, false); assert.deepEqual(calls.at(-1).mentions, []);
+assert.equal(withoutMention.status, "unbound");
+reviewer.wecomUserid="reviewer-wecom";
 const count = calls.length;
 assert.equal(withoutMention.nextReminderAt, '2026-10-20T00:00:00.000Z');
 now += 2 * 3600000; await service.tick(); assert.equal(calls.length, count, "no automatic reminder at night");

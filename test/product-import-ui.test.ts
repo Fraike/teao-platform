@@ -7,8 +7,8 @@ import {isFinishedPdfPath} from '../src/lib/productImportFiles.ts';
 import {api} from '../src/lib/api.ts';
 import type {ProductImportEntry} from '../src/types/productImport.ts';
 // rc-overflow creates Node MessagePorts without closing them; exercise its browser RAF fallback.
-const originalChannel=globalThis.MessageChannel;
-Object.defineProperty(globalThis,'MessageChannel',{value:undefined,configurable:true,writable:true});
+
+
 const wait=()=>act(async()=>{await new Promise(r=>setTimeout(r,40));});
 test('directory filter includes finished/customer/root PDFs and excludes parts, hidden, 3D and image files',()=>{
  for(const p of ['图纸/RD-T001/成品图/a.pdf','RD-T001/成品图/客户图纸/a.PDF','图纸/RD-TR01/a.pdf'])assert(isFinishedPdfPath(p),p);
@@ -29,11 +29,11 @@ test('review never auto-selects candidates; restored retry keeps explicit scope 
  try{
   await act(()=>root.render(createElement(ProductImportReview,{entry:item,products:[],onClose:()=>{},onSaved:()=>{}})));await wait();
   assert.equal((document.querySelector('input[aria-label="导入图号"]') as HTMLInputElement).value,'');
-  assert(!document.querySelector('.ant-select-selection-item'));
+  assert(!document.querySelector('.ant-select-content-has-value'));
   await act(()=>root.unmount());
   const next=createRoot(document.getElementById('root')!);
   try{await act(()=>next.render(createElement(ProductImportReview,{entry:{...item,decision:{entryId:'e',drawingNo:'T001',version:'A1',targets:[]}},products:[],onClose:()=>{},onSaved:()=>{}})));await wait();assert.equal((document.querySelector('input[aria-label="导入图号"]') as HTMLInputElement).value,'T001');assert.equal((document.querySelector('input[aria-label="导入版本"]') as HTMLInputElement).value,'A1');}finally{await act(()=>next.unmount());}
  }finally{globalThis.fetch=original;}
 });
 
-after(()=>{window.close();globalThis.MessageChannel=originalChannel;});
+after(()=>{window.close();});

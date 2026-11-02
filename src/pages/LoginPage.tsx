@@ -113,12 +113,12 @@ export function LoginPage() {
             <Alert
               type="warning"
               showIcon
-              message="登录有效期已满15天，请重新登录"
+              title="登录有效期已满15天，请重新登录"
               className={styles.alert}
             />
           )}
           {loginError && (
-            <Alert type="error" showIcon message={loginError} className={styles.alert} closable onClose={() => setLoginError("")} />
+            <Alert type="error" showIcon title={loginError} className={styles.alert} closable onClose={() => setLoginError("")} />
           )}
           <Form.Item name="username" rules={[{ required: true, message: "请输入用户名" }]}>
             <Input name="username" aria-label="用户名" autoComplete={LOGIN_AUTOCOMPLETE.username} autoCapitalize="none" spellCheck={false} prefix={<UserOutlined />} placeholder="用户名" />
@@ -144,8 +144,8 @@ export function LoginPage() {
           </Text>
         </div>
       </Card>
-      <Modal title={adminRecovery ? "管理员找回密码" : "找回密码"} open={recoveryOpen} onCancel={() => { if (!recoveryLoading) setRecoveryOpen(false); }} onOk={submitRecovery} confirmLoading={recoveryLoading} okText={adminRecovery ? "重置密码" : "提交申请"} cancelButtonProps={{ disabled: recoveryLoading }} maskClosable={!recoveryLoading}>
-        {!adminRecovery && <Alert className={styles.alert} type="info" showIcon message="填写注册时的真实姓名和新密码，管理员审核通过后生效。" />}
+      <Modal title={adminRecovery ? "管理员找回密码" : "找回密码"} open={recoveryOpen} onCancel={() => { if (!recoveryLoading) setRecoveryOpen(false); }} onOk={submitRecovery} confirmLoading={recoveryLoading} okText={adminRecovery ? "重置密码" : "提交申请"} cancelButtonProps={{ disabled: recoveryLoading }} mask={{closable:!recoveryLoading}}>
+        {!adminRecovery && <Alert className={styles.alert} type="info" showIcon title="填写注册时的真实姓名和新密码，管理员审核通过后生效。" />}
         <Form form={recoveryForm} layout="vertical">
           {!adminRecovery && <Form.Item name="name" label="真实姓名" rules={[{ required: true, whitespace: true, message: "请输入注册时的真实姓名" }]}><Input maxLength={100} autoComplete="name" placeholder="注册时填写的真实姓名" /></Form.Item>}
           {adminRecovery && <Form.Item name="recoveryCode" label="管理员恢复码" rules={[{ required: true, message: "请输入恢复码" }]}><Input.Password autoComplete="off" /></Form.Item>}

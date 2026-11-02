@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
-import cron from "../server/node_modules/node-cron/src/node-cron.js";
+import { createRequire } from "node:module";
+const cron = createRequire(new URL("../server/package.json", import.meta.url))("node-cron");
 
 // All storage and delivery are isolated from production.
 const directory = mkdtempSync(path.join(os.tmpdir(), "teao-cron-compat-"));
@@ -27,12 +28,12 @@ function trackedCron() {
   return { tasks, validate: cron.validate, schedule(expression, callback, options) {
     const task = cron.schedule(expression, callback, options);
     tasks.push(task);
-    assert.match(task.options.name, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.ok(task.id, "scheduled task has a public id");
     return task;
   } };
 }
 
-test("real cron with patched uuid preserves production and standard reminder lifecycle", async () => {
+test("real cron preserves production and standard reminder lifecycle without registry leaks", async () => {
   const config = await import("../server/config.js");
   const { createProductionScheduler } = await import("../server/services/production-report-scheduler.js");
   const store = await import("../server/services/standard-store.js");
@@ -41,8 +42,7 @@ test("real cron with patched uuid preserves production and standard reminder lif
   const reminderCron = trackedCron();
   let sends = 0;
   let checks = 0;
-  // Start outside the matching second: node-cron checks synchronously on start,
-  // so an every-second expression can legitimately fire during schedule().
+  // Start outside the matching second so startup must not send a report.
   const laterSecond = (new Date().getSeconds() + 30) % 60;
   config.writeConfig({ ...config.DEFAULT_CONFIG, enabled: true, cronExpression: `${laterSecond} * * * * *`, wecomWebhook: "" });
   const scheduler = createProductionScheduler(productionCron, async () => {
@@ -56,6 +56,7 @@ test("real cron with patched uuid preserves production and standard reminder lif
     config.writeConfig({ ...config.readConfig(), cronExpression: "* * * * * *" });
     await waitFor(() => sends > 0);
     scheduler.stop();
+    assert(productionCron.tasks.every(task => !cron.getTasks().has(task.id)), "stopped production tasks leave the registry");
     const stopped = sends;
     await delay(1100);
     assert.equal(sends, stopped, "stop cancels the real cron timer");
@@ -76,18 +77,19 @@ test("real cron with patched uuid preserves production and standard reminder lif
     reminders.start(reminderCron);
     assert.equal(reminderCron.tasks.length, 1, "repeated start creates one reminder task");
     assert.equal(checks, 0, "reminder must not catch up immediately on startup");
-    await reminderCron.tasks[0].now();
+    await reminderCron.tasks[0].execute();
     assert.equal(checks, 1, "scheduled reminder callback remains callable");
     reminders.stop();
+    assert.equal(cron.getTasks().has(reminderCron.tasks[0].id), false, "stopped reminder leaves the registry");
     reminders.start(reminderCron);
     assert.equal(reminderCron.tasks.length, 2, "reminder restarts after stop");
     assert.equal(checks, 1, "restart does not run an extra check");
-    assert.equal(new Set([...productionCron.tasks, ...reminderCron.tasks].map(task => task.options.name)).size,
-      productionCron.tasks.length + reminderCron.tasks.length, "uuid v4 task names remain unique");
+    assert.equal(new Set([...productionCron.tasks, ...reminderCron.tasks].map(task => task.id)).size,
+      productionCron.tasks.length + reminderCron.tasks.length, "public task ids remain unique");
   } finally {
     scheduler.stop();
     reminders?.stop();
-    for (const task of [...productionCron.tasks, ...reminderCron.tasks]) task.stop();
+    for (const task of [...productionCron.tasks, ...reminderCron.tasks]) task.destroy();
     cron.getTasks().clear();
     store.closeDB();
   }

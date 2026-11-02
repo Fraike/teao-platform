@@ -37,5 +37,9 @@ export function createProductPdfResourceCache<T extends PdfResourceDocument>(loa
 // Dynamic imports keep PDF workers out of initial page bundles and resource unit tests.
 export const productPdfResources=createProductPdfResourceCache({
  fetch:async(key:string)=>(await import('./productFiles')).productBinary(key),
- parse:async(blob:Blob)=>{const task=(await import('./productPdf')).loadProductPdf(new Uint8Array(await blob.arrayBuffer()));return {document:await task.promise,destroy:()=>task.destroy()};},
+ parse:async(blob:Blob)=>{
+  const task=(await import('./productPdf')).loadProductPdf(new Uint8Array(await blob.arrayBuffer()));
+  try{return {document:await task.promise,destroy:()=>task.destroy()};}
+  catch(error){try{await task.destroy();}catch{/* Preserve the original parse failure. */}throw error;}
+ },
 });

@@ -7,8 +7,8 @@ import {ProductPdfViewer} from '../src/components/ProductPdfViewer.tsx';
 import {productPdfResources} from '../src/lib/productPdfResources.ts';
 import {TabPageContext} from '../src/lib/tabPageContext.tsx';
 import {getTabPage} from '../src/lib/tabPageCache.ts';
-const channel=globalThis.MessageChannel;Object.defineProperty(globalThis,'MessageChannel',{value:undefined,configurable:true,writable:true});
-after(()=>{window.close();globalThis.MessageChannel=channel;});
+
+after(()=>{window.close();});
 test('PDF controls survive cold remount under the same tab snapshot',async()=>{
  const original=productPdfResources.document;
  const sheet={rotate:0,getViewport:()=>({width:300,height:200}),render:()=>({promise:Promise.resolve(),cancel:()=>{}})};

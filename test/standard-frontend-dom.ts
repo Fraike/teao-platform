@@ -1,4 +1,25 @@
 import { JSDOM } from 'jsdom';
+import {after} from 'node:test';
+import {MessageChannel as NativeMessageChannel} from 'node:worker_threads';
+const channels: NativeMessageChannel[]=[];
+// Antd 6 schedules work through MessageChannel. Keep real async delivery,
+// but let Node finish after the tests instead of keeping every port alive.
+class TestMessageChannel extends NativeMessageChannel {
+  constructor(){
+    super();channels.push(this);
+    for(const port of [this.port1,this.port2]){
+      let prototype=Object.getPrototypeOf(port);
+      while(prototype&&!Object.getOwnPropertyDescriptor(prototype,'onmessage'))prototype=Object.getPrototypeOf(prototype);
+      const descriptor=Object.getOwnPropertyDescriptor(prototype,'onmessage')!;
+      Object.defineProperty(port,'onmessage',{
+        get:()=>descriptor.get?.call(port),
+        set:listener=>{descriptor.set?.call(port,listener);port.unref();},
+      });
+      port.unref();
+    }
+  }
+}
+after(()=>{for(const channel of channels){channel.port1.close();channel.port2.close();}dom.window.close();});
 const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
 export const observers: ResizeObserverDouble[] = [];
 class ResizeObserverDouble {
@@ -15,6 +36,8 @@ class ResizeObserverDouble {
 Object.assign(globalThis, {
   window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement,
   Element: dom.window.Element, localStorage: dom.window.localStorage, SVGElement: dom.window.SVGElement, ShadowRoot: dom.window.ShadowRoot,
+  HTMLInputElement: dom.window.HTMLInputElement, HTMLTextAreaElement: dom.window.HTMLTextAreaElement, HTMLBodyElement: dom.window.HTMLBodyElement,
+  MessageChannel: TestMessageChannel,
   MutationObserver: dom.window.MutationObserver, ResizeObserver: ResizeObserverDouble,
   getComputedStyle: (element: Element) => dom.window.getComputedStyle(element),
   requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),

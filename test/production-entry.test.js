@@ -74,13 +74,13 @@ try {
     { id: "2314559979366968320", name: "塑胶配件", children: [] },
   ] }));
   assert.deepEqual(productIdentity.getTrustedProductionProduct("assembly", "finished-1"), {
-    productId: "finished-1", productNumber: "SP0001", productName: "可信成品",
+    productId: "finished-1", productNumber: "SP0001", productName: "可信成品", spec: "",
   });
   assert.deepEqual(productIdentity.getTrustedProductionProduct("injection", "plastic-1"), {
     productId: "plastic-1", productNumber: "B0001", productName: "可信塑胶件",
   });
   assert.deepEqual(productIdentity.getTrustedProductionProduct("assembly", "finished-root"), {
-    productId: "finished-root", productNumber: "SP-ROOT", productName: "根分类成品",
+    productId: "finished-root", productNumber: "SP-ROOT", productName: "根分类成品", spec: "",
   });
   assert.equal(productIdentity.getTrustedProductionProduct("assembly", "missing-category").productNumber, "SP0201-A");
   assert.equal(productIdentity.getTrustedProductionProduct("assembly", "blank-category").productNumber, "UNC1");

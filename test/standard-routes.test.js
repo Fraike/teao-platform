@@ -7,6 +7,8 @@ const require = createRequire(new URL('../server/package.json', import.meta.url)
 const express=require('express'), jwt=require('jsonwebtoken');
 process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'standard-routes-'));
 process.env.JWT_SECRET='isolated-test-secret-at-least-32-characters';
+// Isolate application config from the invoking shell; network sends below are mocked.
+process.env.WECOM_CORP_ID='';process.env.WECOM_AGENT_ID='';process.env.WECOM_APP_SECRET='';
 process.env.PRODUCTION_CONFIG_PATH=path.join(process.env.DATA_DIR,'config.json');
 writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));
 let users=[{id:'admin',username:'admin',name:'管理员',role:'admin',status:'active',permissions:[],passwordVersion:0,wecomUserid:''},{id:'editor',username:'editor',name:'甲',role:'user',status:'active',permissions:['engineering_submit'],passwordVersion:0,wecomUserid:''},
@@ -38,20 +40,27 @@ try {
  assert.equal((await call('admin',`/api/standards/${id}/remind`,'POST',{versionNo:999})).status,409);
  const reminder=await call('editor',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
  assert.equal(reminder.status,200);assert.equal(reminder.body.status,'not_configured');
- const originalFetch=globalThis.fetch;let manualSends=0;
+ const originalFetch=globalThis.fetch;let manualSends=0;const recipients=[];
  const mockWebhook='https://example.invalid/manual-reminder-test';
  writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:mockWebhook}));
+ process.env.WECOM_CORP_ID='test-corp';process.env.WECOM_AGENT_ID='1';process.env.WECOM_APP_SECRET='mock-secret';
+ users=users.map(u=>u.id==='reviewer'?{...u,wecomUserid:'reviewer-private-id'}:u);save();
  globalThis.fetch=async(url,options)=>{
-  if(String(url)===mockWebhook){manualSends++;return Response.json({errcode:0});}
-  return originalFetch(url,options);
+  if(String(url).startsWith('http://127.0.0.1:')) return originalFetch(url,options);
+  if(String(url).startsWith('https://qyapi.weixin.qq.com/cgi-bin/gettoken?')) return Response.json({errcode:0,access_token:'mock-access-token',expires_in:7200});
+  if(String(url)==='https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=mock-access-token'){
+   manualSends++;const payload=JSON.parse(options.body);recipients.push(payload.touser);assert.equal(payload.agentid,1);assert.equal(payload.msgtype,'text');
+   assert(!payload.text.content.includes('查看并审核'));assert(!payload.text.mentioned_list);return Response.json({errcode:0});
+  }
+  throw new Error('Unexpected external network destination in isolated route test');
  };
  try {
   const sent=await call('editor',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
-  assert.equal(sent.status,200);assert.equal(sent.body.status,'sent');assert.equal(sent.body.mentionedReviewer,false);
+  assert.equal(sent.status,200);assert.equal(sent.body.status,'sent');assert.equal(sent.body.channel,'app');assert.equal(sent.body.recipientDelivered,true);assert.deepEqual(recipients,['reviewer-private-id']);
   const cooled=await call('admin',`/api/standards/${id}/remind`,'POST',{versionNo:d.versions[0].versionNo});
   assert.equal(cooled.status,429);assert.equal(cooled.body.code,'REMINDER_COOLDOWN');assert(Date.parse(cooled.body.retryAt)>Date.now());
   assert.equal(manualSends,1);
- } finally {globalThis.fetch=originalFetch;writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));}
+ } finally {globalThis.fetch=originalFetch;process.env.WECOM_CORP_ID='';process.env.WECOM_AGENT_ID='';process.env.WECOM_APP_SECRET='';writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));}
  assert.equal((await call('reviewer',`/api/standards/${id}/review`,'POST',{...expected(),approve:'false'})).status,400);
  r=await call('reviewer',`/api/standards/${id}/review`,'POST',{...expected(),approve:true});d=r.body.data;assert.equal(r.status,200);
  const printable=await call('reader',`/api/standards/${id}?summary=true&comments=current`);

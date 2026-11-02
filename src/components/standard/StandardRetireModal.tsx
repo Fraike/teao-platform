@@ -53,14 +53,14 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
     submitting.current = true;
     setSaving(true);
     try {
-      const { data, notification } = await api.post<{ data: StandardDetail; notification?: {status:string;mentionedReviewer?:boolean} }>(`/api/standards/${target.id}/${direct ? "retire" : "retirement-requests"}`, {
+      const { data, notification } = await api.post<{ data: StandardDetail; notification?: {status:string} }>(`/api/standards/${target.id}/${direct ? "retire" : "retirement-requests"}`, {
         versionId: version.id, revision: version.revision, reason: reason.trim(), ...(!direct ? { reviewerId } : {}),
       });
       onRetired(data);
       onClose();
       if (direct) message.success("标准已停用，历史已保留");
-      else if (notification?.status === "sent" && notification.mentionedReviewer) message.success("停用申请已提交并提醒审核人，当前标准继续生效");
-      else message.warning("停用申请已提交，当前标准继续生效；群提醒或 @ 送达未确认，请核查通知配置");
+      else if (notification?.status === "sent") message.success("停用申请已提交并提醒审核人，当前标准继续生效");
+      else message.warning("停用申请已提交，当前标准继续生效；审核人应用通知未送达或结果不确定，请核查账号绑定、权限及应用配置");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "停用失败，请刷新后重试");
     } finally {
@@ -71,10 +71,10 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
 
   return <Modal getContainer={tab.container ?? undefined} open title={`${direct ? "停用标准" : "申请停用"} · ${target.serialNo}`} okText={direct ? "确认停用" : "提交申请"} cancelText="取消"
     okButtonProps={{ danger: true, disabled: !version || Boolean(error) || !reason.trim() || (!direct && !reviewerId) }}
-    confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving}
+    confirmLoading={saving} closable={!saving} mask={{closable:!saving}} keyboard={!saving}
     cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!submitting.current) onClose(); }} onOk={() => void retire()}>
     <p>{direct ? "停用后不可用于生产，完整属性、历史版本与批注仍会保留。" : "选择一位有直接停用权限的审核人；审核通过前，当前标准继续生效。"}</p>
-    {error && <Alert className={styles.feedback} type="error" showIcon message={error} />}
+    {error && <Alert className={styles.feedback} type="error" showIcon title={error} />}
     {!direct && <Select className={styles.reviewerSelect} aria-label="停用审核人" placeholder="请选择停用审核人" value={reviewerId} onChange={setReviewerId}
       showSearch optionFilterProp="label" disabled={saving} options={reviewers.map(person=>({value:person.id,label:person.name}))} />}
     {!direct && !reviewers.length && <p>暂无可选审核人，请联系管理员。</p>}

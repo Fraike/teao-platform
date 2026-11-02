@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import {test,after} from 'node:test';import './standard-frontend-dom.ts';import {createElement,act} from 'react';import {createRoot} from 'react-dom/client';
 import {ProductDrawings} from '../src/components/ProductDrawings.tsx';import type {ProductArchive,ProductDrawing} from '../src/types/product.ts';
-const channel=globalThis.MessageChannel;Object.defineProperty(globalThis,'MessageChannel',{value:undefined,configurable:true,writable:true});after(()=>{window.close();globalThis.MessageChannel=channel;});
+after(()=>{window.close();});
 const wait=()=>act(async()=>{await new Promise(r=>setTimeout(r,70));});
 test('A manual supplement selection is cleared after A to B to A customer switches',async()=>{
  const fetch=globalThis.fetch;globalThis.fetch=()=>new Promise(()=>{});
@@ -9,7 +9,7 @@ test('A manual supplement selection is cleared after A to B to A customer switch
  const root=createRoot(document.getElementById('root')!);const render=(standardId:string)=>act(()=>root.render(createElement(ProductDrawings,{product,drawings,standardId,canManage:false,onChanged:()=>{}})));
  try{
   await render('a');await wait();assert.equal(document.querySelector('strong')!.textContent,'main.pdf');
-  await act(()=>document.querySelector('.ant-select-selector')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));await wait();
+  await act(()=>document.querySelector('.ant-select [role="combobox"]')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));await wait();
   const option=[...document.querySelectorAll<HTMLElement>('.ant-select-item-option-content')].find(e=>e.textContent?.includes('supplement.pdf'))!;assert(option);await act(()=>option.click());await wait();assert.equal(document.querySelector('strong')!.textContent,'supplement.pdf');
   await render('b');await wait();assert.equal(document.querySelector('strong')!.textContent,'main.pdf');await render('a');await wait();assert.equal(document.querySelector('strong')!.textContent,'main.pdf');
  }finally{await act(()=>root.unmount());globalThis.fetch=fetch;}

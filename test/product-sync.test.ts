@@ -12,9 +12,9 @@ try{
  fail=true;await assert.rejects(()=>sync.run(),/离线/);
  assert.equal(store.list([]).length,1);assert.equal(store.syncState().lastSuccessAt,success);
  assert.equal(store.syncState().error,"离线");
- let expression="";const task={stop:()=>{}};
+ let expression="", destroyed=0;const task={stop:()=>{},destroy:()=>{destroyed++;}};
  sync.start({schedule:(expr)=>{expression=expr;return task;}});
- assert.equal(expression,"0 * * * *");sync.stop();
+ assert.equal(expression,"0 * * * *");sync.stop();assert.equal(destroyed,1,"stop releases the scheduler registry entry");
  const diskFail=createProductSync(store,{materials:async()=>[{id:'2',number:'P2',name:'不应提交'}],categories:async()=>[],writeCache:()=>{throw new Error('磁盘不可写');}});
  await assert.rejects(()=>diskFail.run(),/磁盘/);
  assert.equal(store.list([]).some(p=>p.internalNumber==='P2'),false,'缓存失败时目录事务必须回滚');

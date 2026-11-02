@@ -11,7 +11,7 @@ store.initDB();
 const { createStandardReviewReminders } = await import("../server/services/standard-review-reminders.js");
 const db = store.getDB();
 const submitter = { id: "submitter", name: "提交人" };
-const reviewer = { id: "reviewer", name: "审核人", status: "active", wecomUserid: "reviewer-wecom" };
+const reviewer = { id: "reviewer", name: "审核人", status: "active", permissions: ["engineering_review"], wecomUserid: "reviewer-wecom" };
 const users = [reviewer];
 const submitted = Date.parse("2026-10-18T23:59:00.000Z");
 let now = submitted;
@@ -26,8 +26,8 @@ function pending(code) {
   return store.getStandard(detail.id);
 }
 const dependencies = {
-  now: () => now, users: () => users, config: () => ({ ...calendar, wecomWebhook: configured ? "https://example.invalid/mock" : "" }),
-  send: async (_webhook, content, mentions, options) => { calls.push({ content, mentions, shouldSend: options?.shouldSend }); if (fail) throw new Error("test send failure"); },
+  now: () => now, users: () => users, config: () => ({ ...calendar, app: {corpId: "test", agentId: "1", secret: configured ? "mock" : ""} }),
+  send: async (userid, content, options) => { calls.push({ content, userid, shouldSend: options?.shouldSend }); if (fail) throw new Error("test send failure"); },
 };
 const first = pending("TEST-ONE"), second = pending("TEST-TWO");
 const service = createStandardReviewReminders(dependencies);
@@ -37,7 +37,8 @@ at('2026-10-19T08:00:00');
 await Promise.all([service.tick(), createStandardReviewReminders(dependencies).tick()]);
 assert.equal(calls.length, 1, "one grouped reminder per reviewer per day across workers");
 assert(calls[0].content.includes("TEST-ONE") && calls[0].content.includes("TEST-TWO"));
-assert.deepEqual(calls[0].mentions, ["reviewer-wecom"]);
+assert.equal(calls[0].userid, "reviewer-wecom");
+assert(!calls[0].content.includes("查看并审核"));
 assert(!calls[0].content.includes('两小时'));
 await createStandardReviewReminders(dependencies).tick(); assert.equal(calls.length, 1, "restart preserves daily deduplication");
 at('2026-10-19T08:01:00');await service.tick();assert.equal(calls.length,1);
@@ -57,11 +58,11 @@ calendar.makeupWorkdays.push('2026-10-25'); await service.tick(); assert.equal(c
 at('2026-10-26T08:00:00'); configured=false; await service.tick(); assert.equal(calls.length,5);
 configured=true; fail=true; await service.tick(); assert.equal(calls.length,6);
 fail=false; await service.tick(); assert.equal(calls.length,6,'uncertain failure does not resend the same day');
-at('2026-10-27T08:00:00'); reviewer.wecomUserid=''; await service.tick(); assert.equal(calls.length,7);
-assert.deepEqual(calls.at(-1).mentions,[]);
-at('2026-10-28T08:00:00'); reviewer.status='disabled'; await service.tick(); assert.equal(calls.length,7);
-reviewer.status='active'; reviewer.id=submitter.id; await service.tick(); assert.equal(calls.length,7);
-reviewer.id='reviewer'; reviewer.name='审核人'.repeat(40);
+at('2026-10-27T08:00:00'); reviewer.wecomUserid=''; await service.tick(); assert.equal(calls.length,6);
+assert.equal(db.prepare("SELECT status FROM standard_review_reminders WHERE version_id=? AND submitted_at=?").get(resubmitted.versions[0].id, "2026-10-20T00:00:00.000Z").status,'unbound');
+at('2026-10-28T08:00:00'); reviewer.status='disabled'; await service.tick(); assert.equal(calls.length,6);
+reviewer.status='active'; reviewer.id=submitter.id; await service.tick(); assert.equal(calls.length,6);
+reviewer.id='reviewer'; reviewer.wecomUserid='reviewer-wecom'; reviewer.name='审核人'.repeat(40);
 for (let index=0;index<205;index++) {
  const detail=pending(`LONG-${index}`);
  db.prepare("UPDATE product_standard_versions SET customer=?,model=? WHERE id=?").run('客户'.repeat(50),'型号'.repeat(50),detail.versions[0].id);
@@ -69,7 +70,7 @@ for (let index=0;index<205;index++) {
 calls=[]; await service.tick(); assert(calls.length>1);
 assert(calls.some(call=>call.content.includes('LONG-204')),'daily grouping must not silently truncate after 200 items');
 assert(calls.every(call=>Buffer.byteLength(call.content,'utf8')<=2048));
-assert(calls.every(call=>!call.mentions.includes('@all')));
+assert(calls.every(call=>call.userid==='reviewer-wecom'));
 let schedules=0,stops=0,callback;
 const count=calls.length;
 const fakeCron={schedule(expression,handler,options){
@@ -82,7 +83,7 @@ at('2026-10-29T08:00:00');await callback();assert(calls.length>count);
 service.stop();assert.equal(stops,1);
 const { withPublicationQueue } = await import('../server/services/standard-notification-queue.js');
 let release;
-const blocking = withPublicationQueue('https://example.invalid/mock', () => new Promise(resolve => { release=resolve; }));
+const blocking = withPublicationQueue('app:test:1', () => new Promise(resolve => { release=resolve; }));
 await new Promise(resolve=>setImmediate(resolve));
 at('2026-10-30T08:00:00');const queued=service.tick();
 await new Promise(resolve=>setImmediate(resolve));

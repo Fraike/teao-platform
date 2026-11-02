@@ -30,7 +30,7 @@ export function ProductDrawingGuide(){
       <p>文件要求：仅 PDF，单份最大 25MiB，每一页横向，文字方向正确。上传、停用需具备图纸管理权限。</p>
       <p>查看图纸：双击放大至 150%，再次双击恢复整页；按住鼠标左键拖动查看。也可旋转、下载和打印。</p>
       <p className={styles.note}>共用图需逐一核对适用料号，不会自动覆盖整个系列。点击下图可放大查看。</p>
-      <div className={styles.graphic}><Image src="/assets/guides/drawing-guide-general.png" loading="lazy" alt="成品与半成品图纸检查与上传简版指引" preview={{visible:active&&open&&preview,onVisibleChange:setPreview,getContainer:()=>context?.container||document.body}} /></div>
+      <div className={styles.graphic}><Image src="/assets/guides/drawing-guide-general.png" loading="lazy" alt="成品与半成品图纸检查与上传简版指引" preview={{open:active&&open&&preview,onOpenChange:setPreview,getContainer:()=>context?.container||document.body}} /></div>
       </div>}
     </Modal></>;
 }

@@ -16,7 +16,7 @@ test('unprivileged retirement is an application requiring an eligible reviewer',
   assert(document.body.textContent?.includes('申请停用'));const textarea=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="停用原因"]')!;
   await act(()=>{Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,'客户停产');textarea.dispatchEvent(new window.Event('input',{bubbles:true}));});
   const submit=[...document.querySelectorAll('button')].find(b=>b.textContent?.replace(/\s/g,'')==='提交申请')!;assert(submit.disabled);assert.equal(calls,0);
-  await act(()=>document.querySelector('.ant-select-selector')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));
+  await act(()=>document.querySelector('.ant-select [role="combobox"]')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));
   await act(()=>[...document.querySelectorAll('.ant-select-item-option')].find(e=>e.textContent?.includes('可停用人员'))!.dispatchEvent(new window.MouseEvent('click',{bubbles:true})));
   await act(async()=>{submit.click();submit.click();});assert.equal(calls,1);assert.equal(finished,1);
  }finally{await act(()=>root.unmount());api.get=oldGet;api.post=oldPost;}
@@ -63,7 +63,7 @@ test('application from detail immediately refreshes the request panel and disabl
   const trigger=[...document.querySelectorAll('button')].find(b=>b.textContent?.replace(/\s/g,'')==='申请停用')!;
   await act(()=>trigger.click());
   await act(()=>{const textarea=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="停用原因"]')!;Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,'客户停产');textarea.dispatchEvent(new window.Event('input',{bubbles:true}));});
-  await act(()=>document.querySelector('.ant-select-selector')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));
+  await act(()=>document.querySelector('.ant-select [role="combobox"]')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true})));
   await act(()=>[...document.querySelectorAll('.ant-select-item-option')].find(e=>e.textContent?.includes('可停用人员'))!.dispatchEvent(new window.MouseEvent('click',{bubbles:true})));
   await act(async()=>{[...document.querySelectorAll('button')].find(b=>b.textContent?.replace(/\s/g,'')==='提交申请')!.click();});
   assert.equal(changed,1);assert(reads>=2,'pending request panel must refresh without a standard revision change');

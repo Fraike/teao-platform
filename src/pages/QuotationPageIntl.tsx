@@ -17,7 +17,6 @@ import { MoldCardIntl } from "../components/MoldCard";
 import { ExportSettingsCardIntl } from "../components/ExportSettingsCard";
 import PreviewPanelIntl from "../components/intl/PreviewPanelIntl";
 import { useIntlQuotationStore } from "../lib/store";
-import { exportPDFIntl } from "../lib/pdf";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
@@ -75,6 +74,7 @@ export default function QuotationPageIntl({ headerHeight }: Props) {
     if (!await confirmTierValidation()) return;
 
     try {
+      const { exportPDFIntl } = await import("../lib/pdf");
       await exportPDFIntl(previewRef.current, quotation);
 
       messageApi.success("PDF exported");

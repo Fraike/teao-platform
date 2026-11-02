@@ -1,7 +1,7 @@
 import { getDB, listCategories } from "./standard-store.js";
 import { listUsers } from "./users.js";
 import { readConfig, formatShanghaiDate, isRestDay } from "../config.js";
-import { sendWecomText } from "./wecom.js";
+import { sendWecomAppText, readWecomAppConfig, isWecomAppConfigured, appNotificationStatus } from "./wecom-app.ts";
 import { splitStandardPublication } from "./standard-publication.js";
 import { withPublicationQueue } from "./standard-notify.js";
 import { isReleaseMaintenance } from "./release-maintenance.js";
@@ -32,11 +32,19 @@ function nextReminderAt(at, configuration) {
   return undefined;
 }
 
+function appQueueKey(configuration) {
+  const app = configuration.app || readWecomAppConfig();
+  return `app:${app.corpId}:${app.agentId}`;
+}
+function eligible(user) {
+  return user?.status === 'active' && (user.role === 'admin' || user.permissions?.includes('engineering_review'));
+}
+
 function automaticWindow(now, config, slot, webhook) {
   const at = now(), configuration = config();
   const local = new Date(at + 8 * 60 * 60 * 1000);
   return formatShanghaiDate(new Date(at)) === slot.day && local.getUTCHours() === slot.hour
-    && !isRestDay(slot.day, configuration) && configuration.wecomWebhook === webhook ? at : null;
+    && !isRestDay(slot.day, configuration) && isWecomAppConfigured(configuration.app || readWecomAppConfig()) && appQueueKey(configuration) === webhook ? at : null;
 }
 
 const pendingCondition = `v.status='pending_review' AND v.assigned_reviewer_id<>''
@@ -45,7 +53,7 @@ const pendingCondition = `v.status='pending_review' AND v.assigned_reviewer_id<>
     WHERE newer.standard_id=v.standard_id AND newer.version_no>v.version_no)`;
 
 function dueItems(d, now, activeIds, slot) {
-  return d.prepare(`SELECT v.id,v.standard_id,v.submitted_at,v.assigned_reviewer_id,
+  return d.prepare(`SELECT v.id,v.version_no,v.standard_id,v.submitted_at,v.assigned_reviewer_id,
     v.submitted_by_id,v.submitted_by,v.customer,v.model,v.category_key,s.serial_no
     FROM product_standard_versions v JOIN product_standards s ON s.id=v.standard_id
     WHERE ${pendingCondition}
@@ -94,7 +102,7 @@ function text(value) {
   return [...String(value || "—").replace(/[\r\n]/g, " ")].slice(0, 100).join("");
 }
 
-async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, automaticAt, slot) {
+async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, automaticAt, slot, currentUsers) {
   return withPublicationQueue(webhook, async () => {
     const prepared = prepareManual?.();
     const checkedAt = automaticAt?.();
@@ -107,28 +115,36 @@ async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, a
       const previous = d.prepare("SELECT last_attempt_at FROM standard_review_reminders WHERE version_id=? AND submitted_at=?").get(items[0].id, items[0].submitted_at);
       return { status: "cooldown", retryAt: new Date(previous.last_attempt_at + MANUAL_REMINDER_COOLDOWN_MS).toISOString() };
     }
+    if (!reviewer.wecomUserid) {
+      for (const item of claimed) d.prepare("UPDATE standard_review_reminders SET status='unbound' WHERE version_id=? AND submitted_at=?").run(item.id, item.submitted_at);
+      return { status: 'unbound', channel: 'app' };
+    }
     const header = `【产品标准待审核提醒】审核人：${text(reviewer.name || reviewer.username)}，当前有 ${claimed.length} 条标准待处理：\n`;
     const names = new Map(listCategories().map(category => [category.key, category.name]));
     const lines = claimed.map(item => {
       const identity = standardNotificationIdentity({ id: item.standard_id, serialNo: item.serial_no },
         { categoryKey: item.category_key, customer: text(item.customer), model: text(item.model), status: 'pending_review' }, names);
-      return `${identity.details}\n提交人：${text(item.submitted_by)}\n查看并审核：${identity.url}`;
+      return `${identity.details}\n版本：V${item.version_no}`;
     });
-    const content = `${header}${lines.join("\n\n")}\n请进入产品标准页面，筛选“待审核”，点击“审核”核对并处理。未处理的标准在工作日08:00、13:00各提醒一次。`;
+    const content = `${header}${lines.join("\n\n")}`;
     const prefixSize = Buffer.byteLength(`【待审提醒 ${text(reviewer.name || reviewer.username)} 999999/999999】\n`, "utf8");
     const parts = splitStandardPublication(content, Math.min(1800, 2048 - prefixSize));
     let status = "sent";
     let sentParts = 0;
-    const stillPending = automaticAt ? pendingGuard(d, claimed) : null;
+    const stillPending = pendingGuard(d, claimed);
+    const binding = reviewer.wecomUserid;
     try {
       for (const [index, part] of parts.entries()) {
-        await send(webhook, `【待审提醒 ${text(reviewer.name || reviewer.username)} ${index + 1}/${parts.length}】\n${part}`,
-          index === 0 && reviewer.wecomUserid ? [reviewer.wecomUserid] : [],
-          automaticAt ? { shouldSend: () => automaticAt() !== null && stillPending() } : undefined);
+        await send(reviewer.wecomUserid, `【待审提醒 ${text(reviewer.name || reviewer.username)} ${index + 1}/${parts.length}】\n${part}`,
+          { shouldSend: () => {
+            const current = currentUsers().find(user => user.id === reviewer.id);
+            return eligible(current) && current.wecomUserid === binding && stillPending()
+              && (!automaticAt || automaticAt() !== null);
+          } });
         sentParts++;
       }
     } catch (error) {
-      status = error.code === "SEND_REJECTED" ? "failed" : error.code === "SEND_CANCELLED" ? "cancelled" : "unknown";
+      status = appNotificationStatus(error);
       console.error(`[standards-reminder] ${status}; reviewer=${reviewer.id}; count=${claimed.length}`);
     }
     d.transaction(() => {
@@ -137,7 +153,7 @@ async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, a
         WHERE version_id=? AND submitted_at=? AND last_attempt_at=?`)
         .run(status, status, now, item.id, item.submitted_at, now);
     })();
-    return { status, sentParts, totalParts: parts.length, mentionedReviewer: status === "sent" && Boolean(reviewer.wecomUserid),
+    return { status, sentParts, totalParts: parts.length, channel: "app", recipientDelivered: status === "sent",
       retryAt: new Date(now + MANUAL_REMINDER_COOLDOWN_MS).toISOString() };
   });
 }
@@ -158,7 +174,7 @@ function manualItem(d, id, user, expected) {
   return item;
 }
 
-export function createStandardReviewReminders({ now = Date.now, users = listUsers, config = readConfig, send = sendWecomText } = {}) {
+export function createStandardReviewReminders({ now = Date.now, users = listUsers, config = readConfig, send = sendWecomAppText } = {}) {
   const d = getDB();
   initializeReminderSchema(d);
   const runningSlots = new Set();
@@ -166,8 +182,8 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
   async function tick() {
     if (isReleaseMaintenance()) return;
     const configuration = config();
-    const webhook = configuration.wecomWebhook;
-    if (!webhook) return;
+    const webhook = appQueueKey(configuration);
+    if (!isWecomAppConfigured(configuration.app || readWecomAppConfig())) return;
     const at = now();
     const slot = reminderSlot(at, configuration);
     if (!slot) return;
@@ -175,7 +191,7 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
     if (runningSlots.has(slotKey)) return;
     runningSlots.add(slotKey);
     try {
-      const activeUsers = new Map(users().filter(user => user.status === "active").map(user => [user.id, user]));
+      const activeUsers = new Map(users().filter(user => eligible(user)).map(user => [user.id, user]));
       const grouped = new Map();
       for (const item of dueItems(d, at, [...activeUsers.keys()], slot)) {
         if (!activeUsers.has(item.assigned_reviewer_id)) continue;
@@ -188,11 +204,11 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
         const reviewer = activeUsers.get(id);
         const binding = reviewer.wecomUserid;
         const automaticAt = () => {
-          const current = users().find(user => user.id === id && user.status === 'active');
+          const current = users().find(user => user.id === id && eligible(user));
           if (!current || current.wecomUserid !== binding || isReleaseMaintenance()) return null;
           return automaticWindow(now, config, slot, webhook);
         };
-        await sendGroup(d, webhook, reviewer, items, at, send, undefined, automaticAt, slot);
+        await sendGroup(d, webhook, reviewer, items, at, send, undefined, automaticAt, slot, users);
       }
     } finally { runningSlots.delete(slotKey); }
   }
@@ -202,7 +218,7 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
     async remind(id, user, expected) {
       const prepare = () => {
         const item = manualItem(d, id, user, expected);
-        const reviewer = users().find(candidate => candidate.id === item.assigned_reviewer_id && candidate.status === "active");
+        const reviewer = users().find(candidate => candidate.id === item.assigned_reviewer_id && eligible(candidate));
         if (!reviewer || reviewer.id === item.submitted_by_id || (!item.submitted_by_id && reviewer.name === item.submitted_by)) {
           throw Object.assign(new Error("指定审核人无效，请联系管理员处理"), { status: 409 });
         }
@@ -210,15 +226,16 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
       };
       const { item, reviewer, now: at } = prepare();
       const configuration = config();
-      const webhook = configuration.wecomWebhook;
-      if (!webhook) return { status: "not_configured" };
-      const result = await sendGroup(d, webhook, reviewer, [item], at, send, prepare);
+      const webhook = appQueueKey(configuration);
+      if (!isWecomAppConfigured(configuration.app || readWecomAppConfig())) return { status: "not_configured" };
+      if (!reviewer.wecomUserid) return { status: "unbound", nextReminderAt: nextReminderAt(now(), configuration) };
+      const result = await sendGroup(d, webhook, reviewer, [item], at, send, prepare, undefined, undefined, users);
       return { ...result, nextReminderAt: nextReminderAt(now(), configuration) };
     },
     start(cron) {
       if (task) return;
       task = cron.schedule("0 8,13 * * *", safelyTick, { timezone: "Asia/Shanghai" });
     },
-    stop() { task?.stop(); task = null; },
+    stop() { task?.stop(); task?.destroy?.(); task = null; },
   };
 }

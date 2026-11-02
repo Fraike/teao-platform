@@ -10,7 +10,7 @@ const standard = { serialNo: 'SP0006-C', categoryKey: 'gear_damper' };
 const version = { versionNo: 1, fields: { test_standard: '120-160', winter_test_standard: '100-140\n完整冬季要求', unknown: '保留未知值' } };
 
 test('both publication formats distinguish seasons and preserve full winter and unknown values once', () => {
-  const rows = publicationSections(standard, version, category)[1].rows;
+  const rows = publicationSections(standard, version, category)[0].rows;
   assert.deepEqual(rows, [['夏季／常规测试标准gf.cm', '120-160'], ['冬季测试标准', '100-140\n完整冬季要求'], ['unknown', '保留未知值']]);
   for (const text of [buildStandardPublication(standard, version, category, {}),
     buildStandardPublicationMessages(standard, version, category).map(m => m.content).join('\n')]) {
@@ -23,7 +23,7 @@ test('blank winter produces no placeholder notification in either format, includ
   const augmented = { fields: [...category.fields, { key: 'winter_test_standard', label: '冬季测试标准' }] };
   for (const value of [undefined, '', '  ']) {
     const summer = { ...version, fields: { test_standard: '120-160', winter_test_standard: value } };
-    assert(!publicationSections(standard, summer, augmented)[1].rows.some(([label]) => label.includes('冬季')));
+    assert(!publicationSections(standard, summer, augmented)[0].rows.some(([label]) => label.includes('冬季')));
     assert(!buildStandardPublication(standard, summer, augmented, {}).includes('冬季测试标准'));
     assert(!buildStandardPublicationMessages(standard, summer, augmented).some(m => m.content.includes('冬季测试标准')));
   }

@@ -27,7 +27,7 @@ export function UserPermissionDrawer({ open, user, onClose, onChange }: UserPerm
   };
 
   return (
-    <Drawer getContainer={tab.container ?? undefined} title="配置权限" open={open} width={560} rootClassName={styles.drawer}
+    <Drawer getContainer={tab.container ?? undefined} title="配置权限" open={open} size={560} rootClassName={styles.drawer}
       onClose={() => { if (!saving.current) onClose(); }}
       footer={<div className={styles.footer}><span>{savingKey ? "正在保存…" : "开关变更后自动保存"}</span><Button disabled={savingKey !== null} onClick={onClose}>完成</Button></div>}>
       {user && <>
@@ -35,7 +35,7 @@ export function UserPermissionDrawer({ open, user, onClose, onChange }: UserPerm
           <div><strong>{user.name}</strong><span>{user.username}</span></div>
           <Tag color={user.status === "active" ? "green" : "orange"}>{user.status === "active" ? "已激活" : "待审核"}</Tag>
         </div>
-        <Alert className={styles.notice} showIcon type="info" message="已激活账号默认可查看产品标准；新增与提交需单独授权。" />
+        <Alert className={styles.notice} showIcon type="info" title="已激活账号默认可查看产品标准；新增与提交需单独授权。" />
         {USER_PERMISSION_SECTIONS.map(section => (
           <section key={section.key} className={styles.section} aria-label={section.title}>
             <header className={styles.sectionHeader}><h3>{section.title}</h3><p>{section.description}</p></header>

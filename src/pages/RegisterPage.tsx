@@ -43,7 +43,7 @@ export function RegisterPage() {
     return (
       <div className={styles.container}>
         <Card className={styles.card}>
-          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          <Space orientation="vertical" size="large" style={{ width: "100%" }}>
             <div className={styles.titleArea}>
               <Title level={3}>申请已提交</Title>
               <Text type="secondary">请等待管理员审核通过后，再登录系统</Text>
@@ -60,13 +60,13 @@ export function RegisterPage() {
   return (
     <div className={styles.container}>
       <Card className={styles.card}>
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        <Space orientation="vertical" size="large" style={{ width: "100%" }}>
           <div className={styles.titleArea}>
             <Title level={3}>申请注册</Title>
             <Text type="secondary">请使用真实姓名提交注册申请</Text>
           </div>
           <Alert
-            message="请使用真实姓名注册，提交后需等待管理员审核通过方可登录。"
+            title="请使用真实姓名注册，提交后需等待管理员审核通过方可登录。"
             type="info"
             showIcon
           />

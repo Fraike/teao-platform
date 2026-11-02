@@ -105,10 +105,11 @@ export function StandardDetailDrawer({
     if (!reviewerId) { message.error("请选择审核人"); return; }
     setActing(true);
     try {
-      const res = await api.post<{ ok: boolean; data: StandardDetail }>(`/api/standards/${detail.id}/submit`, { versionId: current.id, revision: current.revision, reviewerId });
+      const res = await api.post<{ ok: boolean; data: StandardDetail; notification?: { status: string } }>(`/api/standards/${detail.id}/submit`, { versionId: current.id, revision: current.revision, reviewerId });
       setDetail(res.data);
       onChanged(res.data);
-      message.success("已提交审核");
+      if (res.notification?.status === "sent") message.success("已提交审核，并向指定审核人发送应用通知");
+      else message.warning(`已提交审核；${res.notification?.status === "unbound" ? "审核人未绑定企微账号" : res.notification?.status === "not_configured" ? "企业微信自建应用未配置" : res.notification?.status === "unknown" ? "应用通知发送结果不确定，请核查" : "应用通知未送达，请核查审核人权限和应用配置"}`);
     } catch (err) {
       message.error((err as Error).message || "提交失败");
     } finally {
@@ -158,7 +159,7 @@ export function StandardDetailDrawer({
       title={canReviewThis ? "审核产品标准" : "产品标准详情"}
       open={open}
       onClose={onClose}
-      width={640}
+      size={640}
       footer={
         <Space wrap className={canReviewThis ? styles.reviewFooter : undefined}>
           <Button onClick={onClose}>关闭</Button>
@@ -205,8 +206,8 @@ export function StandardDetailDrawer({
         </Space>
       }
     >
-      {current?.status === "pending_review" && current.assignedReviewerName && <Alert type="info" message={`指定审核人：${current.assignedReviewerName}`} />}
-      {canReviewThis && <Alert className={styles.reviewTask} type="warning" showIcon message="待你审核，请核对完整标准和变更对比" description="核对后在底部选择“通过并发布到群”；需修改时填写意见并驳回。" />}
+      {current?.status === "pending_review" && current.assignedReviewerName && <Alert type="info" title={`指定审核人：${current.assignedReviewerName}`} />}
+      {canReviewThis && <Alert className={styles.reviewTask} type="warning" showIcon title="待你审核，请核对完整标准和变更对比" description="核对后在底部选择“通过并发布到群”；需修改时填写意见并驳回。" />}
       {loading ? (
         <Spin size="large" />
       ) : !detail || !current ? (
@@ -228,7 +229,7 @@ export function StandardDetailDrawer({
                 {standardTypeDisplayLabel(current.standardType,current.status)}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label="状态" span={2}>
               <Tag color={statusColor(current.status)}>{STANDARD_STATUS_LABELS[current.status]}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="最后更新" span={2}>
@@ -238,19 +239,19 @@ export function StandardDetailDrawer({
           </Descriptions>
 
           {current.reviewComment && current.status === "draft" && (
-            <Alert className={styles.reviewComment} type="warning" showIcon message="审核驳回意见" description={current.reviewComment} />
+            <Alert className={styles.reviewComment} type="warning" showIcon title="审核驳回意见" description={current.reviewComment} />
           )}
-          {legacyPending && <Alert type="warning" message="旧待审记录缺少提交人身份，请工程人员重新提交审核。" />}
-          {isSubmitter && current.status === "pending_review" && <Alert type="info" message="该标准由你提交，需其他审核人处理。" />}
+          {legacyPending && <Alert type="warning" title="旧待审记录缺少提交人身份，请工程人员重新提交审核。" />}
+          {isSubmitter && current.status === "pending_review" && <Alert type="info" title="该标准由你提交，需其他审核人处理。" />}
           {current.status === "pending_review" && (
             <Table className={styles.reviewComment} size="small" pagination={false} rowKey="key" dataSource={differences}
               title={() => published ? `审核变更对比：V${published.versionNo} → V${current.versionNo}` : "新标准审核：首次发布"}
               columns={[{title:"字段",dataIndex:"label"},{title:"已发布值",dataIndex:"before"},{title:"待审核值",dataIndex:"after"}]} />
           )}
-          {current.status === "deleted" && <Alert type="warning" message="该待审内容已删除并归档，仅供历史追溯，不可用于生产。" />}
+          {current.status === "deleted" && <Alert type="warning" title="该待审内容已删除并归档，仅供历史追溯，不可用于生产。" />}
           {(published || current.status === "obsolete") && <StandardRetirementPanel standardId={detail.id} versionKey={`${current.id}:${current.revision}:${retirementRefresh}`}
             canRetire={canRetire} onPendingChange={setHasRetirementRequest} onChanged={updated => {setDetail(updated);onChanged(updated);}} />}
-          {current.status === "obsolete" && <Alert type="warning" message="该标准已停用，仅供历史追溯，不可用于生产。" />}
+          {current.status === "obsolete" && <Alert type="warning" title="该标准已停用，仅供历史追溯，不可用于生产。" />}
           {user?.role === "admin" && current.status === "published" && <PublicationDeliveryPanel key={`${detail.id}:${current.id}`} standardId={detail.id} />}
           {canReviewThis && (
             <Input.TextArea

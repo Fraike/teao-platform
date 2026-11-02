@@ -1,12 +1,31 @@
 import { readConfig } from "../config.js";
 import { sendWecomText } from "./wecom.js";
-import { listReviewers, findUserByName, getUserById } from "./users.js";
+import { findUserByName, getUserById } from "./users.js";
 import { listCategories, getDB } from "./standard-store.js";
 import { buildStandardPublication, splitStandardPublication } from "./standard-publication.js";
 import { enqueueStandardPublication, publicationResponse } from "./standard-publication-outbox.js";
 import { withPublicationQueue } from "./standard-notification-queue.js";
 import { standardNotificationIdentity } from "./standard-notification-identity.js";
 export { withPublicationQueue } from "./standard-notification-queue.js";
+
+import { sendWecomAppText, appNotificationStatus } from './wecom-app.ts';
+import { canDirectRetire } from './standard-retirement-permissions.js';
+
+function validReviewer(user, submitterId, retirement = false) {
+  return user?.status === 'active' && user.id !== submitterId && (retirement ? canDirectRetire(user) : user.role === 'admin' || user.permissions?.includes('engineering_review'));
+}
+async function sendPrivate(reviewerId, submitterId, content, guard, retirement = false) {
+  const reviewer = getUserById(reviewerId);
+  if (!validReviewer(reviewer, submitterId, retirement)) return { status: 'invalid_reviewer' };
+  const binding = reviewer.wecomUserid;
+  try {
+    for (const part of splitStandardPublication(content, 1800)) await sendWecomAppText(binding, part, { shouldSend: () => {
+      const current = getUserById(reviewerId);
+      return validReviewer(current, submitterId, retirement) && current.wecomUserid === binding && guard();
+    } });
+    return { status: 'sent', channel: 'app', recipientDelivered: true };
+  } catch (error) { return { status: appNotificationStatus(error), channel: 'app' }; }
+}
 
 function stripMarkers(value) {
   return String(value ?? "").replace(/[▲*]/g, "").trim();
@@ -33,42 +52,26 @@ function latestInfo(standard) {
   };
 }
 
-// 提交审核：提醒指定审核人；兼容旧未指定流程。
-export async function notifyReviewRequested(standard, submitterName) {
-  const webhook = resolveWebhook();
-  if (!webhook) return;
+// 待审消息只发送给指定审核人的自建应用账号。
+export async function notifyReviewRequested(standard, submitter) {
+  const version = standard.versions[0];
   const info = latestInfo(standard);
-  const mentions = (info.reviewerId ? [getUserById(info.reviewerId)].filter(Boolean) : listReviewers())
-    .filter((r) => r.id !== submitterName.id)
-    .map((r) => r.wecomUserid)
-    .filter(Boolean);
-  const reviewerName = standard?.versions?.[0]?.assignedReviewerName || (info.reviewerId && getUserById(info.reviewerId)?.name) || "未指定（历史任务）";
-  const identity = standardNotificationIdentity(standard, standard.versions[0], new Map(listCategories().map(category => [category.key, category.name])));
-  const content = `【产品标准待审核】\n${identity.details}\n提交人：${submitterName.name}\n指定审核人：${reviewerName}\n查看并审核：${identity.url}`;
-  const parts = splitStandardPublication(content,1800);
-  return withPublicationQueue(webhook,async () => {
-    try {
-      for (const [index,part] of parts.entries()) await sendWecomText(webhook,part,index===0?mentions:[]);
-    } catch (err) {
-      console.error("[standards-notify] 提交审核提醒发送失败：", err.message);
-    }
-  });
+  const identity = standardNotificationIdentity(standard, version, new Map(listCategories().map(c => [c.key, c.name])));
+  const content = `【产品标准待审核】\n${identity.details}\n版本：V${version.versionNo}\n提交人：${submitter.name}`;
+  const guard = () => Boolean(getDB().prepare(`SELECT id FROM product_standard_versions WHERE id=? AND status='pending_review'
+    AND assigned_reviewer_id=? AND submitted_at=? AND NOT EXISTS (SELECT 1 FROM product_standard_versions newer WHERE newer.standard_id=? AND newer.version_no>?)`)
+    .get(version.id, info.reviewerId, version.submittedAt, standard.id, version.versionNo));
+  return sendPrivate(info.reviewerId, info.submitterId || submitter.id, content, guard);
 }
 
 export async function notifyRetirementRequested(standard, request) {
-  const webhook = resolveWebhook();
-  if (!webhook) return { status: "not_configured" };
-  const reviewer = getUserById(request.reviewerId);
   const version = standard.versions.find(v => v.id === request.versionId);
-  const identity = standardNotificationIdentity(standard, version, new Map(listCategories().map(category => [category.key, category.name])));
-  const content = `【申请停用 · 待审核】\n${identity.details}\n申请人：${request.applicantName}\n指定审核人：${request.reviewerName}\n停用原因：${request.reason}\n查看并处理：${identity.url}\n审核通过前，当前标准继续生效。`;
-  const parts = splitStandardPublication(content,1800);
-  return withPublicationQueue(webhook,async () => {
-    try {
-      for (const [index,part] of parts.entries()) await sendWecomText(webhook,part,index===0 && reviewer?.wecomUserid ? [reviewer.wecomUserid] : []);
-      return {status:"sent",mentionedReviewer:Boolean(reviewer?.wecomUserid)};
-    } catch(error) {return {status:error.code==="SEND_REJECTED"?"failed":"unknown"};}
-  });
+  const identity = standardNotificationIdentity(standard, version, new Map(listCategories().map(c => [c.key, c.name])));
+  const content = `【申请停用 · 待审核】\n${identity.details}\n版本：V${version?.versionNo}\n申请人：${request.applicantName}\n停用原因：${request.reason}`;
+  const guard = () => Boolean(getDB().prepare(`SELECT r.id FROM standard_retirement_requests r JOIN product_standard_versions v ON v.id=r.version_id
+    WHERE r.id=? AND r.status='pending' AND r.reviewer_id=? AND r.revision=? AND v.status='published' AND v.revision=r.version_revision`)
+    .get(request.id, request.reviewerId, request.revision));
+  return sendPrivate(request.reviewerId, request.applicantId, content, guard, true);
 }
 
 // 审核结果：提醒提交人

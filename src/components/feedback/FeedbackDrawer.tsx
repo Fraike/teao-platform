@@ -45,7 +45,7 @@ export function FeedbackDrawer({ open, onClose, pagePath, pageTitle }: FeedbackD
     } catch (error) { message.error(error instanceof Error ? error.message : "提交失败"); }
     finally { setSaving(false); }
   };
-  return <Drawer title="问题与建议" open={open} onClose={onClose} width={860}>
+  return <Drawer title="问题与建议" open={open} onClose={onClose} size={860}>
     <Tabs activeKey={active} onChange={setActive} items={[
       { key: "new", label: "提交反馈", children: <Form form={form} layout="vertical" initialValues={{ category: "data" }} onFinish={submit}>
         <div className={styles.context}>当前页面：{pageTitle} <span>{pagePath}</span></div>

@@ -25,7 +25,7 @@ export function StandardRetirementPanel({ standardId, versionKey, canRetire, onP
   if (!requests.length && !error) return null;
   return <section className={styles.panel} aria-label="停用申请记录">
     <h4>停用申请</h4>
-    {error && <Alert type="error" message={error} />}
+    {error && <Alert type="error" title={error} />}
     {requests.map(request => <RetirementCard key={`${request.id}:${request.revision}`} request={request} standardId={standardId} canRetire={canRetire}
       onReviewed={(data,updated) => { const next = requests.map(r => r.id===updated.id ? updated : r); setRequests(next); onPendingChange?.(next.some(r => r.status === "pending")); onChanged(data); }} />)}
   </section>;

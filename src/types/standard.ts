@@ -158,8 +158,9 @@ export type StandardPublicationNotice = "new" | "changed" | null;
 
 export interface StandardReminderResponse {
   ok: boolean;
-  status: "sent" | "not_configured" | "failed" | "unknown";
-  mentionedReviewer?: boolean;
+  status: "sent" | "not_configured" | "failed" | "unknown" | "unbound" | "invalid_reviewer" | "cancelled";
+  recipientDelivered?: boolean;
+  channel?: "app";
   retryAt?: string;
   nextReminderAt?: string;
 }

@@ -140,14 +140,14 @@ export function EmployeeImportModal({ open, onClose, onSuccess }: EmployeeImport
           <Alert
             type={preview.errors.length > 0 ? "error" : preview.warnings.length > 0 ? "warning" : "success"}
             showIcon
-            message={`${filename}：识别 ${preview.records.length} 名员工，${preview.errors.length} 个错误，${preview.warnings.length} 个提示`}
+            title={`${filename}：识别 ${preview.records.length} 名员工，${preview.errors.length} 个错误，${preview.warnings.length} 个提示`}
           />
 
           {preview.errors.length > 0 && (
-            <Alert className={styles.issueList} type="error" showIcon message="以下问题必须修正后才能导入" description={<ul>{preview.errors.map((error) => <li key={error}>{error}</li>)}</ul>} />
+            <Alert className={styles.issueList} type="error" showIcon title="以下问题必须修正后才能导入" description={<ul>{preview.errors.map((error) => <li key={error}>{error}</li>)}</ul>} />
           )}
           {preview.warnings.length > 0 && (
-            <Alert className={styles.issueList} type="warning" showIcon message="以下内容将按提示规则导入" description={<ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>} />
+            <Alert className={styles.issueList} type="warning" showIcon title="以下内容将按提示规则导入" description={<ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>} />
           )}
 
           <Table<EmployeeImportRecord>

@@ -181,7 +181,7 @@ export function StandardFormModal({
       open={open}
       onCancel={handleClose}
       width={640}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space>
           <Button onClick={handleClose}>取消</Button>

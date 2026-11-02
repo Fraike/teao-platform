@@ -8,6 +8,7 @@ import {
   startAuthSession,
 } from "./authSession";
 import { clearKingdeeCache } from "./kingdeeCache";
+import { setQuotationUserScope } from "./store";
 import { useTabStore } from "./tabStore";
 
 interface AuthState {
@@ -21,20 +22,25 @@ interface AuthState {
   changeAdminPassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
+let authRevision = 0;
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: false,
   initialized: false,
 
   login: async (req) => {
+    const revision = ++authRevision;
     const data = await api.post<{ token: string; user: User }>(
       "/api/auth/login",
       req
     );
+    if (revision !== authRevision) return;
     setToken(data.token, req.rememberLogin === true);
     startAuthSession(req.rememberLogin === true);
     useTabStore.getState().resetForAuthentication();
-    set({ user: data.user });
+    setQuotationUserScope(data.user.id);
+    set({ user: data.user, loading: false });
   },
 
   register: async (req) => {
@@ -46,15 +52,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    authRevision++;
     clearToken();
+    setQuotationUserScope(null);
     clearKingdeeCache();
     useTabStore.getState().resetForAuthentication();
-    set({ user: null });
+    set({ user: null, loading: false });
   },
 
   fetchMe: async () => {
+    const revision = authRevision;
     const token = getToken();
     if (!token) {
+      setQuotationUserScope(null);
       set({ initialized: true });
       return;
     }
@@ -63,12 +73,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (getAuthSessionMode() === "remember") {
         await refreshAuthToken();
       }
+      if (revision !== authRevision) return;
       const user = await api.get<User>("/api/auth/me");
+      if (revision !== authRevision) return;
+      setQuotationUserScope(user.id);
       set({ user, loading: false, initialized: true });
     } catch (err) {
+      if (revision !== authRevision) return;
       // Only clear token on auth errors (401/403), not network errors
       if (isApiError(err) && (err.status === 401 || err.status === 403)) {
         clearToken();
+        setQuotationUserScope(null);
         useTabStore.getState().resetForAuthentication();
         set({ user: null, loading: false, initialized: true });
       } else {

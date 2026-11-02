@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test,after,mock} from 'node:test';
+import {test,mock} from 'node:test';
 import './standard-frontend-dom.ts';
 import {createElement,act} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -7,9 +7,9 @@ import {ProductDrawingUpload} from '../src/components/ProductDrawingUpload.tsx';
 import type {ProductArchive,ProductDrawingInput} from '../src/types/product.ts';
 let validationPages=[{width:842,height:595}];
 mock.module('../src/lib/productPdf.ts',{namedExports:{loadProductPdf:()=>({promise:Promise.resolve({numPages:validationPages.length,getPage:async(number:number)=>({getViewport:()=>validationPages[number-1],cleanup(){}})}),destroy:async()=>{}})}});
-const originalChannel=globalThis.MessageChannel;
-Object.defineProperty(globalThis,'MessageChannel',{value:undefined,configurable:true,writable:true});
-after(()=>Object.defineProperty(globalThis,'MessageChannel',{value:originalChannel,configurable:true,writable:true}));
+
+
+
 const product:ProductArchive={id:'p1',internalNumber:'SP0015-A',kingdeeId:'k1',name:'RD-T008-28',model:'20-40',category:'齿轮阻尼器',categoryId:'2342097486262423552',group:'finished',unit:'个',material:{id:'k1',number:'SP0015-A',name:'RD-T008-28'},kingdeeMissing:false,standards:[],issues:[],drawingCount:0,productionAvailable:true};
 const wait=()=>act(async()=>{await new Promise(r=>setTimeout(r,50));});
 test('manual upload defaults to series drawing number, A1 and geared; edits survive parent refresh',async()=>{
@@ -21,7 +21,7 @@ test('manual upload defaults to series drawing number, A1 and geared; edits surv
   await render(product);await wait();
   assert.equal(document.querySelector<HTMLInputElement>('#drawingNo')!.value,'RD-T008');
   assert.equal(document.querySelector<HTMLInputElement>('#version')!.value,'A1');
-  assert.equal(document.querySelector('#structure')?.closest('.ant-select')?.querySelector('.ant-select-selection-item')?.textContent,'有齿轮');
+  assert.equal(document.querySelector('#structure')?.closest('.ant-select')?.querySelector('.ant-select-content')?.textContent,'有齿轮');
   const drawingNo=document.querySelector<HTMLInputElement>('#drawingNo')!;
   await act(()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')!.set!.call(drawingNo,'RD-T008 客户补充说明');drawingNo.dispatchEvent(new window.Event('input',{bubbles:true}));});
   await render({...product});await wait();assert.equal(drawingNo.value,'RD-T008 客户补充说明');

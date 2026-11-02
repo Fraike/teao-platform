@@ -205,7 +205,7 @@ export function EmployeePage() {
         <Alert
           type={reminders.expired > 0 ? "error" : "warning"}
           showIcon
-          message={
+          title={
             reminders.expired > 0
               ? `合同到期提醒：${reminders.expired} 人合同已过期，${reminders.expiring} 人即将到期（60天内），请及时处理`
               : `合同到期提醒：${reminders.expiring} 人合同即将到期（60天内），请及时处理`

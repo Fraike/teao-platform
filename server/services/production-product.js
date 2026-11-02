@@ -1,4 +1,5 @@
 import { readKingdeeCache } from "./kingdee-cache.js";
+import { getDB } from "./production-store.js";
 
 export const FINISHED_PRODUCT_CATEGORY = "2314557705978701824";
 export const INJECTION_PLASTIC_PARTS_CATEGORY = "2314559979366968320";
@@ -67,5 +68,19 @@ export function getTrustedProductionProduct(department, productId) {
     productId: String(product.id),
     productNumber: String(product.number || "").trim(),
     productName: String(product.name || "").trim(),
+    ...(department === "assembly" ? { spec: String(product.spec || product.model || "").trim() } : {}),
   };
+}
+
+/** Preserve historical products for unrelated edits; resolve a changed identity as one tuple. */
+export function resolveProductionProductUpdate(department, id, input) {
+  const data = input ?? {};
+  const table = department === "assembly" ? "assembly_records" : "injection_records";
+  const previous = getDB().prepare(`SELECT product_id,product_number,product_name FROM ${table} WHERE id=?`).get(id);
+  if (!previous) return data;
+  const fields = { productId: "product_id", productNumber: "product_number", productName: "product_name" };
+  const changed = Object.entries(fields).some(([key, column]) => data[key] !== undefined && String(data[key] ?? "").trim() !== String(previous[column] ?? "").trim());
+  if (!changed) return data;
+  const trusted = getTrustedProductionProduct(department, data.productId ?? previous.product_id);
+  return { ...data, ...trusted };
 }

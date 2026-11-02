@@ -149,10 +149,10 @@ function HistoryPanel({
       title="报价汇总"
       open={open}
       onClose={onClose}
-      width={960}
+      size={960}
       styles={{ body: { padding: "16px 24px" } }}
     >
-      <Space style={{ marginBottom: 16, width: "100%" }} direction="vertical" size={12}>
+      <Space style={{ marginBottom: 16, width: "100%" }} orientation="vertical" size={12}>
         <Space wrap>
           <Input
             placeholder="搜索报价单号、客户名称"

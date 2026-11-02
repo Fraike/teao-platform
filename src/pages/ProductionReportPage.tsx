@@ -251,16 +251,16 @@ export function ProductionReportPage() {
         </Space>
       </div>
 
-      {!singleDay && <Alert className={styles.notice} type="info" showIcon message="当前为时间段汇总；企微日报仅支持选择同一天后预览和推送。" />}
-      {configError && <Alert className={styles.notice} type="warning" showIcon message={`企微配置读取失败：${configError}`} action={<Button size="small" onClick={() => void fetchConfig()}>重试</Button>} />}
-      {reportError && <Alert className={styles.notice} type="error" showIcon message={reportError} action={<Button size="small" onClick={refresh}>重新加载</Button>} />}
-      {noData && <Alert className={styles.notice} type="info" showIcon message={`${rangeLabel} 暂无生产记录`} />}
-      {report && report.missingDepartments.length > 0 && !noData && <Alert className={styles.notice} type="warning" showIcon message={`暂无记录：${report.missingDepartments.map((department) => department === "assembly" ? "装配部" : "注塑部").join("、")}`} />}
+      {!singleDay && <Alert className={styles.notice} type="info" showIcon title="当前为时间段汇总；企微日报仅支持选择同一天后预览和推送。" />}
+      {configError && <Alert className={styles.notice} type="warning" showIcon title={`企微配置读取失败：${configError}`} action={<Button size="small" onClick={() => void fetchConfig()}>重试</Button>} />}
+      {reportError && <Alert className={styles.notice} type="error" showIcon title={reportError} action={<Button size="small" onClick={refresh}>重新加载</Button>} />}
+      {noData && <Alert className={styles.notice} type="info" showIcon title={`${rangeLabel} 暂无生产记录`} />}
+      {report && report.missingDepartments.length > 0 && !noData && <Alert className={styles.notice} type="warning" showIcon title={`暂无记录：${report.missingDepartments.map((department) => department === "assembly" ? "装配部" : "注塑部").join("、")}`} />}
 
       <Modal getContainer={container ?? undefined} open={preview !== null} title="生产日报消息预览" onCancel={closePreview} footer={<Button onClick={closePreview}>关闭</Button>} width={760}>
-        {preview && <><p>日期：{preview.ticket.dateFrom}</p>{preview.error && <Alert type="error" showIcon message={preview.error} />}{previewLoading && <Spin />}{preview.data && !preview.data.hasData && <Alert type="info" showIcon message="该日期暂无生产记录" />}{preview.data && <pre className={styles.previewContent}>{preview.data.content}</pre>}</>}
+        {preview && <><p>日期：{preview.ticket.dateFrom}</p>{preview.error && <Alert type="error" showIcon title={preview.error} />}{previewLoading && <Spin />}{preview.data && !preview.data.hasData && <Alert type="info" showIcon title="该日期暂无生产记录" />}{preview.data && <pre className={styles.previewContent}>{preview.data.content}</pre>}</>}
       </Modal>
-      <Modal getContainer={container ?? undefined} open={repeatConfirmation !== null} title="确认重复推送" okText="确认重发" cancelText="取消" onOk={() => repeatConfirmation && void handleSend(repeatConfirmation)} onCancel={() => setRepeatConfirmation(null)} okButtonProps={{ disabled: busy }} maskClosable={false}>
+      <Modal getContainer={container ?? undefined} open={repeatConfirmation !== null} title="确认重复推送" okText="确认重发" cancelText="取消" onOk={() => repeatConfirmation && void handleSend(repeatConfirmation)} onCancel={() => setRepeatConfirmation(null)} okButtonProps={{ disabled: busy }} mask={{closable:false}}>
         <p>{repeatConfirmation?.dateFrom} 的日报可能已经发送，请先核查企业微信群，再确认是否重发。</p>
       </Modal>
 

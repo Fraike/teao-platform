@@ -18,7 +18,7 @@ export function ProductPrintPreview({ blob, onClose }: { blob: Blob | null; onCl
     return () => controller.abort();
   }, [blob]);
   return <Modal getContainer={tabContext?.container||false} title="受控图纸打印预览" open width="90vw" onCancel={onClose} footer={null} destroyOnHidden>
-    {error && <Alert type="error" message={error} />}
-    <Spin spinning={loading} tip="正在准备受控打印文件…"><iframe ref={frame} title="受控图纸打印页面" className={styles.printFrame} /></Spin>
+    {error && <Alert type="error" title={error} />}
+    <Spin spinning={loading} description="正在准备受控打印文件…"><iframe ref={frame} title="受控图纸打印页面" className={styles.printFrame} /></Spin>
   </Modal>;
 }

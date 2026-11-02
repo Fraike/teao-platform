@@ -36,7 +36,9 @@ export function useTabPageAdapter(ready=true,options?:TabPageAdapterOptions){
   const effectMode=options?.effectMode??'activity';
   if(record.adapted!==ready||record.effectMode!==effectMode){
    record.adapted=ready;record.effectMode=effectMode;
-   queueMicrotask(()=>{if(record.alive&&record.instance===instance)notifyTabPages()});
+   // Before the first commit the record can be discarded together with an
+   // aborted render; waking the host then would starve that render forever.
+   if(record.committed)queueMicrotask(()=>{if(record.alive&&record.instance===instance)notifyTabPages()});
   }
  }
 }
@@ -46,7 +48,8 @@ function useTabFlag(kind:'busy'|'dirty',value:boolean){
  // Hidden Activity trees still render state updates, but disconnect effects. Keep guards
  // current during an async save without waiting for the page to become visible.
  if(record?.alive&&record.instance===instance&&record[kind].has(id)&&record[kind].get(id)!==value){
-  record[kind].set(id,value);queueMicrotask(notifyTabPages);
+  record[kind].set(id,value);
+  if(record.committed)queueMicrotask(notifyTabPages);
  }
  useEffect(()=>{
   if(!record?.alive||record.instance!==instance)return;

@@ -135,13 +135,13 @@ export default function ProcessCenter() {
       </Paragraph>
 
       <Alert
-        message="如需发起申请或审批，请前往企业微信对应审批流程。"
+        title="如需发起申请或审批，请前往企业微信对应审批流程。"
         type="info"
         showIcon
         className={styles.alert}
       />
 
-      <Space direction="vertical" size={16} className={styles.filters}>
+      <Space orientation="vertical" size={16} className={styles.filters}>
         <Input
           placeholder="搜索流程名称、部门、责任人、输入输出或表单"
           prefix={<SearchOutlined />}
@@ -170,7 +170,7 @@ export default function ProcessCenter() {
       {filtered.length === 0 ? (
         <div className={styles.empty}>未找到匹配的流程</div>
       ) : (
-        <Space direction="vertical" size={24} className={styles.processList}>
+        <Space orientation="vertical" size={24} className={styles.processList}>
           {filtered.map((process) => (
             <Card
               key={process.id}

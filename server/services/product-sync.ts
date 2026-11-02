@@ -1,14 +1,14 @@
 import type { ProductMaterial } from '../../src/types/product.ts';
 import type { ProductCatalog } from './product-catalog.ts';
+import type { CronScheduler, CronTask } from '../../src/types/scheduler.ts';
 interface SyncDependencies {
   materials: () => Promise<ProductMaterial[]>;
   categories: () => Promise<unknown[]>;
   writeCache: (key: string, data: unknown[]) => void;
 }
-interface Cron { schedule: (expression: string, callback: () => void, options?: {timezone:string}) => {stop:()=>void}; }
 export function createProductSync(store: ProductCatalog, deps: SyncDependencies) {
   let pending: Promise<ReturnType<ProductCatalog['syncState']>>|null = null;
-  let task: {stop:()=>void}|null = null;
+  let task: CronTask|null = null;
   const previous = store.syncState();
   if (previous.running) store.setState('sync',{...previous,running:false,error:'上次同步中断，等待重新同步'});
   function run() {
@@ -35,7 +35,7 @@ export function createProductSync(store: ProductCatalog, deps: SyncDependencies)
   }
   return {
     run,
-    start(cron: Cron) {
+    start(cron: CronScheduler) {
       if (task) return;
       task=cron.schedule('0 * * * *',()=>{void run().catch(error=>console.error('[product-sync]',error.message));},{timezone:'Asia/Shanghai'});
       const last=store.syncState().lastSuccessAt;
@@ -43,6 +43,6 @@ export function createProductSync(store: ProductCatalog, deps: SyncDependencies)
         void run().catch(error=>console.error('[product-sync]',error.message));
       }
     },
-    stop() { task?.stop(); task=null; },
+    stop() { task?.stop(); task?.destroy?.(); task=null; },
   };
 }

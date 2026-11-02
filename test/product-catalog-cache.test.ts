@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+const Database=createRequire(new URL('../server/services/product-catalog.ts',import.meta.url))('better-sqlite3') as typeof import('better-sqlite3').default;
+import {publishedProductReferences} from '../server/services/product-reference.ts';
+import {createProductCatalog} from '../server/services/product-catalog.ts';
+const dir=mkdtempSync(path.join(os.tmpdir(),'catalog-cache-'));
+const store=createProductCatalog(dir);
+const refs=[{id:'s',serialNo:'P',customer:'C',customerPartNo:'',model:'M',categoryKey:'',categoryName:'',versionNo:1,fields:{}}];
+try {
+ store.reconcileStandards(refs);
+ const first=store.list(refs);
+ const changes=()=>store.db.prepare('SELECT total_changes() n').get() as {n:number};
+ const count=changes().n;
+ store.reconcileStandards(structuredClone(refs));
+ assert.equal(changes().n,count,'stable reconcile must not write');
+ assert.strictEqual(store.list(structuredClone(refs)),first,'stable reads reuse pure data');
+ assert.strictEqual(store.find(first[0].id,refs),first[0],'indexed lookup reuses projection');
+ refs[0].model='Changed';
+ assert.equal(store.find(first[0].id,refs)?.model,'Changed','in-place reference changes invalidate');
+ assert.equal(store.find(first[0].id,[])?.productionAvailable,false,'unpublished reference immediately unavailable');
+ store.db.prepare('UPDATE product_archives SET material=? WHERE id=?').run(JSON.stringify({name:'Direct'}),first[0].id);
+ assert.equal(store.find(first[0].id,refs)?.name,'Direct');
+ const fileId='file';
+ store.db.prepare(`INSERT INTO product_files(id,product_id,drawing_no,version,filename,kind,standard_ids,scope_key,status,size,sha256,uploaded_by,uploaded_at) VALUES(?,?,'D','1','d.pdf','pdf','[]','','published',1,'hash','u','now')`).run(fileId,first[0].id);
+ assert.equal(store.find(first[0].id,refs)?.drawingCount,1);
+ store.db.prepare("UPDATE product_files SET status='retired' WHERE id=?").run(fileId);
+ assert.equal(store.find(first[0].id,refs)?.drawingCount,0,'retirement invalidates direct writes');
+ const other=new Database(path.join(dir,'products.db'));
+ try {other.prepare('UPDATE product_archives SET material=? WHERE id=?').run(JSON.stringify({name:'External'}),first[0].id);} finally {other.close();}
+ assert.equal(store.find(first[0].id,refs)?.name,'External','other connections invalidate');
+ const stable=store.list(refs);
+ assert.throws(()=>store.db.transaction(()=>{store.db.prepare('UPDATE product_archives SET material=NULL').run();store.list(refs);throw Error('rollback');})());
+ assert.equal(store.list(refs)[0].name,'External','transaction reads never poison cache after rollback');
+ store.applySnapshot([{id:'k',number:'P',name:'Synced'}],[]);
+ assert.equal(store.find('k',refs)?.name,'Synced');
+ assert.notStrictEqual(store.list(refs),stable);
+ store.db.exec(`CREATE TABLE product_standards(id TEXT,serial_no TEXT);
+ CREATE TABLE product_standard_versions(id TEXT,standard_id TEXT,status TEXT,customer TEXT,customer_part_no TEXT,model TEXT,category_key TEXT,vehicle_model TEXT,version_no INTEGER,fields TEXT);
+ CREATE TABLE standard_categories(key TEXT,name TEXT);
+ CREATE TABLE standard_drawing_sources(standard_id TEXT,source_number TEXT,source_standard_id TEXT);
+ INSERT INTO product_standards VALUES('s','P');
+ INSERT INTO product_standard_versions VALUES('v','s','published','C','','Model','gear','',1,'{}');`);
+ const published=publishedProductReferences(store.db);
+ assert.strictEqual(publishedProductReferences(store.db),published,'unchanged standard source is not rebuilt');
+ store.db.exec("UPDATE product_standard_versions SET model='New Model'");
+ assert.equal(publishedProductReferences(store.db)[0].model,'New Model');
+ const standardWriter=new Database(path.join(dir,'products.db'));
+ try {standardWriter.exec("UPDATE product_standard_versions SET status='retired'");} finally {standardWriter.close();}
+ assert.equal(publishedProductReferences(store.db).length,0,'external unpublish immediately invalidates references');
+ console.log('product catalog cache tests passed');
+} finally {store.close();rmSync(dir,{recursive:true,force:true});}

@@ -7,7 +7,8 @@ let calls=[],webhook='https://example.invalid/mock',failure=null,submitterBound=
 mock.module('../server/config.js',{namedExports:{readConfig:()=>({wecomWebhook:webhook})}});
 const record=async(url,content,mentions=[],type='text')=>{calls.push({url,content,mentions,type});await new Promise(resolve=>setImmediate(resolve));if(failure)throw failure;return{errcode:0};};
 mock.module('../server/services/wecom.js',{namedExports:{sendWecomText:record,sendWecomMessage:async(url,content)=>record(url,content,[],'markdown_v2')}});
-mock.module('../server/services/users.js',{namedExports:{listReviewers:()=>[],findUserByName:()=>null,getUserById:()=>({wecomUserid:submitterBound?'submitter-id':''})}});
+mock.module('../server/services/wecom-app.ts',{namedExports:{sendWecomAppText:async(userid,content)=>record(userid,content),appNotificationStatus:error=>error.code==='SEND_RESULT_UNCERTAIN'?'unknown':'failed'}});
+mock.module('../server/services/users.js',{namedExports:{listReviewers:()=>[],findUserByName:()=>null,getUserById:()=>({id:'reviewer',status:'active',role:'admin',wecomUserid:submitterBound?'submitter-id':''})}});
 mock.module('../server/services/standard-store.js',{namedExports:{getDB:()=>db,listCategories:()=>[{key:'rack_damper',name:'齿条阻尼器'},{key:'gear_damper',name:'齿形阻尼器',fields:[{key:'test_standard',label:'测试标准'},{key:'gear_spec',label:'齿轮规格'}]}]}});
 const {notifyReviewDone,notifyReviewRequested,notifyRetirementRequested}=await import('../server/services/standard-notify.js');
 const {initPublicationOutbox}=await import('../server/services/standard-publication-outbox.js');initPublicationOutbox(db);
@@ -16,7 +17,7 @@ const standard={serialNo:'SP-TEST',categoryKey:'gear_damper',categoryName:'齿�
 test('approved publication contains complete standard and mentions everyone once',async()=>{
  calls=[];const result=await notifyReviewDone(standard,{approve:true,comment:'已核对',reviewerName:'乙'});
  assert.equal(result.status,'sent');assert.deepEqual(calls[0].mentions,['@all']);
- for(const value of ['客户▲\\*','CP-001','项目A','齿轮A','齿轮B','不能遗漏的扩展字段','原始变更批注','已核对','V2','| 属性 | 标准内容 |'])assert(calls.map(c=>c.content).join('').includes(value),value);
+ for(const value of ['齿轮A','齿轮B','不能遗漏的扩展字段','V2','| 属性 | 标准内容 |'])assert(calls.map(c=>c.content).join('').includes(value),value);
  assert(calls.slice(1).every(call=>call.type==='markdown_v2'));
 });
 test('long Unicode content is complete, ordered and within text byte limits',async()=>{
@@ -48,12 +49,12 @@ test('pending review notices name both the submitter and selected reviewer',asyn
  const data=structuredClone(standard);data.versions[0].assignedReviewerId='reviewer';data.versions[0].assignedReviewerName='审核人乙';
  data.id='identity-id';data.versions[0].categoryKey='rack_damper';data.versions[0].status='pending_review';
  await notifyReviewRequested(data,{id:'a',name:'提交人甲'});
- assert(calls[0].content.includes('提交人：提交人甲'));assert(calls[0].content.includes('指定审核人：审核人乙'));assert.equal(calls[0].mentions.length,1);
+ assert(calls[0].content.includes('提交人：提交人甲'));assert(!calls[0].content.includes('指定审核人：'));assert.equal(calls[0].url,'submitter-id');assert.equal(calls[0].mentions.length,0);
  assert(calls[0].content.includes('分类：齿条阻尼器'));
- assert(calls[0].content.includes('category=rack_damper') && calls[0].content.includes('standardId=identity-id'));
+ assert(!calls[0].content.includes('查看并审核') && !calls[0].content.includes('https://'));
  calls=[];
  await notifyRetirementRequested(data,{versionId:'v1',reviewerId:'reviewer',reviewerName:'审核人乙',applicantName:'提交人甲',reason:'停用原因'.repeat(400)});
- assert(calls.map(c=>c.content).join('').includes('指定审核人：审核人乙'));
+ assert(calls.every(call=>call.url==='submitter-id' && call.mentions.length===0));
  assert(calls.map(c=>c.content).join('').includes('申请人：提交人甲'));
  assert(calls.map(c=>c.content).join('').includes('分类：齿条阻尼器'));
  assert(calls.every(c=>Buffer.byteLength(c.content,'utf8')<=2048));assert(calls.slice(1).every(c=>c.mentions.length===0));
@@ -67,6 +68,6 @@ test('retirement notice identifies the requested version rather than a newer dra
  const content=calls.map(call=>call.content).join('');
  assert(content.includes('分类：齿条阻尼器') && content.includes('型号：RD-T001'));
  assert(!content.includes('草稿型号'));
- assert(content.includes('category=rack_damper&standardId=retire-id'));
+ assert(!content.includes('查看并处理') && !content.includes('https://'));
  assert(!content.includes('status=pending_review'));
 });

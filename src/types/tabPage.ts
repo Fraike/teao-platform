@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 import type {Location} from 'react-router-dom';
 export interface TabPageRecord {
- scope:string; key:string; alive:boolean; instance:number; active?:boolean; snapshot:Map<string,unknown>; initialized:Map<string,readonly unknown[]>;
+ scope:string; key:string; alive:boolean; instance:number; committed:boolean; active?:boolean; snapshot:Map<string,unknown>; initialized:Map<string,readonly unknown[]>;
  effectMode?:'activity'|'managed'; adapted:boolean; adapterDeclared?:boolean; busy:Map<string,boolean>; dirty:Map<string,boolean>; disposers:Map<string,()=>void>;
  lastUsed:number; scrollTop:number; scrollLeft:number; location?:Location;
 }

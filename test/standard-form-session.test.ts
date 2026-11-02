@@ -48,9 +48,9 @@ test('late categories fill only the empty category and preserve other dirty inpu
   });
   props = { ...props, categories }; await render();
   assert.equal(input.value, '异步期间输入');
-  assert.equal(document.querySelector('.ant-select-selection-item')?.textContent, '齿形');
+  assert.equal(document.querySelector('.ant-select-content')?.textContent, '齿形');
   props = { ...props, categories: [{ key: 'rack_damper', name: '齿条', fields: [] }, ...categories] }; await render();
-  assert.equal(document.querySelector('.ant-select-selection-item')?.textContent, '齿形');
+  assert.equal(document.querySelector('.ant-select-content')?.textContent, '齿形');
   await act(() => root.unmount());
 });
 

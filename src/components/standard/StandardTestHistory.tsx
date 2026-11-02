@@ -39,13 +39,13 @@ function TestHistoryContent({ standardId }: { standardId: string }) {
   const comments = useTestHistoryPage<StandardSourceComment>(standardId, "comments", open.includes("comments"), 10);
   const text = (value: string) => <span className={styles.historyText}>{value || "—"}</span>;
   return <Collapse className={styles.testHistory} activeKey={open} onChange={keys => setOpen(typeof keys === "string" ? [keys] : keys)} items={[
-    { key: "changes", label: "测试标准变更", children: changes.error ? <Alert type="error" showIcon message={changes.error} /> : <Table<StandardChange>
+    { key: "changes", label: "测试标准变更", children: changes.error ? <Alert type="error" showIcon title={changes.error} /> : <Table<StandardChange>
       size="small" rowKey="id" loading={changes.loading} dataSource={changes.data}
       locale={{ emptyText: <Empty description="无测试标准变更" /> }}
       pagination={{ current: changes.page, total: changes.total, pageSize: 20, showSizeChanger: false, onChange: changes.setPage }}
       columns={[{ title: "变更日期", dataIndex: "changedAt", render: (value: string) => value || "无日期" },
         { title: "字段", dataIndex: "fieldLabel" }, { title: "变更内容", dataIndex: "description", render: text }, { title: "修改人", dataIndex: "author", render: text }]} /> },
-    { key: "comments", label: "测试标准原始批注", children: comments.error ? <Alert type="error" showIcon message={comments.error} /> : <Table<StandardSourceComment>
+    { key: "comments", label: "测试标准原始批注", children: comments.error ? <Alert type="error" showIcon title={comments.error} /> : <Table<StandardSourceComment>
       size="small" rowKey="id" loading={comments.loading} dataSource={comments.data}
       locale={{ emptyText: <Empty description="无测试标准原始批注" /> }}
       pagination={{ current: comments.page, total: comments.total, pageSize: 10, showSizeChanger: false, onChange: comments.setPage }}

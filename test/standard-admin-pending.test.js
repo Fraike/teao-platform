@@ -7,9 +7,10 @@ const require=createRequire(new URL('../server/package.json',import.meta.url));
 const express=require('express'),jwt=require('jsonwebtoken');
 process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'admin-pending-'));
 process.env.JWT_SECRET='admin-pending-isolated-test-secret-at-least-32';
+process.env.WECOM_CORP_ID='';process.env.WECOM_AGENT_ID='';process.env.WECOM_APP_SECRET='';
 process.env.PRODUCTION_CONFIG_PATH=path.join(process.env.DATA_DIR,'config.json');
 writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));
-let users=[['admin','admin',[]],['editor','user',['engineering_submit']],['reviewer','user',['engineering_review']],['other','user',['engineering_review']]].map(([id,role,permissions])=>({id,username:id,name:id,role,permissions,status:'active',passwordVersion:0}));
+let users=[['admin','admin',[]],['editor','user',['engineering_submit']],['reviewer','user',['engineering_review']],['other','user',['engineering_review']]].map(([id,role,permissions])=>({id,username:id,name:id,role,permissions,status:'active',passwordVersion:0,wecomUserid:`mock-${id}`}));
 const save=()=>writeFileSync(path.join(process.env.DATA_DIR,'users.json'),JSON.stringify({users}));save();
 const token=Object.fromEntries(users.map(u=>[u.id,jwt.sign(u,process.env.JWT_SECRET)]));
 const {registerStandardRoutes}=await import('../server/routes/standards.js');
@@ -62,6 +63,6 @@ try{
  const revoked=await pending('ADMIN-REVOKED');users=users.map(u=>u.id==='admin'?{...u,role:'user'}:u);save();
  assert.equal((await call('admin',`/api/standards/${revoked.id}/discard`,'POST',{...exp(revoked.versions[0]),reason:'已撤权'})).status,403);
  assert.equal((await call('admin',`/api/standards/${revoked.id}/review`,'POST',{...exp(revoked.versions[0]),approve:false,comment:'已撤权'})).status,403);
- let sends=0;const reminders=createStandardReviewReminders({now:()=>{let at=Date.parse(new Date(Date.now()+REVIEW_REMINDER_INTERVAL_MS*2).toISOString().slice(0,10)+'T08:00:00+08:00');while(new Date(at).getUTCDay()===0)at+=REVIEW_REMINDER_INTERVAL_MS;return at;},users:()=>users,config:()=>({wecomWebhook:'https://example.invalid/mock'}),send:async(_url,content)=>{sends++;assert(!content.includes('ADMIN-DELETE'));assert(!content.includes('ADMIN-REJECT'));}});await reminders.tick();assert(sends>0);
+ let sends=0;const reminders=createStandardReviewReminders({now:()=>{let at=Date.parse(new Date(Date.now()+REVIEW_REMINDER_INTERVAL_MS*2).toISOString().slice(0,10)+'T08:00:00+08:00');while(new Date(at).getUTCDay()===0)at+=REVIEW_REMINDER_INTERVAL_MS;return at;},users:()=>users,config:()=>({app:{corpId:'test-corp',agentId:'1',secret:'mock-secret'}}),send:async(userid,content)=>{assert.equal(userid,'mock-reviewer');assert(!content.includes('查看并审核'));assert(!content.includes('https://'));sends++;assert(!content.includes('ADMIN-DELETE'));assert(!content.includes('ADMIN-REJECT'));}});await reminders.tick();assert(sends>0);
  console.log('admin reject, logical deletion, history, permissions, concurrent conflicts, published version and reminders passed');
 }finally{await new Promise(r=>server.close(r));s.closeDB();}

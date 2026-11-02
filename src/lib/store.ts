@@ -90,9 +90,20 @@ function normalizeQuotation(data: Quotation, opts: QuotationStoreOptions): Quota
   };
 }
 
+let quotationUserScope: string | null = null;
+const scopeListeners = new Set<() => void>();
+export function setQuotationUserScope(userId: string | null) {
+  if (quotationUserScope === userId) return;
+  quotationUserScope = userId;
+  scopeListeners.forEach(reset => reset());
+}
+function scopedKey(key: string) {
+  return quotationUserScope === null ? null : `${key}:user:${encodeURIComponent(quotationUserScope)}`;
+}
 function load(key: string, opts: QuotationStoreOptions): Quotation {
   try {
-    const raw = localStorage.getItem(key);
+    const storageKey = scopedKey(key);
+    const raw = storageKey ? localStorage.getItem(storageKey) : null;
     if (raw) return normalizeQuotation(JSON.parse(raw) as Quotation, opts);
   } catch { /* ignore */ }
   return normalizeQuotation(structuredClone(opts.sampleData), opts);
@@ -100,7 +111,8 @@ function load(key: string, opts: QuotationStoreOptions): Quotation {
 
 function save(key: string, state: Quotation) {
   try {
-    localStorage.setItem(key, JSON.stringify(state));
+    const storageKey = scopedKey(key);
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(state));
   } catch { /* ignore */ }
 }
 
@@ -125,7 +137,7 @@ interface QuotationStore {
 }
 
 export function createQuotationStore(opts: QuotationStoreOptions) {
-  return create<QuotationStore>((set, get) => ({
+  const store = create<QuotationStore>((set, get) => ({
     quotation: load(opts.storageKey, opts),
 
     setCustomer: (fn) =>
@@ -263,6 +275,8 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
       }
     },
   }));
+  scopeListeners.add(() => store.setState({ quotation: load(opts.storageKey, opts) }));
+  return store;
 }
 
 // ---- pre-built store instances ----

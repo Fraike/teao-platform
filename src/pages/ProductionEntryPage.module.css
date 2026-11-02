@@ -53,7 +53,7 @@
   flex-shrink: 0;
 }
 
-.lineFilter :global(.ant-select-selection-item) {
+.lineFilter :global(.ant-select-content) {
   white-space: normal;
   overflow-wrap: anywhere;
 }

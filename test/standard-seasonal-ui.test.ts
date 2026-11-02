@@ -116,7 +116,7 @@ test('historical versions combine seasons once and never borrow winter from the 
     assert.equal(document.querySelector('.ant-drawer-title')?.textContent, '变更历史');
     await click(findText('.ant-collapse-header', '查看 V2 完整参数')!);
     await click(findText('.ant-collapse-header', '查看 V1 完整参数')!);
-    const panels = [...document.querySelectorAll('.ant-collapse-content')];
+    const panels = [...document.querySelectorAll('.ant-collapse-panel')];
     const current = panels.find(node => node.textContent?.includes('120-160'))!;
     const historical = panels.find(node => node.textContent?.includes('110-150'))!;
     assert.match(current.textContent!, /120-160.*冬季.*100-140/);
@@ -131,9 +131,9 @@ test('season display preserves missing summer, hides empty winter and never inve
   const root = createRoot(document.getElementById('root')!);
   try {
     await act(() => root.render(createElement(SeasonalTestStandard, { summer: '', winter: '100-140' })));
-    assert.match(document.body.textContent!, /^—冬季 100-140/);
+    assert.match(document.getElementById('root')!.textContent!, /^—冬季 100-140/);
     await act(() => root.render(createElement(SeasonalTestStandard, { summer: '120-160', winter: '  ' })));
-    assert.equal(document.body.textContent, '120-160');
+    assert.equal(document.getElementById('root')!.textContent, '120-160');
     assert.equal(document.querySelector('[aria-label="冬季"]'), null);
   } finally { await act(() => root.unmount()); }
 });
@@ -146,7 +146,7 @@ test('switching a copied product to a category without seasonal tests drops the 
   try {
     await act(async () => root.render(createElement(StandardFormModal, { open: true, categories: [...categories,
       { key: 'dedicated', name: '专用测试', fields: [{ key: 'dedicated_test', label: '专用测试参数' }] }], initial: null, copySource: detail, onClose() {}, onSaved() {} })));
-    await act(async () => document.querySelector('.ant-select-selector')!.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
+    await act(async () => document.querySelector('.ant-select [role="combobox"]')!.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
     await click(findText('.ant-select-item-option', '专用测试')!);
     assert.equal(findText('label', '冬季'), undefined);
     await click(findText('button', '保存')!); await wait(60);
@@ -168,13 +168,13 @@ test('test history retries visible errors, cancels old product requests and keep
     await click(findText('.ant-collapse-header', '测试标准变更')!);
     assert.equal(pending.length, 1);
     await act(async () => pending[0].reject(new Error('历史暂不可用')));
-    assert.match(document.querySelector('[role="alert"]')!.textContent!, /历史暂不可用/);
+    assert.match(document.getElementById('root')!.querySelector('[role="alert"]')!.textContent!, /历史暂不可用/);
     await click(findText('.ant-collapse-header', '测试标准变更')!);
     await click(findText('.ant-collapse-header', '测试标准变更')!);
     assert.equal(pending.length, 2, 'reopening the section retries the failed request');
     await render('s2');
     assert.equal(pending[1].signal?.aborted, true);
-    assert.equal(document.querySelector('[role="alert"]'), null);
+    assert.equal(document.getElementById('root')!.querySelector('[role="alert"]')?.outerHTML ?? null, null);
     await click(findText('.ant-collapse-header', '测试标准原始批注')!);
     assert.match(pending[2].url, /\/s2\/history\?/);
     await act(async () => pending[2].resolve({ page: 1, pageSize: 10, total: 11, data: [{ id: 'c', sourceCell: 'F487', text: '原文第一页' }] }));

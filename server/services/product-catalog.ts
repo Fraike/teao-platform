@@ -68,12 +68,22 @@ export function createProductCatalog(directory: string) {
   const setState = (key: string, value: unknown) => {
     db.prepare('INSERT INTO product_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,JSON.stringify(value));
   };
+  // total_changes catches writes through this connection (including drawing services),
+  // data_version catches committed writes through other connections. Never cache transactions.
+  const revisionStatement = db.prepare('SELECT total_changes() changes');
+  const revision = () => `${(revisionStatement.get() as {changes:number}).changes}:${db.pragma('data_version',{simple:true})}`;
+  let reconciledKey = '';
+  let projection: {key:string; products:ProductArchive[]; byId:Map<string,ProductArchive>; byNumber:Map<string,ProductArchive>} | undefined;
+  const cacheKey = (standards:ProductStandardReference[]) => `${revision()}:${JSON.stringify(standards)}`;
   function reconcileStandards(standards: ProductStandardReference[]) {
+    const key = cacheKey(standards);
+    if (!db.inTransaction && key === reconciledKey) return;
     db.transaction(() => {
       const insert = db.prepare('INSERT OR IGNORE INTO product_archives(id,number) VALUES(?,?)');
       for (const s of standards) if (s.serialNo.trim()) insert.run(randomUUID(),s.serialNo.trim());
       inheritPublishedDrawings(db,directory,standards);
     })();
+    if (!db.inTransaction) reconciledKey = cacheKey(standards);
   }
   function applySnapshot(materials: ProductMaterial[], categories: unknown[]) {
     validateMaterialSnapshot(materials);
@@ -103,7 +113,7 @@ export function createProductCatalog(directory: string) {
       return {added,updated};
     })();
   }
-  function list(standards: ProductStandardReference[]): ProductArchive[] {
+  function buildList(standards: ProductStandardReference[]): ProductArchive[] {
     const categoryIndex = indexProductCategories(buildProductCategoryTree(getState<unknown[]>('categories',[])));
     const refs = new Map<string,ProductStandardReference[]>();
     for (const s of standards) refs.set(s.serialNo.trim(),[...(refs.get(s.serialNo.trim()) || []),s]);
@@ -126,8 +136,22 @@ export function createProductCatalog(directory: string) {
         kingdeeMissing:Boolean(row.missing),standards:linked,issues,drawingCount:(scopes.get(row.id)||[]).filter(ids=>drawingAppliesToStandards(ids,linked)).length,productionAvailable};
     });
   }
-  const find = (id: string, standards: ProductStandardReference[]) => list(standards).find(p=>p.id===id || p.kingdeeId===id);
-  const findByNumber = (number: string, standards: ProductStandardReference[]) => list(standards).find(p=>p.internalNumber===number.trim());
+  function view(standards:ProductStandardReference[]) {
+    const key=cacheKey(standards);
+    if (!db.inTransaction && projection?.key===key) return projection;
+    const products=buildList(standards),byId=new Map<string,ProductArchive>(),byNumber=new Map<string,ProductArchive>();
+    for(const product of products) {
+      if(!byId.has(product.id)) byId.set(product.id,product);
+      if(product.kingdeeId && !byId.has(product.kingdeeId)) byId.set(product.kingdeeId,product);
+      byNumber.set(product.internalNumber,product);
+    }
+    const result={key,products,byId,byNumber};
+    if (!db.inTransaction) projection=result;
+    return result;
+  }
+  const list = (standards:ProductStandardReference[]) => view(standards).products;
+  const find = (id:string,standards:ProductStandardReference[]) => view(standards).byId.get(id);
+  const findByNumber = (number:string,standards:ProductStandardReference[]) => view(standards).byNumber.get(number.trim());
   const syncState = (): ProductSyncState => ({running:false,lastAttemptAt:null,lastSuccessAt:null,error:null,added:0,updated:0,nextIntervalMinutes:60,...getState('sync',{})});
   return { db, directory, applySnapshot, reconcileStandards, list, find, findByNumber, getState, setState, syncState, categoryTree:(products:ProductArchive[])=>countProductCategories(buildProductCategoryTree(getState<unknown[]>('categories',[])),products), close:()=>db.close() };
 }

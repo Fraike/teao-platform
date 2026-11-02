@@ -34,16 +34,16 @@ export function ProductDrawingImport({open,onClose}:{open:boolean;onClose:()=>vo
   }catch(reason){setError(reason instanceof Error?reason.message:'扫描失败');}
   finally{setBusy(false);}
  }
- return <Modal open={open} title="成品PDF批量导入" width={1200} footer={null} closable={!busy} maskClosable={!busy} onCancel={onClose} destroyOnHidden>
-  <Alert type="info" showIcon message="目录扫描仅生成私有预览，不创建生产图纸。逐份核对料号、客户、图号和版本后，确认导入即直接发布。子件、3D、图片和隐藏文件跳过。" />
-  {error&&<Alert className={styles.notice} type="error" message={error} />}
+ return <Modal open={open} title="成品PDF批量导入" width={1200} footer={null} closable={!busy} mask={{closable:!busy}} onCancel={onClose} destroyOnHidden>
+  <Alert type="info" showIcon title="目录扫描仅生成私有预览，不创建生产图纸。逐份核对料号、客户、图号和版本后，确认导入即直接发布。子件、3D、图片和隐藏文件跳过。" />
+  {error&&<Alert className={styles.notice} type="error" title={error} />}
   <div className={styles.toolbar}>
    <Select className={styles.batchSelect} aria-label="导入批次" disabled={busy} value={batchId||undefined} placeholder="新建批次或选择已有批次重试" allowClear onChange={id=>{setBatchId(id||'');setView(null);}} options={batches.map(b=>({value:b.id,label:`${b.name} · ${new Date(b.createdAt).toLocaleString('zh-CN')}`}))} />
    {!batchId&&<Input aria-label="批次名称" value={name} onChange={e=>setName(e.target.value)} maxLength={200} />}
    <label>选择图纸目录<input aria-label="选择图纸目录" disabled={busy} type="file" multiple ref={node=>{node?.setAttribute('webkitdirectory','');}} onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void scan(files);}} /></label>
   </div>
   {progress.total>0&&<><Progress percent={Math.round(progress.done/progress.total*100)} status={busy?'active':'normal'} /><p>已扫描 {progress.done}/{progress.total} · 跳过非本期文件 {progress.skipped} · 失败 {progress.failed.length}（可在同批次重新选择目录重试）</p></>}
-  {progress.failed.length>0&&<Alert className={styles.notice} type="warning" message="扫描失败项" description={<div>{progress.failed.map(text=><div key={text} className={styles.path}>{text}</div>)}</div>} />}
+  {progress.failed.length>0&&<Alert className={styles.notice} type="warning" title="扫描失败项" description={<div>{progress.failed.map(text=><div key={text} className={styles.path}>{text}</div>)}</div>} />}
   {!view?<Empty description={busy?'正在扫描':'请选择目录或已有批次'} />:<Table<ProductImportEntry> rowKey="id" dataSource={view.entries} pagination={false} size="small" scroll={{x:900}} columns={[
    {title:'原路径 / 文件',dataIndex:'sourcePath',render:value=><span className={styles.path}>{value}</span>},
    {title:'候选系列',dataIndex:'series',render:(_,entry)=>entry.sharedSeries?.join(' / ')||entry.series||'待确认'},

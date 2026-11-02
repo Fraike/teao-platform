@@ -59,7 +59,7 @@ try {
   assert.equal(own.body.data[0].categoryKey, 'barrel_damper', 'category comes from the pending version');
   assert.equal((await call(users[4])).body.overallTotal, 0);
   const all = await call(users[0]); assert.equal(all.body.total, 29); assert(all.body.data.every(item => 'reviewerName' in item));
-  for (const query of ['?page=0', '?pageSize=-1', '?category[bad]=x']) assert.equal((await call(users[2], query)).status, 400);
+  for (const query of ['?page=0', '?pageSize=-1', '?category[bad]=x', '?page[bad]=2', '?pageSize[]=2', '?category=gear&category=barrel']) assert.equal((await call(users[2], query)).status, 400);
   users[2].permissions = []; save();
   const revoked = await call(users[2]); assert.equal(revoked.body.total, 25, 'assigned standards remain visible, legacy and retirement require live privileges');
   users[2].status = 'disabled'; save(); assert.equal((await call(users[2])).status, 401);

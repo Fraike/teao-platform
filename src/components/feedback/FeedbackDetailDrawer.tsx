@@ -32,8 +32,8 @@ export function FeedbackDetailDrawer({ id, onClose, onSaved }: FeedbackDetailDra
     } catch (reason) { message.error(reason instanceof Error ? reason.message : "保存失败"); }
     finally { setSaving(false); }
   };
-  return <Drawer title="反馈详情" open onClose={onClose} width={640}>
-    {error ? <Alert type="error" message={error} /> : !detail ? <Spin /> : <>
+  return <Drawer title="反馈详情" open onClose={onClose} size={640}>
+    {error ? <Alert type="error" title={error} /> : !detail ? <Spin /> : <>
       <Descriptions column={1} size="small" bordered items={[
         { key: "type", label: "反馈类型", children: FEEDBACK_CATEGORY_LABELS[detail.category] },
         { key: "owner", label: "提交人", children: detail.createdBy },

@@ -62,10 +62,10 @@ export function StandardPendingActionModal({ target, onClose, onCompleted }: Sta
 
   return <Modal getContainer={tab.container ?? undefined} open title={`管理员${label} · ${target.serialNo}`} okText={`确认${label}`} cancelText="取消"
     okButtonProps={{ danger: true, disabled: !version || Boolean(error) || !reason.trim() || (deleting && !confirmed) }}
-    confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving}
+    confirmLoading={saving} closable={!saving} mask={{closable:!saving}} keyboard={!saving}
     cancelButtonProps={{ disabled: saving }} onCancel={() => { if (!submitting.current) onClose(); }} onOk={() => void submit()}>
     <p>{deleting ? "只删除本次待审内容；已有生效版本继续生效，参数、批注与操作记录保留归档。" : "管理员可介入驳回，内容将退回草稿，提交人修改后可重新提交。"}</p>
-    {error && <Alert type="error" showIcon message={error} />}
+    {error && <Alert type="error" showIcon title={error} />}
     <Input.TextArea aria-label={`${label}原因`} placeholder={`请填写${label}原因（必填）`} maxLength={2000}
       showCount value={reason} disabled={saving} autoSize={{ minRows: 3, maxRows: 6 }} onChange={event => setReason(event.target.value)} />
     {deleting && <p><Checkbox checked={confirmed} disabled={saving} onChange={event => setConfirmed(event.target.checked)}>

@@ -46,6 +46,7 @@ const TabPageFrame=memo(function TabPageFrame({record,location,active,effectMode
  const [popupContainer,setPopupContainer]=useState<HTMLElement|null>(null);
  const bindContainer=useCallback((element:HTMLDivElement|null)=>{if(element){container.current=element;setPopupContainer(element)}},[]);
  useTabDomScroll(record,instance,active,container);
+ useLayoutEffect(()=>{record.committed=true;},[record,instance]);
  // Only audited pages opt in. Freeze their inactive geometry so ancestor/window
  // resizes cannot trigger hidden table measurements; ordinary pages use Activity.
  useLayoutEffect(()=>{

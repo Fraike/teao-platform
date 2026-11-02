@@ -1,7 +1,7 @@
 import { jwtAuth, requirePermission, requireProductionImport } from "../middleware/jwt-auth.js";
 import { previewProductionImport, confirmProductionImport } from "../services/production-import.js";
 import { initDB, queryInjectionEntries, createInjectionEntry, updateInjectionEntry, deleteInjectionEntry, exportInjectionEntries, getHistory } from "../services/production-store.js";
-import { getTrustedProductionProduct } from "../services/production-product.js";
+import { getTrustedProductionProduct, resolveProductionProductUpdate } from "../services/production-product.js";
 import {
   createProductionActorResolver,
   getProductionActorName,
@@ -71,10 +71,11 @@ export function registerProductionEntryInjectionRoutes(app) {
     try {
       const resolveActor = createProductionActorResolver();
       const user = getProductionActorName(req.user, resolveActor);
-      const entry = updateInjectionEntry(parseInt(req.params.id, 10), req.body, user);
+      const id = parseInt(req.params.id, 10);
+      const entry = updateInjectionEntry(id, resolveProductionProductUpdate("injection", id, req.body), user);
       if (!entry) return res.status(404).json({ error: "记录不存在" });
       res.json({ ok: true, data: mapProductionRecordActors(entry, resolveActor) });
-    } catch (err) { res.status(500).json({ error: "更新失败", detail: err.message }); }
+    } catch (err) { res.status(err.status || 500).json({ error: err.status ? err.message : "更新失败", detail: err.status ? undefined : err.message }); }
   });
 
   app.delete("/api/production/injection/entries/:id", jwtAuth, requirePermission("production"), (req, res) => {

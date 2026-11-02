@@ -47,5 +47,14 @@ const interrupted = outbox.enqueueStandardPublication(db, { ...standard, id: "ca
 let canceledParts = 0;
 await outbox.deliverStandardPublication(db, interrupted, { webhook: "https://example.invalid/cancel", sendText: async () => { canceledParts++;outbox.cancelStandardPublications(db,"cancel-mid-send"); }, sendMarkdown: async () => { canceledParts++; } });
 assert.equal(canceledParts,1);assert.equal(outbox.publicationDelivery(db,"cancel-mid-send","cancel-mid-send").status,"superseded");
+// Existing queued snapshots, including old audit text and delivery progress, stay immutable.
+const legacyStandard = { ...standard, id: "legacy" };
+const legacyVersion = { ...version, id: "legacy" };
+const legacyId = outbox.enqueueStandardPublication(db, legacyStandard, legacyVersion, { fields: [] });
+const legacyPayload = JSON.stringify([{ type: "text", content: "旧模板审核人及原始批注", mentions: ["@all"] }, { type: "markdown_v2", content: "旧快照完整参数" }]);
+db.prepare("UPDATE standard_publication_outbox SET payload=?,status='unknown',next_part=1,total_parts=2 WHERE id=?").run(legacyPayload, legacyId);
+const legacyBefore = db.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(legacyId);
+assert.equal(outbox.enqueueStandardPublication(db, legacyStandard, { ...legacyVersion, fields: { test_standard: "新参数" } }, { fields: [] }), legacyId);
+assert.deepEqual(db.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(legacyId), legacyBefore);
 db.close();
 console.log("Publication outbox: durable progress, crash ambiguity, explicit retry, live authorization, concurrent deduplication and transactional rollback passed.");

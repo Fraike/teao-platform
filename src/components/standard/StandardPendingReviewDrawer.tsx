@@ -36,7 +36,7 @@ export function StandardPendingReviewDrawer({ open, category, scope, version, ad
   useTabBusy(open && !(snapshot?.scope===scope&&snapshot.key===key));
   const current = snapshot?.scope === scope && snapshot.key === key ? snapshot : null;
   const options = snapshot?.scope === scope ? snapshot.data?.categories ?? [] : [];
-  return <Drawer getContainer={tab.container ?? undefined} open={open} onClose={onClose} title={admin ? "全部待审事项" : "我的待审事项"} width="min(720px, 100vw)" className={styles.drawer}>
+  return <Drawer getContainer={tab.container ?? undefined} open={open} onClose={onClose} title={admin ? "全部待审事项" : "我的待审事项"} size="min(720px, 100vw)" className={styles.drawer}>
     <div className={styles.toolbar}>
       <Select aria-label="待审分类" value={filter} className={styles.filter} onChange={value => { setFilter(value); setPage(1); }}
         options={[{ value: "", label: "全部分类" }, ...options.map(item => ({ value: item.categoryKey, label: `${item.categoryName}（${item.total}）` }))]} />

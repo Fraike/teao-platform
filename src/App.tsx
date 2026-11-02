@@ -1,9 +1,10 @@
+import {lazyWithFallback as lazy} from './lib/lazyWithFallback';
 import type {Location} from 'react-router-dom';
 import {TabPageHost} from './components/TabPageHost';
 import {guardTabClose,disposeTabPage,getTabPage} from './lib/tabPageCache';
 import {api} from './lib/api';
 import {productPdfResources} from './lib/productPdfResources';
-import { useState, useEffect, useContext, Suspense, lazy, useMemo } from "react";
+import { useState, useEffect, useContext, Suspense, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, UNSAFE_LocationContext } from "react-router-dom";
 import { App as AntApp, Layout, Menu, Typography, Button, Dropdown, Tabs, Tooltip, Space } from "antd";
 import {
@@ -34,27 +35,27 @@ import styles from "./App.module.css";
 import "./components/PageLoader.css";
 
 // ---- public pages (no header) ----
-const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const RegisterPage = lazy(() => import("./pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
+const LoginPage = lazy<Record<string,never>>(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy<Record<string,never>>(() => import("./pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 
 // ---- protected pages ----
-const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
-const QuotationPage = lazy(() => import("./pages/QuotationPage"));
-const QuotationPageIntl = lazy(() => import("./pages/QuotationPageIntl"));
-const QuotationManagementPage = lazy(() => import("./pages/QuotationManagementPage"));
-const CostCalculatorPage = lazy(() => import("./pages/CostCalculatorPage"));
-const ProcessCenter = lazy(() => import("./pages/ProcessCenter"));
-const ProductionReportPage = lazy(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
-const ProductionEntryPage = lazy(() => import("./pages/ProductionEntryPage").then((m) => ({ default: m.ProductionEntryPage })));
-const ProductionEntryInjectionPage = lazy(() => import("./pages/ProductionEntryInjectionPage").then((m) => ({ default: m.ProductionEntryInjectionPage })));
-const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
-const EmployeePage = lazy(() => import("./pages/EmployeePage").then((m) => ({ default: m.EmployeePage })));
-const MaterialDataPage = lazy(() => import("./pages/MaterialDataPage").then((m) => ({ default: m.MaterialDataPage })));
-const MaterialDetailPage = lazy(() => import("./pages/MaterialDetailPage").then((m) => ({ default: m.MaterialDetailPage })));
-const CustomerDataPage = lazy(() => import("./pages/CustomerDataPage").then((m) => ({ default: m.CustomerDataPage })));
-const SupplierDataPage = lazy(() => import("./pages/SupplierDataPage").then((m) => ({ default: m.SupplierDataPage })));
-const CustomerProductPage = lazy(() => import("./pages/CustomerProductPage").then((m) => ({ default: m.CustomerProductPage })));
-const ProductStandardPage = lazy(() => import("./pages/ProductStandardPage").then((m) => ({ default: m.ProductStandardPage })));
+const Dashboard = lazy<Record<string,never>>(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const QuotationPage = lazy<{headerHeight:number}>(() => import("./pages/QuotationPage"));
+const QuotationPageIntl = lazy<{headerHeight:number}>(() => import("./pages/QuotationPageIntl"));
+const QuotationManagementPage = lazy<Record<string,never>>(() => import("./pages/QuotationManagementPage"));
+const CostCalculatorPage = lazy<{headerHeight:number}>(() => import("./pages/CostCalculatorPage"));
+const ProcessCenter = lazy<Record<string,never>>(() => import("./pages/ProcessCenter"));
+const ProductionReportPage = lazy<Record<string,never>>(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
+const ProductionEntryPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryPage").then((m) => ({ default: m.ProductionEntryPage })));
+const ProductionEntryInjectionPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryInjectionPage").then((m) => ({ default: m.ProductionEntryInjectionPage })));
+const AdminPage = lazy<Record<string,never>>(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const EmployeePage = lazy<Record<string,never>>(() => import("./pages/EmployeePage").then((m) => ({ default: m.EmployeePage })));
+const MaterialDataPage = lazy<Record<string,never>>(() => import("./pages/MaterialDataPage").then((m) => ({ default: m.MaterialDataPage })));
+const MaterialDetailPage = lazy<Record<string,never>>(() => import("./pages/MaterialDetailPage").then((m) => ({ default: m.MaterialDetailPage })));
+const CustomerDataPage = lazy<Record<string,never>>(() => import("./pages/CustomerDataPage").then((m) => ({ default: m.CustomerDataPage })));
+const SupplierDataPage = lazy<Record<string,never>>(() => import("./pages/SupplierDataPage").then((m) => ({ default: m.SupplierDataPage })));
+const CustomerProductPage = lazy<Record<string,never>>(() => import("./pages/CustomerProductPage").then((m) => ({ default: m.CustomerProductPage })));
+const ProductStandardPage = lazy<Record<string,never>>(() => import("./pages/ProductStandardPage").then((m) => ({ default: m.ProductStandardPage })));
 
 const { Header, Sider, Content, Footer } = Layout;
 const { Text } = Typography;

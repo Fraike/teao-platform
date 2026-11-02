@@ -8,7 +8,7 @@ export function notifyTabPages(){version++;listeners.forEach(listener=>listener(
 export function getTabPage(scope:string,key:string):TabPageRecord {
  let pages=scopes.get(scope);if(!pages){pages=new Map();scopes.set(scope,pages)}
  let record=pages.get(key);
- if(!record){record={scope,key,alive:true,instance:0,snapshot:new Map(),initialized:new Map(),adapted:false,busy:new Map(),dirty:new Map(),disposers:new Map(),lastUsed:0,scrollTop:0,scrollLeft:0};pages.set(key,record)}
+ if(!record){record={scope,key,alive:true,instance:0,committed:false,snapshot:new Map(),initialized:new Map(),adapted:false,busy:new Map(),dirty:new Map(),disposers:new Map(),lastUsed:0,scrollTop:0,scrollLeft:0};pages.set(key,record)}
  return record;
 }
 export function writeTabSnapshot(record:TabPageRecord,key:string,value:unknown,instance=record.instance){
@@ -41,7 +41,7 @@ export async function guardTabClose(scope:string,keys:readonly string[],confirmD
 
 /** Start a new mounted page, dropping registrations belonging to its cold predecessor. */
 export function startTabInstance(record:TabPageRecord){
- record.instance++;record.busy.clear();record.dirty.clear();
+ record.instance++;record.committed=false;record.busy.clear();record.dirty.clear();
  return record.instance;
 }
 export function invalidateTabInstance(record:TabPageRecord){record.instance++;}

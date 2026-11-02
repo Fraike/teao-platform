@@ -281,7 +281,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
       width: 220,
       align: "left",
       render: (value: number, product) => product.tierPricingEnabled ? (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Tag color="blue">阶梯报价</Tag>
           {[...(product.tiers || [])].sort((left, right) => left.minQty - right.minQty).map((tier) => (
             <Text key={tier.id}>MOQ ≥ {tier.minQty.toLocaleString("zh-CN")} {product.unit || "PCS"}：{record?.currency || "CNY"} {record?.market === "international" ? tier.price.toFixed(3) : formatDomesticPrice(tier.price)}</Text>
@@ -301,7 +301,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
       title={record ? `${record.market === "international" ? "国际" : "国内"}报价详情` : "报价详情"}
       open={Boolean(record)}
       onClose={onClose}
-      width={960}
+      size={960}
       extra={record ? (
         <Space>
           <Button icon={<CopyOutlined />} onClick={() => onCopy(record)}>复制报价</Button>
@@ -310,7 +310,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
       ) : undefined}
     >
       {record && quotation && (
-        <Space direction="vertical" size={20} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={20} style={{ width: "100%" }}>
           <Descriptions title="报价信息" bordered size="small" column={2}>
             <Descriptions.Item label="报价单号">{record.quoteNo}</Descriptions.Item>
             <Descriptions.Item label="报价日期">{record.quoteDate}</Descriptions.Item>

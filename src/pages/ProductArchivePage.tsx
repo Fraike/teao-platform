@@ -83,7 +83,7 @@ export function ProductArchivePage() {
   return <div className={styles.page}>
     <header className={styles.header}><div><Typography.Title level={4}>商品资料</Typography.Title><Typography.Text type="secondary">按内部料号汇总金蝶商品与已发布产品标准 · {result?.data.length || 0} 个档案</Typography.Text></div><Space wrap><ProductDrawingGuide /><Button onClick={() => void load()}>刷新页面</Button>{canSync && <Button icon={<ReloadOutlined />} loading={syncing || result?.sync.running} onClick={() => void sync()}>立即同步金蝶</Button>}</Space></header>
     <div className={styles.sync}>每小时自动同步 · 最近成功：{result?.sync.lastSuccessAt ? new Date(result.sync.lastSuccessAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未成功同步'}{result?.sync.lastSuccessAt && checkedAt - Date.parse(result.sync.lastSuccessAt) > 7200000 && <Tag color="orange">资料超过2小时未更新</Tag>} · 新增 {result?.sync.added || 0} / 更新 {result?.sync.updated || 0}</div>
-    {(error || result?.sync.error) && <Alert className={styles.notice} type="warning" showIcon message={error || `金蝶同步失败：${result?.sync.error}。当前保留上次成功资料。`} />}
+    {(error || result?.sync.error) && <Alert className={styles.notice} type="warning" showIcon title={error || `金蝶同步失败：${result?.sync.error}。当前保留上次成功资料。`} />}
     <div className={styles.quickStats}>
       <Button aria-label={`未关联金蝶：${unlinkedCount} 个商品`} aria-pressed={scope === 'unlinked'} type={scope === 'unlinked' ? 'primary' : 'default'} disabled={loading && !result}
         onClick={() => updateQuery({ category: 'all', scope: 'unlinked', q: '', series: '', seriesPage: '' })}>
@@ -91,14 +91,14 @@ export function ProductArchivePage() {
       </Button>
       <Typography.Text type="secondary">PMC 待核对 / 补录 · 全部分类，按内部料号统计</Typography.Text>
     </div>
-    {scope === 'unlinked' && <Alert className={styles.notice} type="info" showIcon message="已有已发布产品标准，但未匹配到金蝶商品，或最近成功同步时金蝶未返回。请 PMC 先核对编码和同步状态，再补录或恢复金蝶商品；同步成功后自动更新关联。" />}
+    {scope === 'unlinked' && <Alert className={styles.notice} type="info" showIcon title="已有已发布产品标准，但未匹配到金蝶商品，或最近成功同步时金蝶未返回。请 PMC 先核对编码和同步状态，再补录或恢复金蝶商品；同步成功后自动更新关联。" />}
     <div className={styles.catalogLayout}><aside className={styles.categories} aria-label="商品分类">
       <h3>商品分类</h3><Button type={category === 'all' ? 'primary' : 'text'} block onClick={() => selectCategory('all')}>全部商品（{scoped.length}）</Button>
       <Tree blockNode selectedKeys={[category]} expandedKeys={expanded} onExpand={keys => setExpanded(keys.map(String))} treeData={treeNodes(categories)} onSelect={keys => { if (keys.length) selectCategory(String(keys[0])); }} />
     </aside><main className={styles.results}>
     {seriesEnabled && seriesKey && <Button onClick={() => updateQuery({ series: '', page: '' }, false)}>返回系列</Button>}
     <div className={styles.sectionTitle}><Typography.Title level={5}>{title}{seriesKey ? ` / ${selectedSeries?.name || '系列暂无匹配商品'}` : ''}</Typography.Title><Typography.Text type="secondary">{visibleRows.length} 个商品</Typography.Text></div>
-    {isSemi && !managedSemi && <Alert className={styles.notice} type="info" showIcon message="半成品资料查询：塑胶配件、弹簧五金支持系列展示；绳子、O型圈直接展示物料列表，均支持缺图筛选。" />}
+    {isSemi && !managedSemi && <Alert className={styles.notice} type="info" showIcon title="半成品资料查询：塑胶配件、弹簧五金支持系列展示；绳子、O型圈直接展示物料列表，均支持缺图筛选。" />}
     <div className={styles.filters}><Input prefix={<SearchOutlined />} placeholder="搜索内部料号、名称、型号、客户料号" value={search} onChange={event => updateQuery({ q: event.target.value })} allowClear className={styles.search} /><Select aria-label="档案状态" value={scope} onChange={value => updateQuery({ scope: value })} options={[{ value: 'all', label: '全部档案' }, { value: 'unlinked', label: '未关联金蝶' }, ...(!isSemi || managedSemi ? [{ value: 'missing', label: managedSemi ? '缺少有效图纸' : '成品缺少有效图纸' }] : []), { value: 'issues', label: '需要核对' }, { value: 'inactive', label: '停用 / 历史档案' }]} className={styles.select} /></div>
     {loading ? <div className={styles.loading}><Spin /></div> : seriesEnabled && !seriesKey ? <>
       <div className={styles.seriesGrid}>{groups.map(group => <button key={group.key} className={styles.seriesCard} onClick={() => updateQuery({ series: group.key })}>

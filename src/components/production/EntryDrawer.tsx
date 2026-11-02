@@ -231,8 +231,8 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
   const defects = Form.useWatch("defects", form) || 0;
   const cumulativeQty = Form.useWatch("cumulativeQty", form) || 0;
   const orderQty = Form.useWatch("orderQty", form) || 0;
-  const productId = Form.useWatch("productId", form) || "";
-  const productNumber = Form.useWatch("productNumber", form) || "";
+  const productId = Form.useWatch("productId", { form, preserve: true }) || "";
+  const productNumber = Form.useWatch("productNumber", { form, preserve: true }) || "";
   const achievementRate = planQty > 0 ? dailyQty / planQty : null;
   const qualifiedRate = dailyQty > 0 ? (dailyQty - defects) / dailyQty : null;
   const ppm = cumulativeQty > 0 ? Math.round((defects / cumulativeQty) * 1000000) : null;

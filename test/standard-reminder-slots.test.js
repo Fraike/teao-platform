@@ -12,14 +12,14 @@ const { initializeReminderSchema } = await import('../server/services/standard-r
 const { withPublicationQueue } = await import('../server/services/standard-notification-queue.js');
 const db = store.getDB();
 const submitter = { id: 'submitter', name: '提交人' };
-const reviewer = { id: 'reviewer', name: '审核人', status: 'active', wecomUserid: 'wecom-reviewer' };
+const reviewer = { id: 'reviewer', name: '审核人', status: 'active', permissions: ['engineering_review'], wecomUserid: 'wecom-reviewer' };
 let now, fail = false;
 const calls = [];
-const calendar = { wecomWebhook: 'https://example.invalid/slots', restDays: [], makeupWorkdays: [] };
+const calendar = { app: {corpId: 'test',agentId: '1',secret: 'mock'}, restDays: [], makeupWorkdays: [] };
 const at = value => { now = Date.parse(value + '+08:00'); };
 const dependencies = { now: () => now, config: () => calendar, users: () => [reviewer],
-  send: async (_url, content, mentions, options) => {
-    calls.push({ content, mentions, guard: options?.shouldSend });
+  send: async (userid, content, options) => {
+    calls.push({ content, userid, guard: options?.shouldSend });
     if (fail) throw Object.assign(new Error('mock rejection'), { code: 'SEND_REJECTED' });
   } };
 const service = createStandardReviewReminders(dependencies);
@@ -38,8 +38,8 @@ try {
   await Promise.all([service.tick(), createStandardReviewReminders(dependencies).tick()]);
   assert.equal(calls.length, 1);
   assert(calls[0].content.includes('齿条阻尼器'));
-  assert(calls[0].content.includes(`standardId=${first.id}`));
-  assert.deepEqual(calls[0].mentions, ['wecom-reviewer']);
+  assert(calls[0].content.includes('SLOT-FIRST') && !calls[0].content.includes('查看并审核'));
+  assert.equal(calls[0].userid, 'wecom-reviewer');
   at('2026-10-19T12:59:00'); const second = pending('SLOT-NOON');
   at('2026-10-19T13:00:00');
   await Promise.all([service.tick(), createStandardReviewReminders(dependencies).tick()]);
@@ -75,7 +75,7 @@ try {
   assert.equal(next.nextReminderAt, '2026-10-23T05:00:00.000Z');
 
   let release;
-  const blocker = withPublicationQueue(calendar.wecomWebhook, () => new Promise(resolve => { release = resolve; }));
+  const blocker = withPublicationQueue('app:test:1', () => new Promise(resolve => { release = resolve; }));
   await new Promise(resolve => setImmediate(resolve));
   at('2026-10-24T08:00:00'); const queued = service.tick();
   await new Promise(resolve => setImmediate(resolve));
@@ -94,7 +94,7 @@ try {
   calendar.makeupWorkdays.push('2026-10-25'); await service.tick(); assert.equal(calls.length, beforeQueue + 2);
   at('2026-10-26T13:00:00'); reviewer.status = 'disabled'; await service.tick(); assert.equal(calls.length, beforeQueue + 2);
   reviewer.status = 'active';
-  const blockedReviewer = withPublicationQueue(calendar.wecomWebhook, () => new Promise(resolve => { release = resolve; }));
+  const blockedReviewer = withPublicationQueue('app:test:1', () => new Promise(resolve => { release = resolve; }));
   await new Promise(resolve => setImmediate(resolve));
   at('2026-10-27T08:00:00'); const invalidated = service.tick();
   await new Promise(resolve => setImmediate(resolve));
@@ -111,7 +111,7 @@ try {
     let releaseLimiter, entered;
     const gate = new Promise(resolve => { releaseLimiter = resolve; });
     const reachedLimiter = new Promise(resolve => { entered = resolve; });
-    const guarded = createStandardReviewReminders({ ...dependencies, send: async (_url, _content, _mentions, options) => {
+    const guarded = createStandardReviewReminders({ ...dependencies, send: async (_userid, _content, options) => {
       entered(); await gate;
       if (!options.shouldSend()) throw Object.assign(new Error('cancelled'), { code: 'SEND_CANCELLED' });
       delivered++;

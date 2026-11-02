@@ -33,6 +33,9 @@ function pendingQuery(user) {
 }
 
 export function listPendingReviews(user, options = {}) {
+  // Express 5's simple parser leaves bracketed query keys intact instead of
+  // turning them into objects. These filters accept scalar values only.
+  if (Object.keys(options).some(key => /[[\]]/.test(key))) throw Object.assign(new Error('查询参数无效'), { status: 400 });
   const page = pageNumber(options.page, 1, 1000000), pageSize = pageNumber(options.pageSize, 20, 20);
   if (options.category !== undefined && typeof options.category !== 'string') throw Object.assign(new Error('分类参数无效'), { status: 400 });
   const category = options.category?.trim() || '';

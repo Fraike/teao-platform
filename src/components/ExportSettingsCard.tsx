@@ -80,7 +80,7 @@ function ExportSettingsCard({ useStore, labels }: { useStore: StoreHook; labels:
       size="small"
       styles={{ body: { padding: "12px 16px" } }}
     >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <Text strong style={{ fontSize: 13 }}>{labels.stampLabel}</Text>

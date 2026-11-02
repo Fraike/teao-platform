@@ -1,6 +1,7 @@
+import {lazyWithFallback as lazy} from '../lib/lazyWithFallback';
 import {usesGearDrawingStructure,drawingStructureLabel} from '../lib/productDrawingPresentation';
 import {selectProductionDrawings} from '../../server/shared/product-drawing-selection';
-import { lazy, Suspense, useMemo, useState, useEffect, useId, useContext } from 'react';
+import { Suspense, useMemo, useState, useEffect, useId, useContext } from 'react';
 import { Alert, Button, Empty, Popconfirm, Select, Space, Spin, Table, Tag, message } from 'antd';
 import { PrinterOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useTabState, useTabBusy, useTabDispose, useTabPage, TabPageContext } from '../lib/tabPageContext';
@@ -12,7 +13,7 @@ import { ProductDrawingUpload } from './ProductDrawingUpload';
 import type { DrawingPanelProps, ProductDrawing } from '../types/product';
 import styles from './ProductDrawings.module.css';
 
-const ProductPdfViewer = lazy(() => import('./ProductPdfViewer').then(module => ({ default: module.ProductPdfViewer })));
+const ProductPdfViewer = lazy<{src:string;title:string}>(() => import('./ProductPdfViewer').then(module => ({ default: module.ProductPdfViewer })));
 const date = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—';
 export function ProductDrawings(props:DrawingPanelProps) {
   return <ProductDrawingContext key={`${props.product.id}:${props.standardId}`} {...props} />;
@@ -81,7 +82,7 @@ export function ProductFileManagement({ product, drawings, onChanged }: Pick<Dra
     finally { setBusy(''); }
   }
   if (!drawings.length) return null;
-  return <div className={styles.management}><h3>图纸管理</h3>{actionError&&<Alert type="error" showIcon message={actionError} className={styles.notice} />}<Table<ProductDrawing> size="small" rowKey="id" dataSource={drawings} pagination={{ pageSize: 10 }} scroll={{ x: 700 }} columns={[
+  return <div className={styles.management}><h3>图纸管理</h3>{actionError&&<Alert type="error" showIcon title={actionError} className={styles.notice} />}<Table<ProductDrawing> size="small" rowKey="id" dataSource={drawings} pagination={{ pageSize: 10 }} scroll={{ x: 700 }} columns={[
     { title: '文件 / 图号', render: (_, d) => <><div>{d.filename}</div><small>{d.drawingNo} · {d.version}</small></> },
     { title: '适用范围', render: (_, d) => d.standardIds.length ? d.standardIds.map(id => product.standards.find(s => s.id === id)?.customer || '已失效标准').join('、') : '通用' },
     { title: '状态', render: (_, d) => <Tag color={d.status === 'published' ? 'green' : 'default'}>{{ draft: '未发布', published: '已发布', retired: '已停用' }[d.status]}</Tag> },

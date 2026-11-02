@@ -148,5 +148,5 @@ export function createPublicationWorker(d, readConfig) {
     } catch (error) { console.error(`[standard-publication] worker ${error.code || "FAILED"}`); }
     finally { running = false; }
   }
-  return { tick, start(cron) { if (!task) { task = cron.schedule("* * * * *", tick, { timezone: "Asia/Shanghai" }); void tick(); } }, stop() { task?.stop(); task = null; } };
+  return { tick, start(cron) { if (!task) { task = cron.schedule("* * * * *", tick, { timezone: "Asia/Shanghai" }); void tick(); } }, stop() { task?.stop(); task?.destroy?.(); task = null; } };
 }

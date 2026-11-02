@@ -62,7 +62,11 @@ const standardPublicationWorker = createPublicationWorker(getStandardDB(), readC
     process.exit(1);
   }
 
-  app.listen(PORT, "127.0.0.1", () => {
+  app.listen(PORT, "127.0.0.1", (error) => {
+    if (error) {
+      console.error(`[startup] ${error.code || "LISTEN_FAILED"}`);
+      process.exit(1);
+    }
     console.log(`teao-api running on port ${PORT}`);
     productionScheduler.start();
     productServices.start(cron);

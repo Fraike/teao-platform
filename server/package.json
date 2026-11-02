@@ -6,19 +6,19 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "better-sqlite3": "12.10.0",
-    "express": "^4.22.3",
-    "jsonwebtoken": "^9.0.3",
-    "node-cron": "^3.0.3",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.4.299"
+    "better-sqlite3": "13.0.3",
+    "express": "5.3.0",
+    "jsonwebtoken": "9.0.3",
+    "node-cron": "4.6.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438"
   },
   "overrides": {
-    "body-parser": "1.20.9",
+    "body-parser": "2.4.0",
     "proxy-addr": "2.0.8",
-    "qs": "6.17.1",
-    "node-cron": {
-      "uuid": "11.1.1"
-    }
+    "qs": "6.17.1"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25"
   }
 }

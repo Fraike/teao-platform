@@ -165,13 +165,13 @@ export function registerStandardRoutes(app) {
   });
 
   // 提交审核
-  app.post("/api/standards/:id/submit", jwtAuth, currentUser, requirePermission("engineering_submit"), (req, res) => {
+  app.post("/api/standards/:id/submit", jwtAuth, currentUser, requirePermission("engineering_submit"), async (req, res) => {
     try {
       const reviewer = getUserById(req.body?.reviewerId);
       if (!reviewer || reviewer.status!=="active" || reviewer.id===req.user.id) return res.status(400).json({error:"请选择已激活且非自己的审核人"});
       const data = submitStandard(req.params.id, actorName(req), {...req.body,reviewerId:reviewer.id,reviewerName:reviewer.name||reviewer.username});
-      void notifyReviewRequested(data, actorName(req));
-      res.json({ ok: true, data });
+      const notification = await notifyReviewRequested(data, actorName(req));
+      res.json({ ok: true, data, notification });
     } catch (err) {
       console.error("[standards] submit error:", err);
       res.status(err.status || 500).json({ error: err.message || "提交失败" });

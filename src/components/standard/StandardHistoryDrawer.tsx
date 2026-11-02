@@ -53,7 +53,7 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
   }, [standardId, includeDeleted], completedQuery===completionQuery);
 
   return (
-    <Drawer getContainer={tab.container ?? undefined} title="变更历史" open onClose={onClose} width={640}>
+    <Drawer getContainer={tab.container ?? undefined} title="变更历史" open onClose={onClose} size={640}>
       {loading ? (
         <Spin size="large" />
       ) : !detail ? (
@@ -61,13 +61,13 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
       ) : (
         <>
           <Descriptions column={1} size="small" title="版本历史" />
-          {versions.error && <Alert type="error" message={versions.error} />}
+          {versions.error && <Alert type="error" title={versions.error} />}
           <Spin spinning={versions.loading}>
           <Timeline
             items={versions.data.map((v) => ({
               color: v.status === "published" ? "green" : v.status === "archived" ? "gray" : "blue",
-              children: (
-                <Space direction="vertical" size={0}>
+              content: (
+                <Space orientation="vertical" size={0}>
                   <span>
                     <Tag color={statusColor(v.status)}>{STANDARD_STATUS_LABELS[v.status]}</Tag>
                     <Tag color={STANDARD_TYPE_COLORS[v.standardType]}>{standardTypeDisplayLabel(v.standardType,v.status)}</Tag>
@@ -99,12 +99,12 @@ function StandardHistoryContent({ standardId, onClose, includeDeleted }: { stand
           </Spin>
           {versions.total > 20 && <Pagination size="small" current={versions.page} pageSize={20} total={versions.total} showSizeChanger={false} onChange={versions.setPage} />}
 
-          <Collapse activeKey={commentsOpen?["excel-comments"]:[]} onChange={(keys) => setCommentsOpen(keys.includes("excel-comments"))} items={[{key:"excel-comments",label:`Excel 原始批注${commentsOpen ? `（${comments.total}）` : ""}`,children:comments.error ? <Alert type="error" message={comments.error} /> : comments.loading ? <Spin /> : comments.data.length ? (
+          <Collapse activeKey={commentsOpen?["excel-comments"]:[]} onChange={(keys) => setCommentsOpen(keys.includes("excel-comments"))} items={[{key:"excel-comments",label:`Excel 原始批注${commentsOpen ? `（${comments.total}）` : ""}`,children:comments.error ? <Alert type="error" title={comments.error} /> : comments.loading ? <Spin /> : comments.data.length ? (
             <Table size="small" rowKey="id" pagination={{pageSize:10,current:comments.page,total:comments.total,onChange:comments.setPage,showSizeChanger:false}} dataSource={comments.data}
               columns={[{title:"原表单元格",dataIndex:"sourceCell",width:90},{title:"字段",dataIndex:"fieldLabel",width:90},{title:"作者",dataIndex:"author",width:90},{title:"原始批注",dataIndex:"text",render:(text:string)=><span className={styles.commentText}>{text}</span>}]} />
           ) : <Empty description="无原始 Excel 批注" />}]} />
           <Descriptions column={1} size="small" title="变更历史" />
-          {changes.error && <Alert type="error" message={changes.error} />}
+          {changes.error && <Alert type="error" title={changes.error} />}
           <Table
             size="small"
             rowKey="id"

@@ -7,9 +7,10 @@ const require=createRequire(new URL('../server/package.json',import.meta.url));
 const express=require('express'),jwt=require('jsonwebtoken');
 process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'withdraw-draft-'));
 process.env.JWT_SECRET='withdraw-draft-isolated-test-secret-at-least-32';
+process.env.WECOM_CORP_ID='';process.env.WECOM_AGENT_ID='';process.env.WECOM_APP_SECRET='';
 process.env.PRODUCTION_CONFIG_PATH=path.join(process.env.DATA_DIR,'config.json');
 writeFileSync(process.env.PRODUCTION_CONFIG_PATH,JSON.stringify({enabled:false,wecomWebhook:''}));
-let users=[['admin','admin',[]],['editor','user',['engineering_submit']],['reviewer','user',['engineering_review']],['other','user',['engineering_review']]].map(([id,role,permissions])=>({id,username:id,name:id,role,permissions,status:'active',passwordVersion:0}));
+let users=[['admin','admin',[]],['editor','user',['engineering_submit']],['reviewer','user',['engineering_review']],['other','user',['engineering_review']]].map(([id,role,permissions])=>({id,username:id,name:id,role,permissions,status:'active',passwordVersion:0,wecomUserid:`mock-${id}`}));
 const save=()=>writeFileSync(path.join(process.env.DATA_DIR,'users.json'),JSON.stringify({users}));save();
 const token=Object.fromEntries(users.map(u=>[u.id,jwt.sign(u,process.env.JWT_SECRET)]));
 const {registerStandardRoutes}=await import('../server/routes/standards.js');
@@ -85,7 +86,7 @@ try {
   upgraded=s.submitStandard(upgraded.id,users[1],{...exp(upgraded.versions[0]),reviewerId:'reviewer',reviewerName:'reviewer'});
   assert(Date.parse(upgraded.versions[0].submittedAt)>Date.parse(oldStamp),'legacy submission epoch survives withdrawal and clock rollback');
   let at=nextMorning(Date.parse(upgraded.versions[0].submittedAt))-1,notified=0;
-  const service=createStandardReviewReminders({now:()=>at,users:()=>users,config:()=>({wecomWebhook:'https://example.invalid/mock'}),send:async(_url,content)=>{if(content.includes('LEGACY-REMINDER-CYCLE'))notified++;}});
+  const service=createStandardReviewReminders({now:()=>at,users:()=>users,config:()=>({app:{corpId:'test-corp',agentId:'1',secret:'mock-secret'}}),send:async(userid,content)=>{assert.equal(userid,'mock-reviewer');assert(!content.includes('查看并审核'));assert(!content.includes('https://'));if(content.includes('LEGACY-REMINDER-CYCLE'))notified++;}});
   await service.tick();assert.equal(notified,0);at++;await service.tick();assert.equal(notified,1,'old reminder entry cannot throttle a new review cycle');
  }finally{globalThis.Date=OriginalDate;}
  // Frozen wall clock must still create a distinct submission epoch and the next workday reminder.
@@ -97,7 +98,7 @@ try {
   timed=s.submitStandard(timed.id,users[1],{...exp(timed.versions[0]),reviewerId:'reviewer',reviewerName:'reviewer'});
   assert(Date.parse(timed.versions[0].submittedAt)>Date.parse(stamp),'new cycle must not reuse old reminder key');
   let tickAt=nextMorning(nextMorning(Date.parse(timed.versions[0].submittedAt)))-1,sends=0;
-  const reminders=createStandardReviewReminders({now:()=>tickAt,users:()=>users,config:()=>({wecomWebhook:'https://example.invalid/mock'}),send:async(_url,content)=>{if(content.includes('NEW-REVIEW-CYCLE'))sends++;}});
+  const reminders=createStandardReviewReminders({now:()=>tickAt,users:()=>users,config:()=>({app:{corpId:'test-corp',agentId:'1',secret:'mock-secret'}}),send:async(userid,content)=>{assert.equal(userid,'mock-reviewer');assert(!content.includes('查看并审核'));assert(!content.includes('https://'));if(content.includes('NEW-REVIEW-CYCLE'))sends++;}});
   await reminders.tick();assert.equal(sends,0);tickAt++;await reminders.tick();assert.equal(sends,1);
   s.withdrawStandard(timed.id,exp(timed.versions[0]),users[1]);tickAt+=REVIEW_REMINDER_INTERVAL_MS;await reminders.tick();assert.equal(sends,1);
  }finally{globalThis.Date=NativeDate;}

@@ -51,7 +51,7 @@ test('switching category range clears selected products and only loads visible l
  try {
   await act(async()=>root.render(createElement(StandardPrintModal,{categories,currentCategory:'gear_damper',currentRows:[row('a','Alpha')],onClose(){}})));
   await click(radio('勾选指定产品'));await click(document.querySelector('[data-row-key="a"] input')!);
-  await act(async()=>{document.querySelector('.ant-select-selector')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true}));});await wait();await click(document.querySelector('[title="全部分类（不含停用）"]')!);await wait();
+  await act(async()=>{document.querySelector('.ant-select [role="combobox"]')!.dispatchEvent(new window.MouseEvent('mousedown',{bubbles:true}));});await wait();await click(document.querySelector('[title="全部分类（不含停用）"]')!);await wait();
   assert(document.body.textContent?.includes('已选 0 / 1 条'));assert(button('打印 / PDF').disabled);
   assert.equal(calls.length,1);const query=new URL(calls[0],'http://local').searchParams;assert.equal(query.get('category'),'gear_damper');assert.equal(query.get('all'),'true');assert.equal(query.get('excludeObsolete'),'true');
  } finally {await act(()=>root.unmount());api.get=oldGet;}

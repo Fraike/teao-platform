@@ -266,7 +266,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
           </Button>
         </Popconfirm>,
       ]}
-      destroyOnClose
+      destroyOnHidden
     >
       <Upload.Dragger {...uploadProps}>
         <p className="ant-upload-drag-icon"><InboxOutlined /></p>
@@ -279,7 +279,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
           className={styles.resultAlert}
           type={errors.length > 0 ? "warning" : "success"}
           showIcon
-          message={`${fileName}：识别到 ${records.length} 条有效记录${errors.length > 0 ? `，已剔除 ${errors.length} 条脏数据` : ""}`}
+          title={`${fileName}：识别到 ${records.length} 条有效记录${errors.length > 0 ? `，已剔除 ${errors.length} 条脏数据` : ""}`}
           description={errors.length > 0 ? "缺少必填项或校验不通过的数据不会录入，其余有效记录可直接导入。" : "字段校验通过，可查看预览后确认覆盖。"}
         />
       )}
@@ -305,7 +305,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
           className={styles.resultAlert}
           type="warning"
           showIcon
-          message={`当前 ${preview.currentCount} 条将全部替换为 ${preview.incomingCount} 条`}
+          title={`当前 ${preview.currentCount} 条将全部替换为 ${preview.incomingCount} 条`}
           description={<div className={styles.differenceDetails}>
             <div>当前日期：{preview.currentDateRange ? `${preview.currentDateRange.from} 至 ${preview.currentDateRange.to}` : "无"}</div>
             <div>导入日期：{preview.incomingDateRange ? `${preview.incomingDateRange.from} 至 ${preview.incomingDateRange.to}` : "无"}</div>

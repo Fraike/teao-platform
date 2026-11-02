@@ -45,11 +45,11 @@ export function PublicationDeliveryPanel({ standardId }: { standardId: string })
     if (delivery?.status === "unknown") modal.confirm({ title: "请先核查企业微信群记录", content: "发送超时或服务中断时，消息可能已经到群。确认后将从未确认的部分继续，可能出现重复；不会重发已确认成功的部分。", okText: "已核查，继续发送", cancelText: "取消", onOk: () => retry(true) });
     else void retry(false);
   };
-  if (error) return <Alert className={styles.panel} type="warning" message="无法读取群公告送达记录" description={error} action={<Button size="small" onClick={() => setReload(value => value + 1)}>刷新</Button>} />;
+  if (error) return <Alert className={styles.panel} type="warning" title="无法读取群公告送达记录" description={error} action={<Button size="small" onClick={() => setReload(value => value + 1)}>刷新</Button>} />;
   if (!delivery) return null;
   const retryable = ["failed", "unknown", "not_configured"].includes(delivery.status);
   return <Alert className={styles.panel} type={delivery.status === "sent" ? "success" : retryable ? "warning" : "info"}
-    showIcon message={LABELS[delivery.status]} description={<>
+    showIcon title={LABELS[delivery.status]} description={<>
       {delivery.totalParts > 0 && <span>已确认发送 {delivery.sentParts}/{delivery.totalParts} 条。标准数据已经发布，勿再次审核来补发。</span>}
       <Space className={styles.actions}>
         <Button size="small" onClick={() => setReload(value => value + 1)}>刷新送达状态</Button>

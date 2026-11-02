@@ -178,14 +178,14 @@ function StandardImportContent({ open, onClose, onImported, isAdmin, categories 
 
   return (
     <Modal title="初始化导入产品标准（管理员）" open={open} width={960}
-      onCancel={close} closable={busy !== "confirm"} maskClosable={busy !== "confirm"} keyboard={busy !== "confirm"}
+      onCancel={close} closable={busy !== "confirm"} mask={{closable:busy !== "confirm"}} keyboard={busy !== "confirm"}
       footer={<Space><Button disabled={busy === "confirm"} onClick={close}>取消</Button>
         {migration && isAdmin && <Button disabled={Boolean(busy)} onClick={exportMigration}>导出迁移预览 JSON</Button>}
         <Button type="primary" danger disabled={!canConfirm} loading={busy === "confirm"} onClick={confirmImport}>确认导入</Button></Space>}>
       <div className={styles.body}>
-        <Alert type="warning" showIcon message="初始化导入：普通标准发布，确认作废标准停用"
+        <Alert type="warning" showIcon title="初始化导入：普通标准发布，确认作废标准停用"
             description="仅供管理员初始化使用。服务端按完整身份确认的作废标准将导入为停用；其他作废项阻止发布。服务端确认导入前会备份数据库；请核查预览、备份安排及临时标准。" />
-        {!isAdmin ? <Alert type="error" showIcon message="仅管理员可执行初始化导入。" /> : <>
+        {!isAdmin ? <Alert type="error" showIcon title="仅管理员可执行初始化导入。" /> : <>
           <Radio.Group value={scope} disabled={busy === "confirm"} aria-label="导入内容" onChange={event => {
             generation.current++; parsing.current?.abort(); working.current = false;
             setScope(event.target.value); setSession(null); setBusy(null); setError(""); setAcknowledged(false);
@@ -195,16 +195,16 @@ function StandardImportContent({ open, onClose, onImported, isAdmin, categories 
           </Upload>
           <span className={styles.hint}>支持 XLS / XLSX，最大 10MB；按所选内容读取工作表。新卫浴表按左右SP内部料号分别导入盖、座产品，旧表保留兼容；原始单位和批注完整保留。</span>
         </>}
-        {error && <Alert type="error" showIcon message={error} />}
+        {error && <Alert type="error" showIcon title={error} />}
         {session && <>
           <div className={styles.summary} aria-live="polite">
             <span>{session.fileName} · {session.sheetName}</span>
             <Space wrap><Tag>总计 {session.preview.total}</Tag><Tag>批注 {session.records.reduce((sum, record) => sum + (record.comments?.length || 0), 0)}</Tag><Tag color="green">有效 {session.preview.valid}</Tag>
               <Tag color="orange">将停用 {session.preview.obsolete ?? 0}</Tag><Tag>跳过 {session.preview.skipped}</Tag><Tag color="red">错误 {session.preview.errors.length}</Tag></Space>
           </div>
-          {session.preview.errors.length > 0 && <Alert type="error" showIcon message="预览校验错误"
+          {session.preview.errors.length > 0 && <Alert type="error" showIcon title="预览校验错误"
             description={<ul className={styles.issues}>{session.preview.errors.map((issue, index) => <li key={index}>{issueText(issue)}</li>)}</ul>} />}
-          {warnings.length > 0 && <Alert type="warning" showIcon message="需要重点核查"
+          {warnings.length > 0 && <Alert type="warning" showIcon title="需要重点核查"
             description={<ul className={styles.issues}>{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>} />}
           <Table<SourcedStandardImportRecord> size="small" dataSource={session.records}
             rowKey={(record) => `${record.sourceHash}:${record.sourceSheet}:${record.sourceRow}`}

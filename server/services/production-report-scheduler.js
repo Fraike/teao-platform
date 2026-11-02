@@ -19,7 +19,7 @@ export function createProductionScheduler(cron, send = sendProductionReport, tod
     }
   }
   function rebuild() {
-    if (task) task.stop();
+    if (task) { task.stop(); task.destroy?.(); }
     task = null;
     try {
       const config = readConfig();
@@ -34,7 +34,7 @@ export function createProductionScheduler(cron, send = sendProductionReport, tod
       rebuild();
     },
     stop() {
-      if (task) task.stop();
+      if (task) { task.stop(); task.destroy?.(); }
       task = null;
       if (unsubscribe) unsubscribe();
       unsubscribe = null;

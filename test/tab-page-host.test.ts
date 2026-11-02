@@ -96,6 +96,22 @@ test('lazy pages hidden before initial commit neither register ghost flags nor d
  await act(async()=>root.unmount());
 });
 
+test('adapter readiness before the first commit does not wake the tab host',async()=>{
+ const {Suspense,lazy}=await import('react');
+ const {subscribeTabPages}=await import('../src/lib/tabPageCache.ts');
+ const root=createRoot(document.getElementById('root')!);
+ let notifications=0;const unsubscribe=subscribeTabPages(()=>{notifications++});
+ const tabs=[{key:'p',location:{pathname:'/p',search:'',hash:'',state:null,key:'p'}}];
+ const LazyBody=lazy(()=>new Promise<{default:()=>null}>(()=>{}));
+ function Page(){useTabPageAdapter(false);return createElement(LazyBody)}
+ const page=()=>createElement(Suspense,{fallback:createElement('span',null,'loading')},createElement(Page));
+ try{
+  await act(async()=>root.render(createElement(MemoryRouter,null,createElement(TabPageHost,{scope:'precommit-notify',tabs,activeKey:'p',maxHot:1,renderPage:page}))));
+  await act(async()=>{await Promise.resolve()});
+  assert.equal(notifications,0,'an uncommitted adapter must not restart the host render');
+ }finally{unsubscribe();await act(async()=>root.unmount());}
+});
+
 test('hidden pending reads becoming ready trim protected pages without another navigation',async()=>{
  const root=createRoot(document.getElementById('root')!);let active='r0';
  const finish=new Map<string,()=>void>();

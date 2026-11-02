@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { artifactManifest, backupData, canonicalPath, digest, inside, nginxConfig, readEnvironment } from './release-common.js';
+import {retainPreviousStaticAssets} from './release-static-assets.js';
 
 export function command(program, args, options = {}) {
   const result = spawnSync(program, args, { ...options, encoding: 'utf8', stdio: 'pipe' });
@@ -152,6 +153,8 @@ export async function deploy(options, run = command) {
     const incoming = path.join(root, 'incoming'); fs.mkdirSync(incoming);
     fs.cpSync(path.join(options.stage, 'dist'), incoming, { recursive: true });
     fs.cpSync(path.join(options.stage, 'server'), path.join(incoming, 'server'), { recursive: true });
+    state.retainedStaticAssets=retainPreviousStaticAssets(options.site,incoming,state.previousStateFile);
+    journal(stateFile,state);
     for (const name of fs.readdirSync(incoming)) {
       const target = path.join(options.site, name);
       if (fs.existsSync(target)) { fs.renameSync(target, path.join(state.previous, name)); state.moved.push(name); journal(stateFile, state); }

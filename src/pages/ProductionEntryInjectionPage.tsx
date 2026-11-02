@@ -160,8 +160,8 @@ function EntryModal({ open, record, copyFrom, onClose }: { open: boolean; record
   const df = Form.useWatch("defects", form) || 0;
   const oq = Form.useWatch("orderQty", form) || 0;
   const cq = Form.useWatch("cumulativeQty", form) || 0;
-  const productId = Form.useWatch("productId", form) || "";
-  const productNumber = Form.useWatch("productNumber", form) || "";
+  const productId = Form.useWatch("productId", { form, preserve: true }) || "";
+  const productNumber = Form.useWatch("productNumber", { form, preserve: true }) || "";
 
   return (
     <Modal getContainer={container ?? undefined} title={isEdit ? "编辑注塑记录" : isCopy ? "复制注塑记录（今日）" : "新增注塑记录"} open={open} onCancel={() => onClose(false)} width={700}

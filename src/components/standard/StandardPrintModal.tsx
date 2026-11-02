@@ -139,7 +139,7 @@ export function StandardPrintModal({ categories, currentCategory, currentRows, o
       <span><PrinterOutlined /> <strong>打印 / PDF</strong> 产品信息和生产规格，隐藏审核流程</span>
     </div>
     <p className={styles.hint}>草稿、待审核和停用状态会注明，不可用于生产。以下选择同时用于 Excel 导出和打印。</p>
-    {loadError && <Alert type="error" message={loadError} action={<Button size="small" onClick={() => void changeScope(scope)}>重试</Button>} />}
+    {loadError && <Alert type="error" title={loadError} action={<Button size="small" onClick={() => void changeScope(scope)}>重试</Button>} />}
     {mode === "selected" ? <>
       <div className={styles.selection}>
         <StandardFilterInput className={styles.search} allowClear placeholder="搜索内部料号、客户、型号" onApply={setQuery} initialValue={query} resetVersion={scope === "current" ? 0 : 1} />

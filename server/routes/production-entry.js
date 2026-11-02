@@ -10,7 +10,7 @@ import {
   exportAssemblyEntries,
   getHistory,
 } from "../services/production-store.js";
-import { getTrustedProductionProduct } from "../services/production-product.js";
+import { getTrustedProductionProduct, resolveProductionProductUpdate } from "../services/production-product.js";
 import {
   createProductionActorResolver,
   getProductionActorName,
@@ -102,12 +102,13 @@ export function registerProductionEntryRoutes(app) {
     try {
       const resolveActor = createProductionActorResolver();
       const user = getProductionActorName(req.user, resolveActor);
-      const entry = updateEntry(parseInt(req.params.id, 10), req.body, user);
+      const id = parseInt(req.params.id, 10);
+      const entry = updateEntry(id, resolveProductionProductUpdate("assembly", id, req.body), user);
       if (!entry) return res.status(404).json({ error: "记录不存在" });
       res.json({ ok: true, data: mapProductionRecordActors(entry, resolveActor) });
     } catch (err) {
       console.error("[production-entry] update error:", err);
-      res.status(500).json({ error: "更新失败", detail: err.message });
+      res.status(err.status || 500).json({ error: err.status ? err.message : "更新失败", detail: err.status ? undefined : err.message });
     }
   });
 

@@ -4,8 +4,8 @@ import './standard-frontend-dom.ts';
 import {createElement,act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ProductDrawingGuide} from '../src/components/ProductDrawingGuide.tsx';
-const channel=globalThis.MessageChannel;Object.defineProperty(globalThis,'MessageChannel',{value:undefined,configurable:true,writable:true});
-after(()=>{window.close();globalThis.MessageChannel=channel;});
+
+after(()=>{window.close();});
 const wait=()=>act(async()=>{await new Promise(resolve=>setTimeout(resolve,40));});
 test('guide uses a modal without expanding the page and explains series plus drawing operations',async()=>{
  const root=createRoot(document.getElementById('root')!);
