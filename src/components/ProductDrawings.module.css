@@ -21,3 +21,5 @@
 .pdfControls{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;background:#f5f6f8;border:1px solid #e4e7ec;border-top:0;font-size:13px;}
 
 .printFrame{width:100%;height:72vh;border:0;background:#f5f6f8;}
+
+.viewer.fullscreenViewer {height:100%;min-height:0;}

@@ -14,16 +14,16 @@ const {notifyReviewDone,notifyReviewRequested,notifyRetirementRequested}=await i
 const {initPublicationOutbox}=await import('../server/services/standard-publication-outbox.js');initPublicationOutbox(db);
 beforeEach(()=>db.exec('DELETE FROM standard_publication_outbox'));
 const standard={serialNo:'SP-TEST',categoryKey:'gear_damper',categoryName:'齿形阻尼器',versions:[{id:'v1',status:'published',versionNo:2,customer:'客户▲*',model:'RD-T001',customerPartNo:'CP-001',vehicleModel:'项目A',standardType:'formal',submittedBy:'甲',submittedById:'a',publishedAt:'2026-10-15T00:00:00Z',fields:{test_standard:'12-18',gear_spec:'齿轮A\n齿轮B',extra:'不能遗漏的扩展字段'}}],sourceComments:[{versionId:'v1',fieldLabel:'测试标准',author:'工程',text:'原始变更批注'}]};
-test('approved publication contains complete standard and mentions everyone once',async()=>{
+test('approved publication sends one complete detail with customer and reviewer without mentions',async()=>{
  calls=[];const result=await notifyReviewDone(standard,{approve:true,comment:'已核对',reviewerName:'乙'});
- assert.equal(result.status,'sent');assert.deepEqual(calls[0].mentions,['@all']);
+ assert.equal(result.status,'sent');assert.equal(calls.length,1);assert.deepEqual(calls[0].mentions,[]);assert(calls[0].content.includes('客户：客户▲'));assert(calls[0].content.includes('审核人：乙'));
  for(const value of ['齿轮A','齿轮B','不能遗漏的扩展字段','V2','| 属性 | 标准内容 |'])assert(calls.map(c=>c.content).join('').includes(value),value);
- assert(calls.slice(1).every(call=>call.type==='markdown_v2'));
+ assert(calls.every(call=>call.type==='markdown_v2'));
 });
 test('long Unicode content is complete, ordered and within text byte limits',async()=>{
  calls=[];const text='超长参数😀\n'.repeat(1200);const data=structuredClone(standard);data.versions[0].fields.extra=text;
  const result=await notifyReviewDone(data,{approve:true,comment:'',reviewerName:'乙'});assert.equal(result.status,'sent');assert(calls.length>1);
- assert(calls.every(call=>Buffer.byteLength(call.content,'utf8')<=(call.type==='text'?2048:4096)));assert.equal(calls.filter(call=>call.mentions.includes('@all')).length,1);
+ assert(calls.every(call=>Buffer.byteLength(call.content,'utf8')<=(call.type==='text'?2048:4096)));assert.equal(calls.filter(call=>call.mentions.includes('@all')).length,0);
  assert.equal(calls.map(c=>c.content).join('').split('超长参数😀').length-1,1200);
 });
 test('concurrent publications stay together and every part identifies the standard',async()=>{

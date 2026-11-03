@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, useContext, useCallback } from 'react';
+import {createPortal} from 'react-dom';
 import { Alert, Button, Modal, Space, Spin } from 'antd';
-import {RotateLeftOutlined,RotateRightOutlined,UndoOutlined} from '@ant-design/icons';
+import {FullscreenOutlined,FullscreenExitOutlined,RotateLeftOutlined,RotateRightOutlined,UndoOutlined} from '@ant-design/icons';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type {MouseEvent,PointerEvent} from 'react';
 import type {PdfDragState,PdfZoomAnchor} from '../types/productPdfInteraction';
 import { productPdfResources } from '../lib/productPdfResources';
 import { useTabPage, useTabState, TabPageContext } from '../lib/tabPageContext';
+import {usePdfViewport} from '../lib/usePdfViewport';
 import styles from './ProductDrawings.module.css';
+import fullscreenStyles from './ProductPdfFullscreen.module.css';
 
 export function ProductPdfViewer({ src, title }: { src: string; title: string }) {
   return <ProductPdfDocument key={src} src={src} title={title} />;
@@ -25,6 +28,7 @@ function ProductPdfDocument({src,title}:{src:string;title:string}) {
   const [fit, setFit] = useTabState<'page' | 'width'>(`pdf:${src}:fit`,'page');
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [browserHelpOpen,setBrowserHelpOpen]=useState(false);
+  const {fullscreen,mount:viewportMount,host:viewportHost,button:fullscreenButton,toggle:toggleFullscreen}=usePdfViewport(active,browserHelpOpen);
   const drag=useRef<PdfDragState|null>(null),zoomAnchor=useRef<PdfZoomAnchor|null>(null);
   const [dragging,setDragging]=useState(false);
   const snapshot=tabContext?.record.snapshot;
@@ -102,8 +106,9 @@ function ProductPdfDocument({src,title}:{src:string;title:string}) {
     });
     return () => { cancelled = true; render?.cancel(); };
   }, [pdf, page, zoom, area, fit, rotation,rememberScroll]);
-  return <div>
-    <Modal title="图纸显示异常或不完整" open={active&&browserHelpOpen} getContainer={tabContext?.container||false} onCancel={()=>setBrowserHelpOpen(false)} onOk={()=>setBrowserHelpOpen(false)} okText="知道了" cancelButtonProps={{hidden:true}}>
+  return <><div ref={viewportHost} />{createPortal(<div className={fullscreen?fullscreenStyles.document:undefined} role={fullscreen?'dialog':undefined} aria-modal={fullscreen?true:undefined} aria-label={fullscreen?title:undefined}>
+    {fullscreen&&<div className={fullscreenStyles.heading}>{title}</div>}
+    <Modal title="图纸显示异常或不完整" open={active&&browserHelpOpen} getContainer={fullscreen?()=>viewportMount:tabContext?.container||false} onCancel={()=>setBrowserHelpOpen(false)} onOk={()=>setBrowserHelpOpen(false)} okText="知道了" cancelButtonProps={{hidden:true}}>
       <p>若图纸缺字、缺线或无法显示，请先使用最新版 Microsoft Edge 或 Google Chrome 重新打开系统；已安装的浏览器请更新后重试。</p>
       <Space wrap><a href="https://www.microsoft.com/zh-cn/edge/download" target="_blank" rel="noopener noreferrer">Microsoft Edge 官方下载</a><a href="https://www.google.cn/chrome/" target="_blank" rel="noopener noreferrer">Chrome 中文官方下载</a></Space>
       <p>下载网站是否可访问取决于当前网络。打不开时请联系管理员协助安装。更换浏览器后仍有问题，请反馈内部料号、图号和截图。</p>
@@ -111,10 +116,10 @@ function ProductPdfDocument({src,title}:{src:string;title:string}) {
     <Spin spinning={loading}><div ref={container} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag} onScroll={event=>{
       if(restoreScroll.current)return;
       rememberScroll(event.currentTarget);
-    }} className={[styles.viewer,zoom>100||fit==='width'?styles.pannable:'',active&&dragging?styles.dragging:''].filter(Boolean).join(' ')}>
+    }} className={[styles.viewer,fullscreen?styles.fullscreenViewer:'',zoom>100||fit==='width'?styles.pannable:'',active&&dragging?styles.dragging:''].filter(Boolean).join(' ')}>
       <canvas ref={canvas} aria-label={title} onDoubleClick={doubleClick} className={error?styles.failedCanvas:styles.canvas} />
       {!loading&&error&&<div className={styles.previewError}><Alert type="error" title={error} /><Button type="link" onClick={()=>setBrowserHelpOpen(true)}>显示不完整</Button></div>}
     </div></Spin>
-    <div className={styles.pdfControls}><Space wrap><Button size="small" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>上一页</Button><span>{page} / {pdf?.numPages || '—'}</span><Button size="small" disabled={!pdf || page >= pdf.numPages || loading} onClick={() => setPage(value => value + 1)}>下一页</Button></Space><Space wrap><Button size="small" aria-label="向左旋转90度" icon={<RotateLeftOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>setRotation(value=>(value+270)%360)}>左转</Button><Button size="small" aria-label="向右旋转90度" icon={<RotateRightOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>setRotation(value=>(value+90)%360)}>右转</Button><Button size="small" aria-label="复位图纸方向" icon={<UndoOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>{setRotation(0);setFit('page');setZoom(100);}}>复位</Button><Button size="small" aria-label="缩小图纸" disabled={zoom <= 50} onClick={() => setZoom(value => value - 25)}>−</Button><span>{zoom}%</span><Button size="small" aria-label="放大图纸" disabled={zoom >= 200} onClick={() => setZoom(value => value + 25)}>＋</Button><Button size="small" onClick={() => { setFit('page'); setZoom(100); }}>整页</Button><Button size="small" onClick={() => { setFit('width'); setZoom(100); }}>适合宽度</Button></Space></div>
-  </div>;
+    <div className={styles.pdfControls}><Space wrap><Button size="small" disabled={page <= 1 || loading} onClick={() => setPage(value => value - 1)}>上一页</Button><span>{page} / {pdf?.numPages || '—'}</span><Button size="small" disabled={!pdf || page >= pdf.numPages || loading} onClick={() => setPage(value => value + 1)}>下一页</Button></Space><Space wrap><Button size="small" aria-label="向左旋转90度" icon={<RotateLeftOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>setRotation(value=>(value+270)%360)}>左转</Button><Button size="small" aria-label="向右旋转90度" icon={<RotateRightOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>setRotation(value=>(value+90)%360)}>右转</Button><Button size="small" aria-label="复位图纸方向" icon={<UndoOutlined />} disabled={!pdf||loading||Boolean(error)} onClick={()=>{setRotation(0);setFit('page');setZoom(100);}}>复位</Button><Button size="small" aria-label="缩小图纸" disabled={zoom <= 50} onClick={() => setZoom(value => value - 25)}>−</Button><span>{zoom}%</span><Button size="small" aria-label="放大图纸" disabled={zoom >= 200} onClick={() => setZoom(value => value + 25)}>＋</Button><Button size="small" onClick={() => { setFit('page'); setZoom(100); }}>整页</Button><Button size="small" onClick={() => { setFit('width'); setZoom(100); }}>适合宽度</Button><Button ref={fullscreenButton} size="small" icon={fullscreen?<FullscreenExitOutlined />:<FullscreenOutlined />} disabled={!fullscreen&&(!pdf||loading||Boolean(error))} onClick={toggleFullscreen}>{fullscreen?'退出全屏':'全屏查看'}</Button></Space></div>
+  </div>,viewportMount)}</>;
 }

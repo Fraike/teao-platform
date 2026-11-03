@@ -14,12 +14,12 @@ globalThis.fetch=async()=>{canceledFetches++;return Response.json({errcode:0});}
 try {await assert.rejects(sendWecomMessage("https://example.invalid/cancel-before-http","content",{shouldSend:()=>false}),{code:"SEND_CANCELLED"});assert.equal(canceledFetches,0);}
 finally {globalThis.fetch=nativeFetch;}
 const standard = { id: "standard", serialNo: "SP-ONE", categoryKey: "gear_damper", sourceComments: [] };
-const version = { id: "version", versionNo: 1, customer: "客户", model: "RD-T001", fields: { test_standard: "12-18" } };
+const version = { id: "version", versionNo: 1, customer: "客户", model: "RD-T001", fields: { test_standard: "12-18", extension: "长参数".repeat(1000) } };
 const id = outbox.enqueueStandardPublication(db, standard, version, { fields: [] });
 assert.equal(outbox.enqueueStandardPublication(db, standard, version, { fields: [] }), id, "one immutable message snapshot per version");
 const calls = []; let fail = true;
 const dependencies = { webhook: "https://example.invalid/mock", sendText: async (_url, content, mentions) => calls.push({ content, mentions }),
-  sendMarkdown: async (_url, content) => { if (fail) throw new Error("simulated timeout"); calls.push({ content, mentions: [] }); } };
+  sendMarkdown: async (_url, content) => { if (fail && calls.length === 1) throw new Error("simulated timeout"); calls.push({ content, mentions: [] }); } };
 let result = await outbox.deliverStandardPublication(db, id, dependencies);
 assert.equal(result.status, "unknown"); assert.equal(result.sentParts, 1);
 db.close(); db = new Database(filename);
@@ -33,7 +33,9 @@ outbox.retryStandardPublication(db, standard.id, version.id, result.revision, tr
 await Promise.all([outbox.deliverStandardPublication(db, id, dependencies), outbox.deliverStandardPublication(db, id, dependencies)]);
 result = outbox.publicationDelivery(db, standard.id, version.id);
 assert.equal(result.status, "sent"); assert.equal(result.sentParts, result.totalParts);
-assert.equal(calls.filter(call => call.mentions.includes("@all")).length, 1, "resume must not repeat acknowledged announcement");
+assert(calls.every(call => !call.mentions.length));
+assert.equal(calls.length,result.totalParts,"resume must not repeat acknowledged detail segments");
+assert.equal(new Set(calls.map(call=>call.content)).size,calls.length);
 assert.throws(() => outbox.retryStandardPublication(db, standard.id, version.id, result.revision, true, admin), error => error.status === 409);
 const second = outbox.enqueueStandardPublication(db, { ...standard, id: "two" }, { ...version, id: "two" }, { fields: [] });
 db.prepare("UPDATE standard_publication_outbox SET status='sending',updated_at=? WHERE id=?").run("2000-01-01T00:00:00Z", second);
@@ -45,7 +47,7 @@ outbox.enqueueStandardPublication(db, { ...standard, id: "newer" }, { ...version
 assert.equal(outbox.publicationDelivery(db, "newer", "old-queued").status, "superseded");
 const interrupted = outbox.enqueueStandardPublication(db, { ...standard, id: "cancel-mid-send" }, { ...version, id: "cancel-mid-send" }, { fields: [] });
 let canceledParts = 0;
-await outbox.deliverStandardPublication(db, interrupted, { webhook: "https://example.invalid/cancel", sendText: async () => { canceledParts++;outbox.cancelStandardPublications(db,"cancel-mid-send"); }, sendMarkdown: async () => { canceledParts++; } });
+await outbox.deliverStandardPublication(db, interrupted, { webhook: "https://example.invalid/cancel", sendText: async () => assert.fail("new publication must not send a text announcement"), sendMarkdown: async () => { canceledParts++;outbox.cancelStandardPublications(db,"cancel-mid-send"); } });
 assert.equal(canceledParts,1);assert.equal(outbox.publicationDelivery(db,"cancel-mid-send","cancel-mid-send").status,"superseded");
 // Existing queued snapshots, including old audit text and delivery progress, stay immutable.
 const legacyStandard = { ...standard, id: "legacy" };

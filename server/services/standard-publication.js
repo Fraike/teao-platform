@@ -15,15 +15,21 @@ function cell(value) {
   return String(value === undefined || value === null || value === "" ? "—" : value).replace(/[\r\n]+/g, " ").replace(/\\/g, "\\\\").replace(/[|*`_~<>\[\]]/g, character => `\\${character}`).replace(/\t/g, " ");
 }
 
+function publicationMetadata(standard, version, options) {
+  const actor = options.reviewerName || version.reviewedBy || (options.directPublish ? version.updatedBy || version.createdBy : "") || "未记录";
+  return [["标准", standard.serialNo || "—"], ["版本", `V${version.versionNo}`],
+    ["客户", version.customer || "—"], [options.directPublish ? "发布人" : "审核人", actor]];
+}
+
 export function buildStandardPublicationMessages(standard, version, category, options = {}) {
-  const identity = [standard.serialNo, `V${version.versionNo}`]
-    .map(value => [...String(value === undefined || value === null || value === "" ? "—" : value).replace(/[\r\n]/g, " ")].slice(0, 40).join("")).join(" / ");
-  const heading = `# ${options.directPublish ? "产品标准已发布" : "产品标准审核通过 · 已发布"}\n\n**${cell(identity)}**\n\n`;
+  const metadata = publicationMetadata(standard, version, options).map(([label, value]) => `${label}：${cell(value)}`).join("\n\n");
+  const heading = `# ${options.directPublish ? "产品标准已发布" : "产品标准审核通过 · 已发布"}\n\n${metadata}\n\n`;
   const limit = 4096 - 160;
   const packets = []; let current = heading;
   const flush = () => { if (current !== heading) packets.push(current.trimEnd()); current = heading; };
   for (const section of publicationSections(standard, version, category, options)) {
     const header = `## ${section.title}\n\n| 属性 | 标准内容 |\n| --- | --- |\n`;
+    if (!section.rows.length) current += header;
     let needsHeader = true;
     for (const [label, value] of section.rows) {
       let continuation = false;
@@ -42,14 +48,12 @@ export function buildStandardPublicationMessages(standard, version, category, op
     current += "\n";
   }
   flush();
-  const messages = [{ type: "text", content: `【${options.directPublish ? "产品标准已发布" : "产品标准审核通过 · 已发布"}】${identity}`, mentions: ["@all"] }];
-  packets.forEach((content, index) => messages.push({ type: "markdown_v2", content: `${content}\n\n> 第${index + 1}/${packets.length}部分` }));
-  return messages;
+  return packets.map((content, index) => ({ type: "markdown_v2", content: packets.length > 1 ? `${content}\n\n> 第${index + 1}/${packets.length}部分` : content }));
 }
 
 export function buildStandardPublication(standard, version, category, options = {}) {
   const lines = [options.directPublish ? "【产品标准已发布】" : "【产品标准审核通过 · 已发布】",
-    `${standard.serialNo} / V${version.versionNo}`, "", "【完整标准参数】"];
+    ...publicationMetadata(standard, version, options).map(([label, value]) => `${label}：${value}`), "", "【完整标准参数】"];
   for (const section of publicationSections(standard, version, category)) {
     for (const [label, value] of section.rows) lines.push(`${label}：${value ?? "—"}`);
   }

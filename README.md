@@ -1,6 +1,6 @@
 # 特澳科技后台
 
-东莞市特澳电子科技有限公司内部业务工具平台，集成报价单生成、成本计算、生产日报推送、员工管理等业务模块。
+东莞市特澳电子科技有限公司内部业务工具平台，集成报价与成本管理、装配/注塑生产日报、商品工程资料与图纸、产品标准审核发布、基础资料及员工管理。
 
 > 在线地址：https://teao.work
 
@@ -8,15 +8,21 @@
 
 ## 业务模块
 
-以下模块、API 与目录示例为早期概览，未覆盖后续产品标准、商品图纸等功能；完整入口及权限以当前路由、服务端校验为准。当前运维要求见[运行清单](docs/operations.md)。
+下表概览当前功能；操作权限以服务端校验为准。商品资料和产品标准页面可供已登录用户进入，上传、提交、审核等操作另受细分权限控制。运维要求见[运行清单](docs/operations.md)。
 
 | 模块 | 路由 | 权限 | 说明 |
 |------|------|------|------|
 | 首页 Dashboard | `/` | 所有用户 | 系统入口，分类展示各模块快捷入口 |
 | 国内报价 | `/quotation` | business | 国内客户报价单编辑、预览、PDF 导出 |
 | 国际报价 | `/quotation-intl` | business | 海外客户报价单，支持阶梯定价、EXW/FOB 等 |
+| 报价管理 | `/quotation-management` | business | 历史报价查询、复制与管理 |
 | 成本计算 | `/cost` | business | 原材料、外购件、制造、包装、运输等全维度成本核算 |
 | 生产日报 | `/production-report` | production | 内部装配部 + 注塑部生产数据，企业微信定时推送 |
+| 装配部日报录入 | `/production-entry` | production | 日报录入、复制、Excel 导入 |
+| 注塑部日报录入 | `/production-entry-injection` | production | 注塑日报录入与导入 |
+| 商品资料与详情 | `/materials`、`/materials/:id` | 已登录；操作另行授权 | 商品分类、工程资料、PDF 图纸查看与管理 |
+| 产品标准 | `/product-standards` | 已登录；操作另行授权 | 标准参数、版本、导入、提交审核、发布与停用 |
+| 客户/供应商/客户商品资料 | `/customers`、`/suppliers`、`/customer-products` | basic_data | 基础资料查询 |
 | 员工管理 | `/employees` | hr | 员工档案 CRUD、搜索筛选、CSV 导出、合同到期提醒 |
 | 流程查阅 | `/process` | tools | 产品工艺流程图可视化 |
 | 用户管理 | `/admin` | admin | 管理员审核注册、模块权限开关 |
@@ -45,6 +51,8 @@
 | jsonwebtoken | JWT 认证 |
 | node-cron 4 | 定时任务（生产日报推送） |
 | crypto (Node.js) | scrypt 密码哈希 |
+| better-sqlite3 | SQLite 业务数据存储 |
+| pdf-lib + pdfjs-dist | PDF 图纸处理与校验 |
 
 ---
 
@@ -52,7 +60,7 @@
 
 ### 1. 环境准备
 
-开发和构建使用 Node.js 24.15+（24 主版本）；生产发布脚本和工作流固定验证 Node.js 24 主版本。依赖升级优先最新稳定版，经过兼容性检查、测试和审计后锁定版本；当前 TypeScript 保持工具链支持的 6.0.x，详见 [依赖升级方案](docs/specs/2026-11-02-dependency-upgrade.md)。
+统一使用 **Node.js >=24.15.0 且 <25**（以根目录 `package.json` 的 `engines` 为准）；后端单独声明 >=24.0.0 且 <25，整项目按较严格的要求执行。CI 使用 Node.js 24；切换 Node 主版本后需重新安装原生依赖。依赖升级优先最新稳定版，经过兼容性检查、测试和审计后锁定版本；当前 TypeScript 保持工具链支持的 6.0.x，详见 [依赖升级方案](docs/specs/2026-11-02-dependency-upgrade.md)。
 
 ```bash
 # 安装前端依赖
@@ -127,9 +135,14 @@ cd server && npm start # 后端启动（需设置环境变量）
 | `VIKA_TOKEN` | 否 | — | 历史维格表配置；当前日报仅使用内部数据 |
 | `ASSEMBLY_DATASHEET_ID` | 否 | — | 装配部维格表 ID |
 | `INJECTION_DATASHEET_ID` | 否 | — | 注塑部维格表 ID |
-| `WECOM_WEBHOOK` | 否 | — | 企业微信机器人 Webhook 地址 |
+| `WECOM_WEBHOOK` | 按推送需求 | — | 企业微信群机器人，供日报及标准群通知使用 |
+| `WECOM_CORP_ID` | 待审个人推送需要 | — | 企业微信企业 ID |
+| `WECOM_AGENT_ID` | 待审个人推送需要 | — | 自建应用 AgentId |
+| `WECOM_APP_SECRET` | 待审个人推送需要 | — | 自建应用 Secret，仅通过私密环境配置 |
 | `CRON_EXPRESSION` | 否 | `0 0 13 * * *` | 生产日报推送 cron 表达式 |
 | `PRODUCTION_REPORT_ENABLED` | 否 | `true` | 是否启用日报定时推送 |
+
+待审标准通过自建应用通知对应审核人，需配置用户企微账号与应用可见范围；审核通过发布及驳回沿用群通知，生产日报保持既有群推送。标准发布内容保留版本和完整适用参数。
 
 ### 启动后端
 
@@ -172,12 +185,17 @@ STANDARD_REVIEW_REMINDERS_ENABLED=true
 
 ## 权限体系
 
-基于 RBAC 的五模块权限：
+基于角色及细分操作权限控制：
 
 | 权限标识 | 可访问模块 |
 |----------|-----------|
-| `business` | 国内报价、国际报价、成本计算 |
-| `production` | 生产日报 |
+| `business` | 国内报价、国际报价、报价管理、成本计算 |
+| `production` | 生产日报汇总及装配、注塑录入 |
+| `production_import` | 生产日报导入操作 |
+| `basic_data` | 客户、供应商、客户商品资料 |
+| `engineering` / `engineering_submit` | 产品标准编辑及提交，具体操作以服务端为准 |
+| `engineering_review` / `engineering_retire` | 标准审核及停用操作 |
+| `product_drawing_manage` | 商品图纸管理 |
 | `hr` | 员工管理 |
 | `tools` | 流程查阅 |
 | `admin` | 全部模块 + 用户管理（审核注册、权限开关） |
@@ -229,7 +247,7 @@ STANDARD_REVIEW_REMINDERS_ENABLED=true
 |------|------|------|
 | GET | `/api/production/config` | 获取日报配置 |
 | POST | `/api/production/config` | 保存日报配置 |
-| POST | `/api/production/fetch` | 从维格表拉取并存储日报 |
+| POST | `/api/production/fetch` | 读取内部日报并汇总 |
 | GET | `/api/production/report` | 获取已存储的日报 |
 | POST | `/api/production/send` | 推送到企业微信群 |
 | POST | `/api/production/preview` | 预览推送内容 |
@@ -247,81 +265,53 @@ STANDARD_REVIEW_REMINDERS_ENABLED=true
 
 ## 项目结构
 
-```
+以下展示主要职责，不逐项列出所有文件；目录内容以仓库为准。
+
+```text
 teao-platform/
-├── public/assets/                   # 静态资源（Logo、公章）
 ├── src/
-│   ├── App.tsx                      # 路由 + 顶部导航 + 权限过滤
-│   ├── main.tsx                     # 入口
-│   ├── index.css                    # 全局样式
-│   ├── types/
-│   │   ├── quotation.ts             # 报价单类型定义
-│   │   ├── costQuote.ts             # 成本报价类型定义
-│   │   ├── auth.ts                  # 用户/认证类型定义
-│   │   └── employee.ts              # 员工类型定义
-│   ├── lib/
-│   │   ├── api.ts                   # API 客户端（JWT 自动刷新）
-│   │   ├── authStore.ts             # 认证 Store
-│   │   ├── constants.ts             # 公司信息、默认条款、资源路径
-│   │   ├── store.ts                 # 报价单 Store（国内 + 国际共用工厂）
-│   │   ├── sample.ts                # 国内报价示例数据
-│   │   ├── sample-intl.ts           # 国际报价示例数据
-│   │   ├── pdf.ts                   # PDF 导出引擎
-│   │   ├── costStore.ts             # 成本计算 Store
-│   │   ├── costCalculations.ts      # 成本计算函数
-│   │   ├── costFormat.ts            # 金额/重量格式化
-│   │   ├── costStorage.ts           # 成本数据 localStorage
-│   │   ├── historyStore.ts          # 报价汇总 Store
-│   │   ├── imageUtils.ts            # 图片缩放工具
-│   │   ├── useBase64Image.ts        # 图片转 Base64 Hook
-│   │   └── useIsMobile.ts           # 移动端检测 Hook
-│   ├── components/
-│   │   ├── AuthGuard.tsx             # 路由守卫（登录 + 权限检查）
-│   │   ├── EmployeeFormModal.tsx     # 员工新增/编辑弹窗
-│   │   ├── intl/                    # 国际报价特有组件（ProductCard/PreviewPanel）
-│   │   ├── cost/                    # 成本计算组件
-│   │   ├── process/                 # 流程查阅组件
-│   │   └── *.tsx                    # 共享组件（国内/国际共用）
-│   └── pages/
-│       ├── Dashboard.tsx            # 首页（模块分类导航）
-│       ├── LoginPage.tsx            # 登录页
-│       ├── RegisterPage.tsx         # 注册页
-│       ├── AdminPage.tsx            # 用户管理（管理员）
-│       ├── EmployeePage.tsx         # 员工管理（含合同到期提醒）
-│       ├── QuotationPage.tsx        # 国内报价
-│       ├── QuotationPageIntl.tsx    # 国际报价
-│       ├── CostCalculatorPage.tsx   # 成本计算
-│       ├── ProductionReportPage.tsx # 生产日报
-│       └── ProcessCenter.tsx        # 流程查阅
+│   ├── App.tsx                  # 路由、权限入口及多标签页面管理
+│   ├── pages/                   # 报价、日报、商品、标准、基础资料等页面
+│   ├── components/              # 共享组件及 admin/cost/intl/process/production/standard
+│   ├── lib/                     # API、Store、计算、缓存、PDF 与页面状态逻辑
+│   ├── types/                   # TypeScript 类型
+│   └── data/                    # 前端静态/示例数据
 ├── server/
-│   ├── server.js                    # Express 入口 + cron 定时任务
-│   ├── config.js                    # 配置读写 + 数据存储路径
-│   ├── production-config.json       # 本地兼容默认路径；生产使用 DATA_DIR 内持久配置
-│   ├── lib/mutex.js                 # 文件写入互斥锁
-│   ├── middleware/
-│   │   ├── jwt-auth.js              # JWT 验证 + Admin 权限
-│   │   └── rate-limit.js            # 登录频率限制
-│   ├── routes/
-│   │   ├── auth.js                  # 认证路由
-│   │   ├── admin.js                 # 管理员路由
-│   │   ├── employees.js             # 员工路由
-│   │   ├── history.js               # 报价汇总路由
-│   │   └── production.js            # 生产日报路由
-│   └── services/
-│       ├── users.js                 # 用户管理 + JWT
-│       ├── employees.js             # 员工管理 + 合同提醒
-│       ├── report.js                # 维格表数据拉取 + 汇总
-│       ├── vika.js                  # 维格表 API 调用
-│       └── wecom.js                 # 企业微信推送
-├── data/                            # 运行时数据（git-ignored）
-│   ├── users.json                   # 用户数据
-│   └── employees.json               # 员工数据
-├── docs/                            # 设计文档
-├── .env.example                     # 环境变量模板
-├── CLAUDE.md                        # AI 编码规范
-├── vite.config.ts                   # Vite 配置（含 API 代理）
-└── package.json
+│   ├── server.js                # Express 入口及任务初始化
+│   ├── config.js                # 运行配置与数据路径
+│   ├── routes/                  # 认证、报价、日报、商品、标准、通知等 API
+│   ├── services/                # 业务逻辑、SQLite、金蝶、企微及发布队列
+│   ├── shared/                  # 前后端复用的商品分类与图纸规则
+│   ├── middleware/              # 认证、权限及请求保护
+│   ├── lib/                     # 后端基础工具
+│   └── scripts/                 # 发布包、部署与服务端运维脚本
+├── scripts/                     # 导入、校验及维护工具
+├── test/                        # 主要回归测试与前端测试支持
+├── tests/                       # 报价兼容性等补充测试
+├── public/assets/               # 静态资源
+├── docs/                        # 运维清单、方案及审计记录
+├── data/                        # 本地运行数据，不进 Git；生产由 DATA_DIR 指定
+├── trash_review/                # 待复核归档，不进 Git
+├── .github/workflows/           # CI 与手动部署工作流
+├── .env.example                 # 环境变量模板，不包含真实密钥
+├── CLAUDE.md                    # 现有 AI 协作说明
+├── start-dev.sh                 # 本地前后端启动入口
+├── vite.config.ts              # Vite 与 API 代理配置
+└── package.json                # 根依赖、Node 要求与检查命令
 ```
+
+## 按改动选择验证
+
+- `npm run lint`：全项目 Lint；局部修改可用 `npx eslint <相关文件>`。
+- `npm run test:products`：商品资料与图纸专项。
+- `npm run test:standards`：产品标准专项。
+- `npm run test:tab-cache`：标签缓存与页面状态专项。
+- `npm run test:tooling`：工具链专项。
+- `npm run test:production-products`：生产日报商品保存回归。
+- `npm test`：根默认测试集；不能替代所有独立专项。
+- `npm run build`：TypeScript 检查及前端生产构建。
+
+小改动优先运行相关检查，不要求每次执行以上全部命令。
 
 ---
 
@@ -338,13 +328,13 @@ GitHub Actions 仅支持手动 `workflow_dispatch`，并要求输入 `release`�
 
 代码包不包含本地业务数据库、配置、Excel、图纸原件或导入结果；代码发布不等于数据同步，不自动执行图纸导入。应用启动可能执行兼容性建表/迁移，因此仍需一致性备份和部署后检查。GitHub Secrets 需配置 `DEPLOY_SSH_KEY`，生产运行环境另按上文准备。
 
-完整发布、回滚、静态权限及资料保留要求见[运行清单](docs/operations.md)。本轮资源保留和 PDF 失败清理改动属于本地待发布修复，不能据此判断线上已生效。
+完整发布、回滚、静态权限及资料保留要求见[运行清单](docs/operations.md)。README 描述仓库能力，不代表所有本地改动已部署上线。
 
 ---
 
 ## 开发规范
 
-见 [CLAUDE.md](CLAUDE.md) — 所有 AI 协作必须遵循的编码规范。
+按当前项目协作规则执行；仓库另有 [CLAUDE.md](CLAUDE.md) 供参考，其内容如与用户最新指示冲突，以最新指示为准。
 
 核心规则：
 - **不自动提交 Git**，等用户确认
