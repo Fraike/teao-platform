@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement, act } from 'react';
 import { createRoot } from 'react-dom/client';
+import {MemoryRouter} from 'react-router-dom';
 import { TabPageContext } from '../src/lib/tabPageContext.tsx';
 import { getTabPage, clearTabScope } from '../src/lib/tabPageCache.ts';
 import { api } from '../src/lib/api.ts';
@@ -50,7 +51,7 @@ for (const name of ['SupplierDataPage', 'CustomerProductPage', 'EmployeePage', '
    return url.includes('/kingdee/') ? {ok:true,data:[]} : [];
   }) as typeof api.get;
   let root=createRoot(document.getElementById('root')!);
-  const render=()=>createElement(TabPageContext.Provider,{value:{record,instance:record.instance,active:true,restored:true,container:document.getElementById('root')}},createElement(module[name]));
+  const render=()=>createElement(MemoryRouter,null,createElement(TabPageContext.Provider,{value:{record,instance:record.instance,active:true,restored:true,container:document.getElementById('root')}},createElement(module[name])));
   try {
    await act(async()=>root.render(render()));
    const initialCalls=calls; assert.ok(initialCalls > 0);assert.equal(record.adapted,true);

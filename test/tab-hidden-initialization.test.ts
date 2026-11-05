@@ -122,7 +122,7 @@ test('CustomerProductPage successful search B survives Activity return without a
  const scope='hidden-customer-search';const record=getTabPage(scope,'page');const root=createRoot(document.getElementById('root')!);
  const original=api.get;const requests:string[]=[];
  api.get=(async(url:string)=>{requests.push(url);return {ok:true,data:[]}}) as typeof api.get;
- const render=(visible:boolean)=>act(async()=>root.render(createElement(TabPageContext.Provider,{value:{record,instance:record.instance,active:visible,restored:false,container:null}},createElement(Activity,{mode:visible?'visible':'hidden'},createElement(CustomerProductPage)))));
+ const render=(visible:boolean)=>act(async()=>root.render(createElement(MemoryRouter,null,createElement(TabPageContext.Provider,{value:{record,instance:record.instance,active:visible,restored:false,container:null}},createElement(Activity,{mode:visible?'visible':'hidden'},createElement(CustomerProductPage))))));
  try {
   await render(true);assert.equal(requests.length,1);
   const input=document.querySelector<HTMLInputElement>('input[placeholder="搜索客户名称/商品名称/编码"]');assert.ok(input);
