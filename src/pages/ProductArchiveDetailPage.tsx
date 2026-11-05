@@ -20,6 +20,13 @@ export function ProductArchiveDetailPage() {
   const location=useLocation(),renameTab=useTabStore(s=>s.renameTab);
   const { id } = useParams(); const navigate = useNavigate(); const [params, setParams] = useSearchParams();
   const [result, setResult] = useTabState<ProductDetailResponse | null>('product:result',null), [error, setError] = useTabState('product:error','');
+  useEffect(() => {
+    if (!active || !result?.data.id) return;
+    const timer = window.setTimeout(() => {
+      void import('../lib/productPdf').then(module => module.preloadProductPdf()).catch(() => {});
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [active, result?.data.id]);
   const [kingdee, setKingdee] = useTabState<{ data: ProductMaterial; fetchedAt: string; stale: boolean } | null>('product:kingdee',null);
   const [detailError, setDetailError] = useState('');
   const user = useAuthStore(s => s.user);

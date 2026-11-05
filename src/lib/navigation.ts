@@ -42,7 +42,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { key: "/production-entry", title: "装配部生产日报", description: "装配部生产日报录入与导入", category: "生产管理", group: "production", permission: "production", icon: "tool", color: "#1677ff", menu: true, dashboard: true },
   { key: "/production-entry-injection", title: "注塑部生产日报", description: "注塑部生产日报录入与导入", category: "生产管理", group: "injection", permission: "production", icon: "tool", color: "#722ed1", menu: true, dashboard: true },
   { key: "/employees", title: "员工管理", description: "员工档案与合同管理", category: "人事管理", group: "hr", permission: "hr", icon: "team", color: "#eb2f96", menu: true, dashboard: true },
-  { key: "/process", title: "技术资料（流程查阅）", description: "查看已录入的 12 个关键流程", category: "工具", group: "tools", permission: "tools", icon: "read", color: "#fa8c16", menu: true, dashboard: true },
+  { key: "/process", title: "流程查询", description: "查看已录入的 12 个关键流程", category: "工具", group: "tools", permission: "tools", icon: "read", color: "#fa8c16", menu: true, dashboard: true },
   { key: "/materials", title: "商品资料", description: "商品工程资料与生产图纸", category: "基础资料", group: "basic-data", icon: "database", color: "#2f54eb", menu: true, dashboard: true },
   { key: "/materials/:id", title: "商品详情", description: "商品资料详情", category: "基础资料", group: "basic-data", icon: "database", color: "#2f54eb", menu: false, dashboard: false, match: /^\/materials\/[^/]+$/ },
   { key: "/customers", title: "客户资料", description: "客户信息查询", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#531dab", menu: true, dashboard: true },

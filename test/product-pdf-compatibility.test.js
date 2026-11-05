@@ -48,3 +48,18 @@ test('shared PDF loader parses and renders without native Uint8Array.toHex',asyn
     else Reflect.deleteProperty(Uint8Array.prototype,'toHex');
   }
 });
+
+test('PDF background preload retries failures and shares successful worker downloads',async t=>{
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async (url,options)=>{
+    calls.push({url,options});
+    return new Response('worker',{status:calls.length===1?503:200});
+  });
+  const {preloadProductPdf}=await import('../src/lib/productPdf.ts');
+  await assert.rejects(preloadProductPdf());
+  await Promise.all([preloadProductPdf(),preloadProductPdf()]);
+  await preloadProductPdf();
+  assert.equal(calls.length,2);
+  assert(calls.every(call=>String(call.url).includes('pdf.worker.min.mjs')));
+  assert.deepEqual(calls[1].options,{cache:'force-cache',priority:'low'});
+});

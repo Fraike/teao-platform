@@ -212,6 +212,10 @@ export function registerKingdeeRoutes(app) {
   /** 外部商品库 — 客户商品资料 */
   app.get("/api/kingdee/outside-materials", jwtAuth, requireAnyPermission(TECHNICAL_DATA_PERMISSIONS), async (req, res) => {
     const { search, type } = req.query;
-    await respondWithCachedData(res, getQueryCacheKey("outsideMaterials", { search, type }), () => fetchOutsideMaterials({ search, type }));
+    const materials = await getCachedKingdeeData("materials", () => fetchAllMaterials(), false).catch(() => ({ data: [] }));
+    const numbers = new Map(materials.data.map(material => [String(material.id), material.number]));
+    await respondWithCachedData(res, getQueryCacheKey("outsideMaterials", { search, type }), () => fetchOutsideMaterials({ search, type }), {
+      transformData: rows => rows.map(row => ({ ...row, material_number: numbers.get(String(row.material_id)) || row.material_number || "" })),
+    });
   });
 }

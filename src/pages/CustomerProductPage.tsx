@@ -1,6 +1,9 @@
 import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect, useTabDispose } from "../lib/tabPageContext";
-import { useCallback, useMemo, useRef } from "react";
-import { Input, Select, Typography, Spin, Card, Space, Tag, Button, message } from "antd";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Input, Select, Typography, Spin, Card, Space, Tag, Button, Modal, message } from "antd";
+import {useNavigate} from 'react-router-dom';
+import {findCustomerProductStandards} from '../lib/customerProductStandards';
+import type {StandardListItem} from '../types/standard';
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { api } from "../lib/api";
@@ -11,29 +14,33 @@ import { createCustomerProductSearchCoordinator } from "../lib/customerProductSe
 
 const { Title } = Typography;
 
-interface OutsideMaterial {
-  id: string;
-  customer_id: string;
-  customer_name: string;
-  customer_number: string;
-  material_id: string;
-  material_name: string;
-  name: string;
-  number: string;
-  outside_model: string;
-  outside_unit: string;
-  outside_barcode: string;
-  outside_pk_id: string;
-  is_bind_relation: boolean;
-  type: string; // "1"=供应商 "2"=客户
-  type_name: string;
-  unit_name: string;
-}
+import type { OutsideMaterial } from "../types/customerProduct";
 
-const CACHE_KEY = "outside_materials_v2_default";
+const CACHE_KEY = "outside_materials_v3_default";
 const PAGE_SIZE = 50;
 
 export function CustomerProductPage() {
+  const navigate = useNavigate();
+  const standardRequest = useRef<AbortController | null>(null);
+  const [openingStandard, setOpeningStandard] = useState('');
+  const [standardChoices, setStandardChoices] = useState<StandardListItem[]>([]);
+  useTabDispose(() => standardRequest.current?.abort(), 'customer-products:standard-link');
+  const openStandard = async (row: OutsideMaterial) => {
+    standardRequest.current?.abort();
+    const request = new AbortController(); standardRequest.current = request;
+    setOpeningStandard(row.id); setStandardChoices([]);
+    try {
+      const matches = await findCustomerProductStandards(row.material_number || '', request.signal);
+      if (request.signal.aborted) return;
+      if (matches.length === 1) navigate(`/product-standards?standardId=${encodeURIComponent(matches[0].id)}`);
+      else if (matches.length) setStandardChoices(matches);
+      else message.info('未找到该内部料号对应的可查看产品标准');
+    } catch (error) {
+      if (!request.signal.aborted) message.error(error instanceof Error ? error.message : '产品标准查询失败');
+    } finally {
+      if (!request.signal.aborted) setOpeningStandard('');
+    }
+  };
   const [data, setData] = useTabState<OutsideMaterial[]>("CustomerProductPage.data", () => getCache<OutsideMaterial[]>(CACHE_KEY) || []);
   const [loaded, setLoaded] = useTabState("CustomerProductPage.loaded", false);
   useTabPageAdapter(loaded);
@@ -86,22 +93,37 @@ export function CustomerProductPage() {
   const rows = useMemo(() => data.map((item) => ({ ...item, key: item.id })), [data]);
   const submitSearch = () => setSubmitted({ search: search.trim(), type: typeFilter });
 
-  const columns: ColumnsType<OutsideMaterial> = [
+  const allColumns: ColumnsType<OutsideMaterial> = [
     { title: "客户名称", dataIndex: "customer_name", key: "cn", width: 150, fixed: "left",
-      render: (v: string) => <span style={{ fontWeight: 500 }}>{v || "-"}</span> },
+      render: (v: string) => <Typography.Text strong>{v || "—"}</Typography.Text> },
     { title: "客户编码", dataIndex: "customer_number", key: "cnum", width: 100 },
-    { title: "商品名称", dataIndex: "material_name", key: "mn", width: 200, ellipsis: true },
+    { title: submitted.type === "1" ? "供应商商品编码" : submitted.type === "2" ? "客户商品编码" : "外部商品编码", dataIndex: "number", key: "num", width: 150, ellipsis: true },
+    { title: "内部料号", dataIndex: "material_number", key: "material_number", width: 150,
+      render: (value: string, row) => value ? <Button type="link" size="small" loading={openingStandard === row.id} onClick={() => void openStandard(row)}>{value}</Button> : '未匹配' },
+    { title: "内部商品名称", dataIndex: "material_name", key: "mn", width: 200, ellipsis: true },
     { title: "规格型号", dataIndex: "outside_model", key: "om", width: 120, ellipsis: true },
-    { title: "编码", dataIndex: "number", key: "num", width: 120 },
     { title: "单位", dataIndex: "outside_unit", key: "ou", width: 70, align: "center" as const },
     { title: "条形码", dataIndex: "outside_barcode", key: "ob", width: 120 },
     { title: "类型", dataIndex: "type_name", key: "tn", width: 80,
       render: (v: string) => <Tag color={v === "客户" ? "blue" : "orange"}>{v}</Tag> },
     { title: "外部唯一标识", dataIndex: "outside_pk_id", key: "pk", width: 120, ellipsis: true },
   ];
+  const optionalFields = new Map([["ou", "outside_unit"], ["ob", "outside_barcode"], ["pk", "outside_pk_id"]] as const);
+  const columns = allColumns.filter(column => {
+    const field = optionalFields.get(column.key as "ou" | "ob" | "pk");
+    return !field || data.some(row => String(row[field] ?? "").trim() !== "");
+  });
+  const tableWidth = columns.reduce((width, column) => width + Number(column.width || 0), 0);
 
   return (
     <div className={styles.customerProductContainer}>
+      <Modal title="选择对应的产品标准" open={standardChoices.length > 0} footer={null} onCancel={() => setStandardChoices([])}>
+        <Space direction="vertical">
+          {standardChoices.map(standard => <Button key={standard.id} type="link" onClick={() => { setStandardChoices([]); navigate(`/product-standards?standardId=${encodeURIComponent(standard.id)}`); }}>
+            {standard.serialNo} · {standard.customer || '未填写客户'} · {standard.categoryName} · V{standard.versionNo}
+          </Button>)}
+        </Space>
+      </Modal>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <Title level={4} style={{ margin: 0 }}>客户商品资料</Title>
         <Space>
@@ -147,7 +169,7 @@ export function CustomerProductPage() {
           dataSource={rows}
           pagination={{ pageSize: PAGE_SIZE, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
           size="small"
-          minWidth={1200}
+          minWidth={tableWidth}
           bordered
           locale={{ emptyText: "暂无数据，点击搜索查询" }}
         />

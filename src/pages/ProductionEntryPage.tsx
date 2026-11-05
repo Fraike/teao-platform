@@ -359,8 +359,8 @@ export function ProductionEntryPage() {
       </div>
 
       {/* ===== 内容区 ===== */}
-      <div ref={setContentElement} className={styles.content}>
-        <Spin spinning={loading}>
+      <Spin spinning={loading} className={styles.contentLoading}>
+        <div ref={setContentElement} className={styles.content}>
           {groups.length === 0 && !loading ? (
             <Card style={{ textAlign: "center", padding: 40 }}>
               <div style={{ color: "#999", marginBottom: 12 }}>暂无生产数据</div>
@@ -401,8 +401,8 @@ export function ProductionEntryPage() {
               )}
             </div>
           )}
-        </Spin>
-      </div>
+        </div>
+      </Spin>
 
       <EntryDrawer open={drawerOpen} record={editingRecord} copyFrom={copyFromRecord} defaultDate={defaultDate} onClose={onDrawerClose} />
       <ProductionImportModal

@@ -5,7 +5,7 @@ export interface SidebarLayout {
 
 export function getSidebarLayout(isMobile: boolean): SidebarLayout {
   return {
-    expandedWidth: 216,
+    expandedWidth: 180,
     collapsedWidth: isMobile ? 0 : 64,
   };
 }

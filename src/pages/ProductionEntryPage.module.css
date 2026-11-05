@@ -59,8 +59,18 @@
 }
 
 /* 纵向滚动 + 横向滚动的统一容器 */
+.contentLoading {
+  flex: 1;
+  min-height: 0;
+}
+
+.contentLoading > :global(.ant-spin-container) {
+  height: 100%;
+}
+
 .content {
   flex: 1;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;

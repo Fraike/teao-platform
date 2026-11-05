@@ -114,6 +114,20 @@ try {
     assert.deepEqual(complete.data.unclassifiedMaterials, [{ id: "missing", number: "SP0201-A", name: "RD-T023-60", spec: "" }]);
     writeKingdeeCache("materials", savedMaterials.data);
 
+    writeKingdeeCache("materials", [{ id: "internal-1", number: "SP0001-A" }]);
+    writeKingdeeCache("outsideMaterials", [
+      { id: "a", customer_name: "客户甲", number: "CP-A", material_id: "internal-1" },
+      { id: "b", customer_name: "客户乙", number: "CP-B", material_id: "internal-1" },
+      { id: "c", number: "CP-C", material_id: "missing" },
+    ]);
+    const outside = await fetch(`http://127.0.0.1:${port}/api/kingdee/outside-materials`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(response => response.json());
+    assert.deepEqual(outside.data.map(row => [row.number, row.material_number]), [
+      ["CP-A", "SP0001-A"], ["CP-B", "SP0001-A"], ["CP-C", ""],
+    ], "客户编码与内部编码按 ID 关联；同款不同客户不混淆，缺失关联不冒用客户编码");
+    writeKingdeeCache("materials", savedMaterials.data);
+
     const refreshEvents = [];
     const originalInfo = console.info;
     const originalWarn = console.warn;

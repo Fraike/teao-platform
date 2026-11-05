@@ -3,6 +3,14 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mj
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker&url';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
+let preload: Promise<void> | undefined;
+export function preloadProductPdf() {
+  return preload ??= fetch(workerUrl, { cache: 'force-cache', priority: 'low' }).then(async response => {
+    if (!response.ok) throw new Error('PDF worker preload failed');
+    await response.arrayBuffer();
+  }).catch(error => { preload = undefined; throw error; });
+}
+
 export function loadProductPdf(src: string | Uint8Array) {
   return getDocument({ ...(typeof src === 'string' ? { url: src } : { data: src }) });
 }

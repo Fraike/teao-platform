@@ -12,7 +12,7 @@ assert.equal(getNavigationItem("/not-a-page"), undefined);
 const adminTitles = getVisibleNavigationItems(admin).map((item) => item.title);
 assert.ok(adminTitles.includes("报价管理"));
 assert.ok(adminTitles.includes("客户商品资料"));
-assert.ok(adminTitles.includes("技术资料（流程查阅）"));
+assert.ok(adminTitles.includes("流程查询"));
 assert.ok(adminTitles.includes("用户管理"));
 
 const productionTitles = getVisibleNavigationItems(productionUser).map((item) => item.title);

@@ -383,8 +383,8 @@ export function ProductionEntryInjectionPage() {
         </div>
       </div>
 
-      <div ref={setContentElement} className={styles.content}>
-        <Spin spinning={loading}>
+      <Spin spinning={loading} className={styles.contentLoading}>
+        <div ref={setContentElement} className={styles.content}>
           {groups.length === 0 && !loading ? (
             <Card style={{ textAlign: "center", padding: 40 }}><div style={{ color: "#999", marginBottom: 12 }}>暂无生产数据</div><Button type="primary" icon={<PlusOutlined />} onClick={add}>新增第一条</Button></Card>
           ) : (
@@ -401,8 +401,8 @@ export function ProductionEntryInjectionPage() {
               {hasMore && <div className={styles.loadMore}><Button onClick={() => fetchData(true)} loading={loading}>加载更多（共 {total} 条）</Button></div>}
             </div>
           )}
-        </Spin>
-      </div>
+        </div>
+      </Spin>
 
       <EntryModal open={modalOpen} record={editRec} copyFrom={copyRec} onClose={onModalClose} />
       <ProductionImportModal
