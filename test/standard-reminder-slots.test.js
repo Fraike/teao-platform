@@ -7,7 +7,7 @@ process.env.DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'standard-slots-'));
 process.env.JWT_SECRET = 'slot-tests-only-secret-at-least-32-characters';
 const store = await import('../server/services/standard-store.js');
 store.initDB();
-const { createStandardReviewReminders } = await import('../server/services/standard-review-reminders.js');
+const { createStandardReviewReminders, reviewWaitingText } = await import('../server/services/standard-review-reminders.js');
 const { initializeReminderSchema } = await import('../server/services/standard-reminder-schema.js');
 const { withPublicationQueue } = await import('../server/services/standard-notification-queue.js');
 const db = store.getDB();
@@ -31,15 +31,23 @@ function pending(serialNo) {
 }
 
 try {
+  assert(reviewWaitingText('2026-10-16T23:58:00+08:00', Date.parse('2026-10-19T08:10:00+08:00')).includes('已等待：2天8小时12分钟'));
+  assert(reviewWaitingText('2026-10-19T08:10:00+08:00', Date.parse('2026-10-19T08:10:00+08:00')).includes('已等待：0分钟'));
+  assert(reviewWaitingText('', Date.now()).includes('无法计算'));
   at('2026-10-19T07:59:00');
   const first = pending('SLOT-FIRST');
   db.prepare('UPDATE product_standards SET category_key=? WHERE id=?').run('gear_damper', first.id);
-  at('2026-10-19T08:00:00');
+  at('2026-10-19T08:00:00'); await service.tick(); assert.equal(calls.length, 0, 'morning reminder waits until 08:10');
+  at('2026-10-19T08:10:00');
   await Promise.all([service.tick(), createStandardReviewReminders(dependencies).tick()]);
   assert.equal(calls.length, 1);
   assert(calls[0].content.includes('齿条阻尼器'));
   assert(calls[0].content.includes('SLOT-FIRST') && !calls[0].content.includes('查看并审核'));
   assert.equal(calls[0].userid, 'wecom-reviewer');
+  assert(calls[0].content.includes('已等待：12分钟'));
+  assert(calls[0].content.includes('提交时间：2026-10-19 07:58'));
+  at('2026-10-19T08:11:00'); await service.tick(); assert.equal(calls.length, 1);
+
   at('2026-10-19T12:59:00'); const second = pending('SLOT-NOON');
   at('2026-10-19T13:00:00');
   await Promise.all([service.tick(), createStandardReviewReminders(dependencies).tick()]);
@@ -47,7 +55,7 @@ try {
   assert(calls[1].content.includes('SLOT-FIRST') && calls[1].content.includes('SLOT-NOON'));
   await createStandardReviewReminders(dependencies).tick(); assert.equal(calls.length, 2);
   for (const detail of [first, second]) store.reviewStandard(detail.id, { versionId: detail.versions[0].id, revision: detail.versions[0].revision, approve: false, comment: '修改' }, reviewer);
-  at('2026-10-20T08:00:00'); await service.tick(); assert.equal(calls.length, 2);
+  at('2026-10-20T08:10:00'); await service.tick(); assert.equal(calls.length, 2);
 
   const migrated = pending('SLOT-LEGACY');
   db.prepare('INSERT INTO standard_review_daily_reminders VALUES(?,?,?)').run(reviewer.id, '2026-10-20', now);
@@ -57,19 +65,19 @@ try {
   store.reviewStandard(migrated.id, { versionId: migrated.versions[0].id, revision: migrated.versions[0].revision, approve: true }, reviewer);
   at('2026-10-21T07:59:00'); const completed = pending('SLOT-COMPLETED');
   const approved = pending('SLOT-APPROVED');
-  at('2026-10-21T08:00:00'); await service.tick();
+  at('2026-10-21T08:10:00'); await service.tick();
   store.withdrawStandard(completed.id, { versionId: completed.versions[0].id, revision: completed.versions[0].revision }, submitter);
   store.reviewStandard(approved.id, { versionId: approved.versions[0].id, revision: approved.versions[0].revision, approve: true }, reviewer);
   const beforeComplete = calls.length;
   at('2026-10-21T13:00:00'); await service.tick(); assert.equal(calls.length, beforeComplete);
 
   at('2026-10-22T07:59:00'); pending('SLOT-FAILED');
-  at('2026-10-22T08:00:00'); fail = true; await service.tick();
+  at('2026-10-22T08:10:00'); fail = true; await service.tick();
   const beforeRetry = calls.length;
   fail = false; await service.tick(); assert.equal(calls.length, beforeRetry, 'same failed slot does not retry');
   at('2026-10-22T13:00:00'); await service.tick(); assert.equal(calls.length, beforeRetry + 1);
   const manual = await service.remind(db.prepare("SELECT id FROM product_standards WHERE serial_no='SLOT-FAILED'").get().id, { role: 'admin' }, { versionNo: 1 });
-  assert.equal(manual.nextReminderAt, '2026-10-23T00:00:00.000Z');
+  assert.equal(manual.nextReminderAt, '2026-10-23T00:10:00.000Z');
   at('2026-10-23T09:00:00');
   const next = await service.remind(db.prepare("SELECT id FROM product_standards WHERE serial_no='SLOT-FAILED'").get().id, { role: 'admin' }, { versionNo: 1 });
   assert.equal(next.nextReminderAt, '2026-10-23T05:00:00.000Z');
@@ -77,7 +85,7 @@ try {
   let release;
   const blocker = withPublicationQueue('app:test:1', () => new Promise(resolve => { release = resolve; }));
   await new Promise(resolve => setImmediate(resolve));
-  at('2026-10-24T08:00:00'); const queued = service.tick();
+  at('2026-10-24T08:10:00'); const queued = service.tick();
   await new Promise(resolve => setImmediate(resolve));
   const beforeQueue = calls.length;
   at('2026-10-24T13:00:00'); const afternoon = service.tick();
@@ -96,7 +104,7 @@ try {
   reviewer.status = 'active';
   const blockedReviewer = withPublicationQueue('app:test:1', () => new Promise(resolve => { release = resolve; }));
   await new Promise(resolve => setImmediate(resolve));
-  at('2026-10-27T08:00:00'); const invalidated = service.tick();
+  at('2026-10-27T08:10:00'); const invalidated = service.tick();
   await new Promise(resolve => setImmediate(resolve));
   const beforeInvalidated = calls.length;
   reviewer.status = 'disabled'; release(); await blockedReviewer; await invalidated;
@@ -104,7 +112,7 @@ try {
   reviewer.status = 'active';
   let delivered = 0;
   for (const [index, decision] of ['approve', 'reject', 'withdraw'].entries()) {
-    at(`2026-10-${28 + index}T08:00:00`);
+    at(`2026-10-${28 + index}T08:10:00`);
     const target = index === 0
       ? store.getStandard(db.prepare("SELECT id FROM product_standards WHERE serial_no='SLOT-FAILED'").get().id)
       : pending(`RATE-${decision}`);

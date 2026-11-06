@@ -54,9 +54,9 @@ try {
     createEntry(assemblyRecord({ date: '2026-07-01', line }), 'test-user');
   }
   const lineFilter = { dateFrom: '2026-07-01', dateTo: '2026-07-01', line: '2#组装线' };
-  assert.equal(queryEntries(lineFilter).total, 1);
+  assert.equal(queryEntries(lineFilter).total, 3, "已知旧名称写入时归一到同一组装线");
   assert.equal(queryEntries(lineFilter).groups[0].records[0].line, '2#组装线');
-  assert.equal(exportAssemblyEntries(lineFilter).groups[0].records.length, 1);
+  assert.equal(exportAssemblyEntries(lineFilter).groups[0].records.length, 3);
   // Remove only this isolated test fixture so subsequent totals remain unchanged.
   getDB().prepare("DELETE FROM assembly_records WHERE date = ?").run('2026-07-01');
 

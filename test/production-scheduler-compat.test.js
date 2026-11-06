@@ -75,14 +75,14 @@ test("real cron preserves production and standard reminder lifecycle without reg
       users: () => [], send: async () => assert.fail("no real reminder delivery") });
     reminders.start(reminderCron);
     reminders.start(reminderCron);
-    assert.equal(reminderCron.tasks.length, 1, "repeated start creates one reminder task");
+    assert.equal(reminderCron.tasks.length, 2, "repeated start retains exactly the morning and afternoon tasks");
     assert.equal(checks, 0, "reminder must not catch up immediately on startup");
     await reminderCron.tasks[0].execute();
     assert.equal(checks, 1, "scheduled reminder callback remains callable");
     reminders.stop();
-    assert.equal(cron.getTasks().has(reminderCron.tasks[0].id), false, "stopped reminder leaves the registry");
+    assert(reminderCron.tasks.slice(0, 2).every(task => !cron.getTasks().has(task.id)), "both stopped reminders leave the registry");
     reminders.start(reminderCron);
-    assert.equal(reminderCron.tasks.length, 2, "reminder restarts after stop");
+    assert.equal(reminderCron.tasks.length, 4, "restart creates a fresh morning and afternoon pair");
     assert.equal(checks, 1, "restart does not run an extra check");
     assert.equal(new Set([...productionCron.tasks, ...reminderCron.tasks].map(task => task.id)).size,
       productionCron.tasks.length + reminderCron.tasks.length, "public task ids remain unique");

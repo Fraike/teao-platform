@@ -133,7 +133,7 @@ export function ProductionEntryPage() {
   useTabInitialEffect("lines", () => {
     api.get<{ ok: boolean; data: string[] }>("/api/production/lines")
       .then((result) => {
-        if (result.ok) setLines(buildAssemblyLineOptions(result.data));
+        if (result.ok) setLines(buildAssemblyLineOptions());
       })
       .catch(() => undefined);
   }, [], lines.length > 0);
@@ -248,7 +248,7 @@ export function ProductionEntryPage() {
   };
 
   const columns = useMemo<ColumnsType<ProductionRecord>>(() => [
-    { title: "产线", dataIndex: "line", key: "ln", width: 42, fixed: "left",
+    { title: "产线", dataIndex: "line", key: "ln", width: 100, fixed: "left",
       render: (v: string) => <span style={{ fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },
     { title: "日期", dataIndex: "date", key: "dt", width: 76, fixed: "left",
       render: (v: string) => <span style={{ fontSize: 12, whiteSpace: "nowrap" }}>{v}</span> },

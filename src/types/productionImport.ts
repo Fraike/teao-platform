@@ -1,5 +1,6 @@
 export interface ProductionImportPreview {
   previewToken: string;
+  lineChanges?: Array<{row: number; from: string; to: string}>;
   currentCount: number;
   incomingCount: number;
   replacedCount: number;

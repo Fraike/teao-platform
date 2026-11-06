@@ -101,10 +101,7 @@ export interface AuditLog {
 }
 
 // 产线选项
-export const ASSEMBLY_LINES = [
-  "12#", "15#", "16#", "17#", "18#", "19#", "20#",
-  "21#", "22#", "23#", "24#", "25#", "26#", "27#",
-];
+export { ASSEMBLY_LINES } from '../../server/shared/assembly-lines.ts';
 
 // 工序字段列表
 export const PROCESS_FIELDS: { key: keyof ProductionEntryInput; label: string }[] = [

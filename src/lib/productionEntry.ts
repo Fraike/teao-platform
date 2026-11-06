@@ -1,8 +1,8 @@
+import {ASSEMBLY_LINES} from '../../server/shared/assembly-lines.ts';
 export type OrderQtySort = "asc" | "desc" | null;
 
-export function buildAssemblyLineOptions(lines: readonly string[]): string[] {
-  return [...new Set(lines.filter(line => line.trim()))]
-    .sort((left, right) => left.localeCompare(right, "zh-CN", { numeric: true }));
+export function buildAssemblyLineOptions(): string[] {
+  return [...ASSEMBLY_LINES];
 }
 
 export function getInjectionShiftVisual(shift: string): { tone: "day" | "night"; icon: "sun" | "moon" } {

@@ -69,9 +69,9 @@ try {
   assert.equal(preview.body.hasData, false);
   assert.equal(preview.body.dataSource, "internal");
   assert.match(preview.body.content, /内部平台/);
-  store.createEntry({ date: "2026-09-15", line: "1", customer: "C", productName: "Late record", dailyQty: 7 }, "test");
+  store.createEntry({ date: "2026-09-15", line: "1#", customer: "C", productName: "Late record", dailyQty: 7 }, "test");
   assert.equal((await request("/report?date=2026-09-15")).body.assembly.summary.totalActualQty, 7);
-  store.createEntry({ date: "2026-09-14", line: "2", customer: "C", productName: "Earlier", planQty: 10, dailyQty: 5, defects: 1 }, "test");
+  store.createEntry({ date: "2026-09-14", line: "2#", customer: "C", productName: "Earlier", planQty: 10, dailyQty: 5, defects: 1 }, "test");
   const range = await request("/report?dateFrom=2026-09-14&dateTo=2026-09-15");
   assert.equal(range.status, 200);
   assert.equal(range.body.dateFrom, "2026-09-14");

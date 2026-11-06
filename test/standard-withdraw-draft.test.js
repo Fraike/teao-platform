@@ -21,7 +21,7 @@ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listeni
 const call=async(who,url,method='GET',body)=>{const r=await fetch(`http://127.0.0.1:${server.address().port}${url}`,{method,headers:{authorization:`Bearer ${token[who]}`,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:r.status,body:r.headers.get('content-type')?.includes('application/json')?await r.json():{}};};
 const input={serialNo:'ADMIN-PENDING',customer:'客户',model:'RD-TEST',categoryKey:'gear_damper',fields:{test_standard:'10-20'}};
 const exp=v=>({versionId:v.id,revision:v.revision});
-const nextMorning=at=>{let day=Date.parse(new Date(at+REVIEW_REMINDER_INTERVAL_MS).toISOString().slice(0,10)+'T08:00:00+08:00');while(day<=at||new Date(day).getUTCDay()===0)day+=REVIEW_REMINDER_INTERVAL_MS;return day;};
+const nextMorning=at=>{let day=Date.parse(new Date(at+REVIEW_REMINDER_INTERVAL_MS).toISOString().slice(0,10)+'T08:10:00+08:00');while(day<=at||new Date(day).getUTCDay()===0)day+=REVIEW_REMINDER_INTERVAL_MS;return day;};
 async function pending(serialNo){let d=s.createStandard({...input,serialNo},users[1]);return s.submitStandard(d.id,users[1],{...exp(d.versions[0]),reviewerId:'reviewer',reviewerName:'reviewer'});}
 try {
  let d=await pending('WITHDRAW-OWNER');const v=d.versions[0];const withdraw=`/api/standards/${d.id}/withdraw`;

@@ -15,7 +15,7 @@ function reminderSlot(at, configuration) {
   const local = new Date(at + 8 * 60 * 60 * 1000);
   const date = formatShanghaiDate(new Date(at));
   const hour = local.getUTCHours();
-  return [8, 13].includes(hour) && local.getUTCMinutes() === 0 && !isRestDay(date, configuration)
+  return ((hour === 8 && local.getUTCMinutes() === 10) || (hour === 13 && local.getUTCMinutes() === 0)) && !isRestDay(date, configuration)
     ? { day: date, hour } : null;
 }
 
@@ -25,7 +25,7 @@ function nextReminderAt(at, configuration) {
     const day = start + index * REVIEW_REMINDER_INTERVAL_MS;
     if (isRestDay(formatShanghaiDate(new Date(day)), configuration)) continue;
     for (const hour of [8, 13]) {
-      const candidate = day + hour * 60 * 60 * 1000;
+      const candidate = day + hour * 60 * 60 * 1000 + (hour === 8 ? 10 * 60 * 1000 : 0);
       if (candidate > at) return new Date(candidate).toISOString();
     }
   }
@@ -102,6 +102,16 @@ function text(value) {
   return [...String(value || "—").replace(/[\r\n]/g, " ")].slice(0, 100).join("");
 }
 
+export function reviewWaitingText(submittedAt, at) {
+  const submitted = Date.parse(submittedAt);
+  if (!Number.isFinite(submitted)) return '提交时间：未记录\n已等待：无法计算';
+  const minutes = Math.max(0, Math.floor((at - submitted) / 60000));
+  const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60);
+  const waiting = `${days ? `${days}天` : ''}${hours ? `${hours}小时` : ''}${minutes % 60 || !days && !hours ? `${minutes % 60}分钟` : ''}`;
+  const localTime = new Date(submitted + 8 * 3600000).toISOString();
+  return `提交时间：${localTime.slice(0, 10)} ${localTime.slice(11, 16)}\n已等待：${waiting}（尚未审核通过）`;
+}
+
 async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, automaticAt, slot, currentUsers) {
   return withPublicationQueue(webhook, async () => {
     const prepared = prepareManual?.();
@@ -119,12 +129,12 @@ async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, a
       for (const item of claimed) d.prepare("UPDATE standard_review_reminders SET status='unbound' WHERE version_id=? AND submitted_at=?").run(item.id, item.submitted_at);
       return { status: 'unbound', channel: 'app' };
     }
-    const header = `【产品标准待审核提醒】审核人：${text(reviewer.name || reviewer.username)}，当前有 ${claimed.length} 条标准待处理：\n`;
+    const header = `【产品标准待审核提醒】审核人：${text(reviewer.name || reviewer.username)}，当前有 ${claimed.length} 条标准待处理，请尽快完成审核。\n`;
     const names = new Map(listCategories().map(category => [category.key, category.name]));
     const lines = claimed.map(item => {
       const identity = standardNotificationIdentity({ id: item.standard_id, serialNo: item.serial_no },
         { categoryKey: item.category_key, customer: text(item.customer), model: text(item.model), status: 'pending_review' }, names);
-      return `${identity.details}\n版本：V${item.version_no}`;
+      return `${identity.details}\n版本：V${item.version_no}\n${reviewWaitingText(item.submitted_at, now)}`;
     });
     const content = `${header}${lines.join("\n\n")}`;
     const prefixSize = Buffer.byteLength(`【待审提醒 ${text(reviewer.name || reviewer.username)} 999999/999999】\n`, "utf8");
@@ -178,7 +188,7 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
   const d = getDB();
   initializeReminderSchema(d);
   const runningSlots = new Set();
-  let task = null;
+  let tasks = [];
   async function tick() {
     if (isReleaseMaintenance()) return;
     const configuration = config();
@@ -233,9 +243,9 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
       return { ...result, nextReminderAt: nextReminderAt(now(), configuration) };
     },
     start(cron) {
-      if (task) return;
-      task = cron.schedule("0 8,13 * * *", safelyTick, { timezone: "Asia/Shanghai" });
+      if (tasks.length) return;
+      tasks = ["10 8 * * *", "0 13 * * *"].map(expression => cron.schedule(expression, safelyTick, { timezone: "Asia/Shanghai" }));
     },
-    stop() { task?.stop(); task?.destroy?.(); task = null; },
+    stop() { for (const task of tasks) { task.stop(); task.destroy?.(); } tasks = []; },
   };
 }

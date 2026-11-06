@@ -311,6 +311,7 @@ export function ProductionImportModal({ department, open, onClose, onImported }:
             <div>导入日期：{preview.incomingDateRange ? `${preview.incomingDateRange.from} 至 ${preview.incomingDateRange.to}` : "无"}</div>
             <div>导入后消失的日期：{preview.disappearingDates.length ? preview.disappearingDates.map(({ date, count }) => `${date}（${count}条）`).join("、") : "无"}</div>
             <div>每日条数变化：{preview.dateDifferences.length ? preview.dateDifferences.map(({ date, currentCount, incomingCount }) => `${date}：${currentCount}→${incomingCount}`).join("、") : "无"}</div>
+            {!!preview.lineChanges?.length && <div>产线名称将统一：{preview.lineChanges.map(change => `第${change.row}条 ${change.from}→${change.to}`).join("；")}</div>}
             <div>原有 {preview.replacedCount} 条记录均会从当前列表移除；请核对后再确认。</div>
           </div>}
         />

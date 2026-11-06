@@ -121,7 +121,7 @@
 
 .tableWrap {
   /* Stable reading density, independent of the category/overview layout. */
-  --standard-row-height: 64px;
+  --standard-row-height: 80px;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -235,7 +235,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
   padding-top: 4px;
   border-top: 1px solid #e8edf3;

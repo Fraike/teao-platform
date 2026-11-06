@@ -1,8 +1,9 @@
+import {normalizeAssemblyLine} from '../../../server/shared/assembly-lines';
 import { useTabPage, useTabState, useTabBusy, useTabForm, useTabInitialEffect, } from "../../lib/tabPageContext";
 import { useEffect, useCallback } from "react";
 import {
   Modal, Form, Select, Input, InputNumber, DatePicker, Divider,
-  Button, Space, message, Descriptions, Row, Col, AutoComplete,
+  Button, Space, message, Descriptions, Row, Col,
 } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
@@ -108,9 +109,12 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
     const defaultFiller = currentUser?.name || currentUser?.username || "";
     if (fillRecord) {
       const copiedQuantities = copyFrom ? buildAssemblyCopyValues(fillRecord) : null;
+      let line = '';
+      try { line = normalizeAssemblyLine(fillRecord.line); }
+      catch { message.warning('原产线无法识别，请重新选择固定产线'); }
       form.setFieldsValue({
         date: copyFrom ? dayjs() : dayjs(fillRecord.date),
-        line: fillRecord.line,
+        line,
         productName: fillRecord.productName,
         productId: fillRecord.productId || "",
         productNumber: fillRecord.productNumber || "",
@@ -262,8 +266,9 @@ export function EntryDrawer({ open, record, copyFrom, defaultDate, onClose }: En
           </Col>
           <Col span={8}>
             <Form.Item label="产线" name="line" rules={[{ required: true, message: "必填" }]}>
-              <AutoComplete
-                placeholder="选择或输入产线号"
+              <Select
+                showSearch optionFilterProp="label"
+                placeholder="请选择产线"
                 options={ASSEMBLY_LINES.map((l) => ({ value: l, label: l }))}
                 filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input?.toLowerCase() ?? "")}
               />

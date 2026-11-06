@@ -1,8 +1,8 @@
+import {ASSEMBLY_LINES} from "../shared/assembly-lines.ts";
 import { jwtAuth, requirePermission, requireProductionImport } from "../middleware/jwt-auth.js";
 import { previewProductionImport, confirmProductionImport } from "../services/production-import.js";
 import {
   initDB,
-  getDB,
   queryEntries,
   createEntry,
   updateEntry,
@@ -26,9 +26,7 @@ export function registerProductionEntryRoutes(app) {
   // 获取产线列表
   app.get("/api/production/lines", jwtAuth, requirePermission("production"), (_req, res) => {
     try {
-      const db = getDB();
-      const rows = db.prepare("SELECT DISTINCT line FROM assembly_records WHERE line != '' ORDER BY line").all();
-      res.json({ ok: true, data: rows.map((r) => r.line) });
+      res.json({ ok: true, data: ASSEMBLY_LINES });
     } catch (err) {
       res.status(500).json({ error: "查询失败", detail: err.message });
     }

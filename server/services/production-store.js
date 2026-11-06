@@ -1,3 +1,4 @@
+import {normalizeAssemblyLine} from "../shared/assembly-lines.ts";
 import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
@@ -271,6 +272,10 @@ export function validateProductionImportRecords(department, records) {
     : department === "injection" ? ["date", "machine", "shift", "productName"] : null;
   if (!fields) throw importValidationError("未知生产部门");
   validateImportedRecords(records, fields);
+  if (department === "assembly") for (const [index, record] of records.entries()) {
+    try { normalizeAssemblyLine(record.line); }
+    catch (error) { throw importValidationError(`第 ${index + 1} 行：${error.message}`); }
+  }
 }
 
 // ---- 公开 API ----
@@ -331,6 +336,7 @@ export function exportAssemblyEntries(filters = {}) {
 }
 
 export function createEntry(data, user) {
+  data = { ...data, line: normalizeAssemblyLine(data.line) };
   const d = getDB();
   const now = new Date().toISOString();
   const stmt = d.prepare(`
@@ -392,6 +398,7 @@ export function replaceAssemblyEntries(records, user, backupFile = null) {
 }
 
 export function updateEntry(id, data, user) {
+  if (data.line !== undefined) data = { ...data, line: normalizeAssemblyLine(data.line) };
   const d = getDB();
   const old = d.prepare("SELECT * FROM assembly_records WHERE id = ?").get(id);
   if (!old) return null;

@@ -1,3 +1,4 @@
+import {normalizeAssemblyLine} from "../shared/assembly-lines.ts";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -44,7 +45,12 @@ export function previewProductionImport(department, records, userId) {
     expiresAt: Date.now() + PREVIEW_MS,
   });
   for (const [key, value] of previews) if (value.expiresAt < Date.now()) previews.delete(key);
+  const lineChanges = department === "assembly" ? records.flatMap((row, index) => {
+    const normalized = normalizeAssemblyLine(row.line);
+    return row.line === normalized ? [] : [{ row: index + 1, from: row.line, to: normalized }];
+  }) : [];
   return {
+    lineChanges,
     previewToken: token,
     currentCount: oldRows.length,
     incomingCount: records.length,

@@ -510,7 +510,7 @@ function ProductStandardPageContent() {
       {
         title: "操作",
         key: `action-${canEdit}-${canReview}-${canRetire}-${canDirectPublish}-${currentUserId}`,
-        width: 180,
+        width: canDirectPublish ? 280 : 180,
         fixed: "right",
         render: (_: unknown, record: StandardListItem) => (
           <div className={styles.rowActions}>
@@ -663,7 +663,7 @@ function ProductStandardPageContent() {
           fitViewport
           bottomScrollbar={false}
           virtual={virtualTable}
-          listItemHeight={64}
+          listItemHeight={80}
           components={virtualTable?virtualTableComponents:tableComponents}
           locale={{ emptyText: <Empty description="没有匹配的标准" /> }}
           dataSource={filtered}
