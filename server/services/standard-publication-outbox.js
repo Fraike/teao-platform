@@ -1,3 +1,5 @@
+import { pushAllowed, onPushSettingsChange } from "./push-settings.ts";
+import { capturePushGuard } from "./push-policy.ts";
 import { randomUUID } from "node:crypto";
 import { buildStandardPublicationMessages } from "./standard-publication.js";
 import { sendWecomText, sendWecomMessage } from "./wecom.js";
@@ -24,8 +26,15 @@ export function enqueueStandardPublication(d, standard, version, category, optio
     cancelStandardPublications(d, standard.id || standard.serialNo);
     d.prepare(`INSERT INTO standard_publication_outbox(id,standard_id,version_id,payload,total_parts,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?)`).run(id, standard.id || standard.serialNo, version.id, JSON.stringify(messages), messages.length, now, now);
+    if (!pushAllowed("standardPublication")) skipDisabledPublications(d);
     return id;
   })();
+}
+
+export function skipDisabledPublications(d) {
+  if (pushAllowed("standardPublication")) return;
+  d.prepare("UPDATE standard_publication_outbox SET status='disabled',revision=revision+1,updated_at=? WHERE status='queued'")
+    .run(new Date().toISOString());
 }
 
 export function cancelStandardPublications(d, standardId) {
@@ -69,12 +78,19 @@ export function recoverInterruptedPublications(d, now = Date.now()) {
 
 export async function deliverStandardPublication(d, id, { webhook, sendText = sendWecomText, sendMarkdown = sendWecomMessage } = {}) {
   initPublicationOutbox(d);
+  skipDisabledPublications(d);
+  if (!pushAllowed("standardPublication")) return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
+  const allowed = capturePushGuard("standardPublication");
   if (!webhook) {
     d.prepare("UPDATE standard_publication_outbox SET status='not_configured',revision=revision+1,updated_at=? WHERE id=? AND status='queued'")
       .run(new Date().toISOString(), id);
     return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
   }
   return withPublicationQueue(webhook, async () => {
+    if (!allowed()) {
+      d.prepare("UPDATE standard_publication_outbox SET status='disabled',revision=revision+1,updated_at=? WHERE id=? AND status='queued'").run(new Date().toISOString(), id);
+      return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
+    }
     const candidate = d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id);
     if (candidate?.status === "queued" && !isCurrentPublication(d, candidate)) {
       d.prepare("UPDATE standard_publication_outbox SET status='superseded',revision=revision+1,updated_at=? WHERE id=?")
@@ -90,14 +106,18 @@ export async function deliverStandardPublication(d, id, { webhook, sendText = se
       for (let index = row.next_part; index < messages.length; index++) {
         const active = d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id);
         // An in-flight HTTP request cannot be recalled; cancellation stops all subsequent parts.
+        if (!allowed()) {
+          d.prepare("UPDATE standard_publication_outbox SET status='disabled',revision=revision+1,updated_at=? WHERE id=? AND status='sending'").run(new Date().toISOString(), id);
+          return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
+        }
         if (active.status !== "sending" || !isCurrentPublication(d, active)) {
           if (active.status === "sending") cancelStandardPublications(d, active.standard_id);
           return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
         }
         const message = messages[index];
-        const options = { shouldSend: () => {
+        const options = { channel: "standardPublication", shouldSend: () => {
           const latest = d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id);
-          return latest.status === "sending" && isCurrentPublication(d, latest);
+          return allowed() && latest.status === "sending" && isCurrentPublication(d, latest);
         } };
         if (message.type === "text") await sendText(webhook, message.content, message.mentions || [], options);
         else await sendMarkdown(webhook, message.content, options);
@@ -107,6 +127,10 @@ export async function deliverStandardPublication(d, id, { webhook, sendText = se
       d.prepare("UPDATE standard_publication_outbox SET status='sent',revision=revision+1,updated_at=? WHERE id=? AND status='sending'")
         .run(new Date().toISOString(), id);
     } catch (error) {
+      if (error.code === "PUSH_DISABLED" || error.code === "SEND_CANCELLED" && !allowed()) {
+        d.prepare("UPDATE standard_publication_outbox SET status='disabled',revision=revision+1,updated_at=? WHERE id=? AND status='sending'").run(new Date().toISOString(), id);
+        return summary(d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id));
+      }
       if (error.code === "SEND_CANCELLED") {
         const latest = d.prepare("SELECT * FROM standard_publication_outbox WHERE id=?").get(id);
         if (latest.status === "sending") cancelStandardPublications(d, latest.standard_id);
@@ -123,6 +147,7 @@ export async function deliverStandardPublication(d, id, { webhook, sendText = se
 
 export function retryStandardPublication(d, standardId, versionId, expectedRevision, acknowledgeUncertain, user) {
   if (user.role !== "admin") throw Object.assign(new Error("仅管理员可以补发群公告"), { status: 403 });
+  capturePushGuard("standardPublication");
   if (!Number.isInteger(expectedRevision)) throw Object.assign(new Error("公告修订号无效"), { status: 400 });
   const row = d.prepare("SELECT * FROM standard_publication_outbox WHERE standard_id=? AND version_id=?").get(standardId, versionId);
   if (!row) throw Object.assign(new Error("没有可补发的公告记录"), { status: 404 });
@@ -135,11 +160,13 @@ export function retryStandardPublication(d, standardId, versionId, expectedRevis
 }
 
 export function createPublicationWorker(d, readConfig) {
-  let task, running = false;
+  let task, unsubscribe, running = false;
   async function tick() {
     if (running || isReleaseMaintenance()) return;
     running = true;
     try {
+      skipDisabledPublications(d);
+      if (!pushAllowed("standardPublication")) return;
       recoverInterruptedPublications(d);
       const webhook = readConfig().wecomWebhook;
       if (!webhook) return;
@@ -148,5 +175,5 @@ export function createPublicationWorker(d, readConfig) {
     } catch (error) { console.error(`[standard-publication] worker ${error.code || "FAILED"}`); }
     finally { running = false; }
   }
-  return { tick, start(cron) { if (!task) { task = cron.schedule("* * * * *", tick, { timezone: "Asia/Shanghai" }); void tick(); } }, stop() { task?.stop(); task?.destroy?.(); task = null; } };
+  return { tick, start(cron) { if (!task) { skipDisabledPublications(d); unsubscribe = onPushSettingsChange(() => skipDisabledPublications(d)); task = cron.schedule("* * * * *", tick, { timezone: "Asia/Shanghai" }); void tick(); } }, stop() { unsubscribe?.(); unsubscribe = undefined; task?.stop(); task?.destroy?.(); task = null; } };
 }

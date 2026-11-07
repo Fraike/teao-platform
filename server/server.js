@@ -17,6 +17,7 @@ import { registerProductionEntryInjectionRoutes } from "./routes/production-entr
 import { registerQuotationRoutes } from "./routes/quotations.js";
 import { registerStandardRoutes } from "./routes/standards.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
+import { registerSystemSettingsRoutes } from "./routes/system-settings.js";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { createProductionScheduler } from "./services/production-report-scheduler.js";
 import { createStandardReviewReminders } from "./services/standard-review-reminders.js";
@@ -43,6 +44,7 @@ registerProductionEntryInjectionRoutes(app);
 registerStandardRoutes(app);
 registerNotificationRoutes(app);
 registerFeedbackRoutes(app);
+registerSystemSettingsRoutes(app);
 const productServices = registerProductRoutes(app);
 
 // ---- cron: daily push ----
@@ -70,8 +72,7 @@ const standardPublicationWorker = createPublicationWorker(getStandardDB(), readC
     console.log(`teao-api running on port ${PORT}`);
     productionScheduler.start();
     productServices.start(cron);
-    if (process.env.STANDARD_REVIEW_REMINDERS_ENABLED === "true") standardReviewReminders.start(cron);
-    else console.log("[standards-reminder] 定时催审未启用，需显式设置 STANDARD_REVIEW_REMINDERS_ENABLED=true");
+    standardReviewReminders.start(cron);
     standardPublicationWorker.start(cron);
   });
 })();

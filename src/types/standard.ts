@@ -158,7 +158,7 @@ export type StandardPublicationNotice = "new" | "changed" | null;
 
 export interface StandardReminderResponse {
   ok: boolean;
-  status: "sent" | "not_configured" | "failed" | "unknown" | "unbound" | "invalid_reviewer" | "cancelled";
+  status: "disabled" | "sent" | "not_configured" | "failed" | "unknown" | "unbound" | "invalid_reviewer" | "cancelled";
   recipientDelivered?: boolean;
   channel?: "app";
   retryAt?: string;
@@ -176,7 +176,7 @@ export interface StandardPublicationDelivery {
   versionId?: string;
   revision?: number;
   updatedAt?: string;
-  status: "sent" | "not_configured" | "failed" | "unknown" | "queued" | "sending" | "not_recorded" | "superseded";
+  status: "disabled" | "sent" | "not_configured" | "failed" | "unknown" | "queued" | "sending" | "not_recorded" | "superseded";
   sentParts: number;
   totalParts: number;
   mentionedSubmitter?: boolean;

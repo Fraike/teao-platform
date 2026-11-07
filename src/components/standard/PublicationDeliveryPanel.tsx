@@ -5,6 +5,7 @@ import type { StandardPublicationDelivery } from "../../types/standard";
 import styles from "./PublicationDeliveryPanel.module.css";
 
 const LABELS: Record<StandardPublicationDelivery["status"], string> = {
+  disabled: "推送已关闭，本次群公告已跳过，不会自动补发",
   sent: "群公告已发送", queued: "群公告已保存，等待发送", sending: "群公告发送中", failed: "企业微信拒绝发送群公告",
   unknown: "群公告发送结果不确定，请先核查群记录", not_configured: "未配置企业微信群，群公告尚未发送", not_recorded: "此历史版本没有群公告发送记录",
   superseded: "已有更新的标准版本，旧公告已停止发送",

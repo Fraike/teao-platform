@@ -30,9 +30,11 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
   { key: "tools", title: "公共工具" },
   { key: "basic-data", title: "基础资料" },
   { key: "engineering", title: "工程部" },
+  { key: "system", title: "系统管理" },
 ];
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
+  { key: "/system-settings", title: "系统设置", description: "系统推送开关与时间设置", category: "系统管理", group: "system", adminOnly: true, icon: "setting", color: "#595959", menu: false, dashboard: true },
   { key: "/", title: "首页", description: "系统功能总览", category: "首页", group: "home", icon: "app", color: "#1677ff", menu: true, dashboard: false },
   { key: "/quotation", title: "国内报价", description: "生成国内客户报价单并导出 PDF", category: "业务系统", group: "business", permission: "business", icon: "file", color: "#1677ff", menu: true, dashboard: true },
   { key: "/quotation-intl", title: "国际报价", description: "海外客户英文报价与贸易条款", category: "业务系统", group: "business", permission: "business", icon: "global", color: "#722ed1", menu: true, dashboard: true },

@@ -1,10 +1,13 @@
+import { capturePushGuard, pushDisabledError } from "./push-policy.ts";
 import { createWecomRateLimiter } from "./wecom-rate-limit.js";
 
 const reserveMessageSlot = createWecomRateLimiter();
 
-async function postWebhook(webhook, payload, { shouldSend } = {}) {
+async function postWebhook(webhook, payload, { shouldSend, channel = "production" } = {}) {
+  const allowed = capturePushGuard(channel);
   try {
     await reserveMessageSlot(webhook);
+    if (!allowed()) throw pushDisabledError();
     if (shouldSend && !shouldSend()) throw Object.assign(new Error("公告已停止发送"), { code: "SEND_CANCELLED" });
     const res = await fetch(webhook, {
       method: "POST",
@@ -23,7 +26,7 @@ async function postWebhook(webhook, payload, { shouldSend } = {}) {
     }
     return json;
   } catch (cause) {
-    if (["SEND_REJECTED", "SEND_CANCELLED"].includes(cause.code)) throw cause;
+    if (["SEND_REJECTED", "SEND_CANCELLED", "PUSH_DISABLED"].includes(cause.code)) throw cause;
     const error = new Error("发送结果不确定，请先核查企业微信群，勿直接重试");
     error.code = "SEND_RESULT_UNCERTAIN";
     error.status = 502;

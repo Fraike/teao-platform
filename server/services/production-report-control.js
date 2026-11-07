@@ -1,3 +1,5 @@
+import { pushAllowed } from "./push-settings.ts";
+import { capturePushGuard, pushDisabledError } from "./push-policy.ts";
 import cron from "node-cron";
 import { createHash } from "node:crypto";
 import { readConfig, writeConfig } from "../config.js";
@@ -149,24 +151,36 @@ function repeatState(d, date) {
   return d.prepare("SELECT 1 FROM production_report_sends WHERE date = ? AND status = 'sent' LIMIT 1").get(date) ? "skipped_duplicate" : null;
 }
 
-export async function sendProductionReport(date, { automatic = false, confirmRepeat = false, actor } = {}) {
+export async function sendProductionReport(date, { automatic = false, confirmRepeat = false, actor, shouldSend } = {}) {
   validateDate(date);
+  if (!pushAllowed("production")) {
+    if (automatic) return { ok: true, date, status: "skipped_disabled" };
+    throw pushDisabledError();
+  }
+  const allowed = capturePushGuard("production");
+  const valid = () => allowed() && (!shouldSend || shouldSend());
   return withOperation("send_report", actor || (automatic ? "cron" : "user"), async (config, d) => {
+    if (!valid()) throw pushDisabledError();
     const repeated = repeatState(d, date);
     if (repeated && automatic) return { ok: true, date, dataSource: config.dataSource, status: repeated };
     if (repeated && !confirmRepeat) throw apiError(409, "该日报已发送或发送结果待核查，请确认是否重复发送", "REPEAT_CONFIRMATION_REQUIRED");
     const report = await generateProductionReport(date, config);
     if (automatic && !hasProductionData(report)) return { ok: true, date, dataSource: config.dataSource, status: "skipped_empty" };
     if (!config.wecomWebhook) throw apiError(400, "未配置企微 Webhook");
+    if (!valid()) throw pushDisabledError();
     const now = new Date().toISOString();
     const content = reportContent(report);
     const contentHash = createHash("sha256").update(content).digest("hex");
     const id = d.prepare("INSERT INTO production_report_sends (date, data_source, trigger_type, status, created_at, updated_at, actor, content_hash) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)")
       .run(date, config.dataSource, automatic ? "automatic" : "manual", now, now, actor || (automatic ? "cron" : "user"), contentHash).lastInsertRowid;
     try {
-      await sendWecomMessage(config.wecomWebhook, content);
+      await sendWecomMessage(config.wecomWebhook, content, { channel: "production", shouldSend: valid });
       d.prepare("UPDATE production_report_sends SET status = 'sent', updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
     } catch (error) {
+      if (["PUSH_DISABLED", "SEND_CANCELLED"].includes(error.code)) {
+        d.prepare("DELETE FROM production_report_sends WHERE id=? AND status='pending'").run(id);
+        throw pushDisabledError();
+      }
       d.prepare("UPDATE production_report_sends SET status = ?, error_code = ?, updated_at = ? WHERE id = ?")
         .run(error.code === "SEND_REJECTED" ? "rejected" : "unknown", error.code || "SEND_RESULT_UNCERTAIN", new Date().toISOString(), id);
       throw error;

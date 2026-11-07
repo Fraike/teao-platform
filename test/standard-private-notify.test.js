@@ -2,6 +2,9 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 let user = { id: 'reviewer', status: 'active', permissions: ['engineering_review'], wecomUserid: 'alice' };
 let pending = true, mutate = () => {}, posts = 0;
+mock.module('../server/services/push-settings.ts', { namedExports: {
+ readPushSettings: () => ({ revision: 1 }), pushAllowed: () => true, onPushSettingsChange: () => () => {},
+} });
 mock.module('../server/services/users.js', { namedExports: { getUserById: () => user, findUserByName: () => null } });
 mock.module('../server/config.js', { namedExports: { readConfig: () => ({ wecomWebhook: 'never-used' }) } });
 mock.module('../server/services/standard-store.js', { namedExports: {

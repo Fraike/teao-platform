@@ -59,6 +59,7 @@ export function StandardRetireModal({ target, direct = true, onClose, onRetired 
       onRetired(data);
       onClose();
       if (direct) message.success("标准已停用，历史已保留");
+      else if (notification?.status === "disabled") message.info("停用申请已提交；审核提醒已关闭，当前标准继续生效");
       else if (notification?.status === "sent") message.success("停用申请已提交并提醒审核人，当前标准继续生效");
       else message.warning("停用申请已提交，当前标准继续生效；审核人应用通知未送达或结果不确定，请核查账号绑定、权限及应用配置");
     } catch (cause) {

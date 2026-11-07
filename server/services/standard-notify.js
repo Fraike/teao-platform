@@ -1,3 +1,5 @@
+import { pushAllowed } from "./push-settings.ts";
+import { capturePushGuard } from "./push-policy.ts";
 import { readConfig } from "../config.js";
 import { sendWecomText } from "./wecom.js";
 import { findUserByName, getUserById } from "./users.js";
@@ -15,13 +17,15 @@ function validReviewer(user, submitterId, retirement = false) {
   return user?.status === 'active' && user.id !== submitterId && (retirement ? canDirectRetire(user) : user.role === 'admin' || user.permissions?.includes('engineering_review'));
 }
 async function sendPrivate(reviewerId, submitterId, content, guard, retirement = false) {
+  if (!pushAllowed("standardReview")) return { status: "disabled", channel: "app" };
+  const allowed = capturePushGuard("standardReview");
   const reviewer = getUserById(reviewerId);
   if (!validReviewer(reviewer, submitterId, retirement)) return { status: 'invalid_reviewer' };
   const binding = reviewer.wecomUserid;
   try {
     for (const part of splitStandardPublication(content, 1800)) await sendWecomAppText(binding, part, { shouldSend: () => {
       const current = getUserById(reviewerId);
-      return validReviewer(current, submitterId, retirement) && current.wecomUserid === binding && guard();
+      return allowed() && validReviewer(current, submitterId, retirement) && current.wecomUserid === binding && guard();
     } });
     return { status: 'sent', channel: 'app', recipientDelivered: true };
   } catch (error) { return { status: appNotificationStatus(error), channel: 'app' }; }
@@ -82,6 +86,8 @@ export async function notifyReviewDone(standard, { approve, comment, reviewerNam
     const id = enqueueStandardPublication(d, standard, standard.versions[0], listCategories().find(category => category.key === standard.categoryKey), { comment, reviewerName, directPublish });
     return publicationResponse(d, id, { webhook });
   }
+  if (!pushAllowed("standardReview")) return { status: "disabled", sentParts: 0, totalParts: 0 };
+  const allowed = capturePushGuard("standardReview");
   if (!webhook) return { status: "not_configured", sentParts: 0, totalParts: 0 };
   const info = latestInfo(standard);
   const submitter = info.submitterId ? getUserById(info.submitterId) : findUserByName(info.submitterName);
@@ -101,13 +107,13 @@ export async function notifyReviewDone(standard, { approve, comment, reviewerNam
     try {
       for (const [index, part] of parts.entries()) {
         const prefix = parts.length > 1 ? `【${kind} ${heading} · ${index + 1}/${parts.length}】\n` : "";
-        await sendWecomText(webhook, prefix + part, index === 0 ? mentions : []);
+        await sendWecomText(webhook, prefix + part, index === 0 ? mentions : [], { channel: "standardReview", shouldSend: allowed });
         sentParts++;
       }
       return { status: "sent", sentParts, totalParts: parts.length, mentionedSubmitter: !approve && mentions.length > 0 };
     } catch (err) {
       console.error("[standards-notify] 审核结果提醒发送失败：", err.message);
-      return { status: err.code === "SEND_REJECTED" ? "failed" : "unknown", sentParts, totalParts: parts.length };
+      return { status: err.code === "PUSH_DISABLED" ? "disabled" : err.code === "SEND_REJECTED" ? "failed" : "unknown", sentParts, totalParts: parts.length };
     }
   });
 }

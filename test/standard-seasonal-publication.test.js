@@ -38,7 +38,7 @@ test('category read augments stored old definitions without rewriting them; wint
     db.prepare('UPDATE standard_categories SET fields=? WHERE key=?').run(JSON.stringify(category.fields), 'gear_damper');
     const before = db.prepare('SELECT fields FROM standard_categories WHERE key=?').get('gear_damper').fields;
     const categories = store.listCategories();
-    assert.deepEqual(categories.find(c => c.key === 'gear_damper').fields.map(f => f.key), ['test_standard', 'winter_test_standard']);
+    assert.deepEqual(categories.find(c => c.key === 'gear_damper').fields.map(f => f.key), ['test_standard', 'winter_test_standard', 'grease_amount_g']);
     assert.equal(db.prepare('SELECT fields FROM standard_categories WHERE key=?').get('gear_damper').fields, before);
     for (const item of categories) {
       if (item.fields.some(f => f.key === 'test_standard')) assert.equal(item.fields.filter(f => f.key === 'winter_test_standard').length, 1);

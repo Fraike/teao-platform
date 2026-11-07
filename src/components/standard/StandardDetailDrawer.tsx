@@ -109,6 +109,7 @@ export function StandardDetailDrawer({
       setDetail(res.data);
       onChanged(res.data);
       if (res.notification?.status === "sent") message.success("已提交审核，并向指定审核人发送应用通知");
+      else if (res.notification?.status === "disabled") message.info("已提交审核；企业微信推送已关闭，可在系统内处理待审事项");
       else message.warning(`已提交审核；${res.notification?.status === "unbound" ? "审核人未绑定企微账号" : res.notification?.status === "not_configured" ? "企业微信自建应用未配置" : res.notification?.status === "unknown" ? "应用通知发送结果不确定，请核查" : "应用通知未送达，请核查审核人权限和应用配置"}`);
     } catch (err) {
       message.error((err as Error).message || "提交失败");
@@ -132,6 +133,7 @@ export function StandardDetailDrawer({
       setReviewComment("");
       if (res.notification?.status === "sent" && !approve && !res.notification.mentionedSubmitter) message.warning("已驳回并发送群通知；提交人未绑定企微账号，未能 @ 到本人");
       else if (res.notification?.status === "sent") message.success(approve ? "审核通过，完整标准已发布到群并 @所有人" : "已驳回并 @ 提交人");
+      else if (res.notification?.status === "disabled") message.info(approve ? "审核已通过，标准已生效；推送已关闭，本次公告已跳过" : "已驳回；推送已关闭，未发送通知");
       else if (res.notification?.status === "not_configured") message.warning(approve ? "审核已通过，系统标准已生效；尚未配置企业微信群，未发送群公告" : "已驳回；尚未配置企业微信群，未发送提醒");
       else if (res.notification?.status === "queued" || res.notification?.status === "sending") message.info("标准已发布，群公告已入队；可在详情中查看送达状态");
       else if (res.notification) message.warning(`审核${approve ? "通过" : "驳回"}已保存；群消息${res.notification.status === "unknown" ? "发送结果不确定，请先核查群记录" : "发送失败"}（已确认 ${res.notification.sentParts}/${res.notification.totalParts} 条）`);

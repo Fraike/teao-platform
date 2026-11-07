@@ -1,3 +1,4 @@
+import { validateGreaseAmount } from "../../../server/shared/standard-grease";
 import {useTabPage,useTabBusy,useTabDirty,useTabState,useTabForm} from "../../lib/tabPageContext";
 import { groupStandardFields, activeStandardFields } from "../../lib/standardFieldGroups";
 import { useAuthStore } from "../../lib/authStore";
@@ -157,7 +158,8 @@ export function StandardFormModal({
         ? await api.put<StandardReviewResponse>(`/api/standards/${initial!.id}`, payload)
         : await api.post<StandardReviewResponse>("/api/standards", payload);
       message.success(result.data.versions[0]?.status === "published" ? "已保存并发布" : isEdit ? "已保存草稿" : "已新增标准草稿");
-      if (result.notification && result.notification.status !== "sent") message.warning(result.notification.status === "not_configured"
+      if (result.notification?.status === "disabled") message.info("标准已生效；推送已关闭，本次公告已跳过");
+      else if (result.notification && result.notification.status !== "sent") message.warning(result.notification.status === "not_configured"
         ? "标准已生效，未配置企业微信群；公告已留存，可在详情中补发"
         : "标准已生效，请在详情中核查群公告送达状态，勿重复保存来补发");
       endSession();
@@ -246,7 +248,7 @@ export function StandardFormModal({
           {groupStandardFields(displayedFields).map(group => (
             <section key={group.name} className={styles.fieldGroup} aria-label={group.name || "规格参数"}>
               {group.name && <h4 className={styles.groupTitle}>{group.name}</h4>}
-              {group.fields.map(field => <Form.Item key={field.key} name={["fields", field.key]} label={field.key === "winter_test_standard" ? `${field.label}（选填）` : field.label} extra={field.key === "gear_spec" ? "每行填写一种齿轮规格，按回车换行" : undefined} rules={field.key === "part_type" ? [{required:true,message:"请选择盖或座"}] : undefined}>
+              {group.fields.map(field => <Form.Item key={field.key} name={["fields", field.key]} label={field.key === "winter_test_standard" ? `${field.label}（选填）` : field.label} extra={field.key === "grease_amount_g" ? "请填写范围或公差，单位：克。例如 0.4–0.6、0.5±0.05、0.5+0.05/-0.02" : field.key === "gear_spec" ? "每行填写一种齿轮规格，按回车换行" : undefined} rules={field.key === "grease_amount_g" ? [{ validator: (_rule, value: string | undefined) => { const error = validateGreaseAmount(value); return error ? Promise.reject(new Error(error)) : Promise.resolve(); } }] : field.key === "part_type" ? [{required:true,message:"请选择盖或座"}] : undefined}>
                 {field.key === "part_type" ? <Select options={[{label:"盖",value:"盖"},{label:"座",value:"座"}]} placeholder="请选择盖或座" /> : <Input.TextArea autoSize={{ minRows: field.key === "gear_spec" ? 3 : 1, maxRows: field.key === "gear_spec" ? 8 : 4 }} placeholder={field.label} />}
               </Form.Item>)}
             </section>

@@ -1,3 +1,5 @@
+import { enableTestPushes } from './push-enabled-fixture.js';
+enableTestPushes();
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';

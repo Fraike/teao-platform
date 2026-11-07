@@ -28,6 +28,7 @@ export function StandardRemindButton({ standardId, versionNo, serialNo }: Standa
       const result = await api.post<StandardReminderResponse>(`/api/standards/${standardId}/remind`, { versionNo });
       setRetryAt(Date.parse(result.retryAt || "") || 0);
       if (result.status === "sent") message.success("已向指定审核人发送应用催审通知");
+      else if (result.status === "disabled") message.info("审核提醒已在系统设置中关闭，未发送消息");
       else if (result.status === "not_configured") message.warning("企业微信自建应用未配置，未发送催审通知");
       else if (result.status === "unbound") message.warning("审核人未绑定企微账号，未发送催审通知");
       else if (result.status === "cancelled" || result.status === "invalid_reviewer") message.warning("审核任务或审核人权限已变化，未发送通知");

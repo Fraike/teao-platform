@@ -242,3 +242,15 @@
 }
 .productDrawingLink {display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
 .productDrawingLink :global(.ant-tag) {margin:0;font-size:11px;line-height:18px;}
+
+.resetFilterButton:global(.ant-btn) {
+  color: #1677ff;
+  background: #f0f7ff;
+  border-color: #91caff;
+  font-weight: 500;
+}
+.resetFilterButton:global(.ant-btn):hover {
+  color: #0958d9;
+  background: #e6f4ff;
+  border-color: #4096ff;
+}

@@ -4,6 +4,9 @@ import {createRequire} from 'node:module';
 const require=createRequire(new URL('../server/package.json',import.meta.url));
 const db=new(require('better-sqlite3'))(':memory:');
 let calls=[],webhook='https://example.invalid/mock',failure=null,submitterBound=true;
+mock.module('../server/services/push-settings.ts', { namedExports: {
+ readPushSettings: () => ({ revision: 1 }), pushAllowed: () => true, onPushSettingsChange: () => () => {},
+} });
 mock.module('../server/config.js',{namedExports:{readConfig:()=>({wecomWebhook:webhook})}});
 const record=async(url,content,mentions=[],type='text')=>{calls.push({url,content,mentions,type});await new Promise(resolve=>setImmediate(resolve));if(failure)throw failure;return{errcode:0};};
 mock.module('../server/services/wecom.js',{namedExports:{sendWecomText:record,sendWecomMessage:async(url,content)=>record(url,content,[],'markdown_v2')}});

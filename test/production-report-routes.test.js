@@ -85,6 +85,10 @@ try {
   assert.equal((await request("/report?dateFrom=2025-01-01&dateTo=2026-01-01")).status, 400);
   assert.equal((await request("/report/records?department=bad&dateFrom=2026-09-14&dateTo=2026-09-15")).status, 400);
   assert.equal((await request("/fetch?date=2026-09-15", {})).body.dataSource, "internal");
+  const paused = await request("/send?date=2026-09-15", {});
+  assert.equal(paused.status, 409);
+  assert.equal(paused.body.code, "PUSH_DISABLED");
+  await request("/config", { enabled: true });
   assert.equal((await request("/send?date=2026-09-15", {})).body.status, "sent");
   const repeated = await request("/send?date=2026-09-15", {});
   assert.equal(repeated.status, 409);
@@ -109,7 +113,9 @@ try {
   assert.equal(scheduled[1].expression, "0 1 13 * * *");
   assert.equal(scheduled[1].options.timezone, "Asia/Shanghai");
   await scheduled[0].callback();
-  assert.equal(sentDate, "2026-09-14", "旧回调也读取最新节假日配置");
+  assert.equal(sentDate, undefined, "修改时间后旧回调不得补发");
+  await scheduled[1].callback();
+  assert.equal(sentDate, "2026-09-14", "新回调读取最新节假日配置");
   config.writeConfig({ ...config.readConfig(), enabled: false });
   sentDate = null;
   await scheduled[1].callback();

@@ -48,6 +48,7 @@ const ProcessCenter = lazy<Record<string,never>>(() => import("./pages/ProcessCe
 const ProductionReportPage = lazy<Record<string,never>>(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
 const ProductionEntryPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryPage").then((m) => ({ default: m.ProductionEntryPage })));
 const ProductionEntryInjectionPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryInjectionPage").then((m) => ({ default: m.ProductionEntryInjectionPage })));
+const SystemSettingsPage = lazy<Record<string,never>>(() => import("./pages/SystemSettingsPage").then((m) => ({ default: m.SystemSettingsPage })));
 const AdminPage = lazy<Record<string,never>>(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const EmployeePage = lazy<Record<string,never>>(() => import("./pages/EmployeePage").then((m) => ({ default: m.EmployeePage })));
 const MaterialDataPage = lazy<Record<string,never>>(() => import("./pages/MaterialDataPage").then((m) => ({ default: m.MaterialDataPage })));
@@ -79,6 +80,7 @@ function renderTabPage(location:Location) {
   return <Suspense fallback={<PageLoader />}>
               <Routes location={location}>
                 <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
+                <Route path="/system-settings" element={<AuthGuard requireAdmin><SystemSettingsPage /></AuthGuard>} />
                 <Route path="/admin" element={<AuthGuard requireAdmin><AdminPage /></AuthGuard>} />
                 <Route path="/quotation" element={<AuthGuard permission="business"><QuotationPage headerHeight={56} /></AuthGuard>} />
                 <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
@@ -329,7 +331,7 @@ function AppLayout() {
               menu={{
                 items: [
                   ...(user.role === "admin"
-                    ? [{ key: "admin", icon: <SettingOutlined />, label: <Link to="/admin">用户管理</Link> }]
+                    ? [{ key: "system-settings", icon: <SettingOutlined />, label: <Link to="/system-settings">系统设置</Link> }, { key: "admin", icon: <SettingOutlined />, label: <Link to="/admin">用户管理</Link> }]
                     : []),
                   ...(user.role === "admin" ? [{ key: "change-password", label: "修改我的密码", onClick: () => setPasswordModalOpen(true) }] : []),
                   { key: "divider", type: "divider" as const },

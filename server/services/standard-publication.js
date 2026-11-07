@@ -1,8 +1,11 @@
+import { greaseCategoryFields } from "../shared/standard-grease.ts";
 import { isStandardFieldApplicable, seasonalStandardFields, standardBusinessFields } from "./standard-fields.js";
 export function publicationSections(standard, version, category) {
   const fields = standardBusinessFields(standard.categoryKey, version.fields || {});
   const paired = !fields.part_type && Object.keys(fields).some(key => /^(lid|seat)_/.test(key));
-  const definitions = seasonalStandardFields(category?.fields).filter(field => isStandardFieldApplicable(standard.categoryKey, field.key)
+  const definitions = (Object.hasOwn(fields, "grease_amount_g")
+    ? greaseCategoryFields(version.categoryKey || standard.categoryKey, seasonalStandardFields(category?.fields))
+    : seasonalStandardFields(category?.fields)).filter(field => isStandardFieldApplicable(standard.categoryKey, field.key)
     && (!field.variant || field.variant === (paired ? "paired" : "component")));
   const labels = new Map([["test_standard", "夏季／常规测试标准"], ["winter_test_standard", "冬季测试标准"], ...definitions.map(field => [field.key, field.label])]);
   const keys = [...new Set([...definitions.map(field => field.key), ...Object.keys(fields)])]

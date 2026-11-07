@@ -1,3 +1,6 @@
+import { pushAllowed, readPushSettings, onPushSettingsChange } from "./push-settings.ts";
+import { capturePushGuard } from "./push-policy.ts";
+import { shanghaiMinute, reminderWindowEnd } from "../shared/push-schedule.ts";
 import { getDB, listCategories } from "./standard-store.js";
 import { listUsers } from "./users.js";
 import { readConfig, formatShanghaiDate, isRestDay } from "../config.js";
@@ -12,11 +15,10 @@ export const REVIEW_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const MANUAL_REMINDER_COOLDOWN_MS = 5 * 60 * 1000;
 
 function reminderSlot(at, configuration) {
-  const local = new Date(at + 8 * 60 * 60 * 1000);
+  const time = shanghaiMinute(at), settings = readPushSettings();
   const date = formatShanghaiDate(new Date(at));
-  const hour = local.getUTCHours();
-  return ((hour === 8 && local.getUTCMinutes() === 10) || (hour === 13 && local.getUTCMinutes() === 0)) && !isRestDay(date, configuration)
-    ? { day: date, hour } : null;
+  return settings.reviewTimes.includes(time) && !isRestDay(date, configuration)
+    ? { day: date, time, revision: settings.revision, end: reminderWindowEnd(at, time, settings.reviewTimes) } : null;
 }
 
 function nextReminderAt(at, configuration) {
@@ -24,8 +26,9 @@ function nextReminderAt(at, configuration) {
   for (let index = 0; index < 370; index++) {
     const day = start + index * REVIEW_REMINDER_INTERVAL_MS;
     if (isRestDay(formatShanghaiDate(new Date(day)), configuration)) continue;
-    for (const hour of [8, 13]) {
-      const candidate = day + hour * 60 * 60 * 1000 + (hour === 8 ? 10 * 60 * 1000 : 0);
+    for (const time of readPushSettings().reviewTimes) {
+      const [hour, minute] = time.split(":").map(Number);
+      const candidate = day + (hour * 60 + minute) * 60000;
       if (candidate > at) return new Date(candidate).toISOString();
     }
   }
@@ -42,8 +45,8 @@ function eligible(user) {
 
 function automaticWindow(now, config, slot, webhook) {
   const at = now(), configuration = config();
-  const local = new Date(at + 8 * 60 * 60 * 1000);
-  return formatShanghaiDate(new Date(at)) === slot.day && local.getUTCHours() === slot.hour
+  return formatShanghaiDate(new Date(at)) === slot.day && at < slot.end && shanghaiMinute(at) >= slot.time
+    && pushAllowed("standardReview") && readPushSettings().revision === slot.revision
     && !isRestDay(slot.day, configuration) && isWecomAppConfigured(configuration.app || readWecomAppConfig()) && appQueueKey(configuration) === webhook ? at : null;
 }
 
@@ -59,9 +62,9 @@ function dueItems(d, now, activeIds, slot) {
     WHERE ${pendingCondition}
     AND v.assigned_reviewer_id IN (SELECT value FROM json_each(@activeIds))
     AND v.submitted_at<>'' AND v.submitted_at<=@at
-    AND NOT EXISTS (SELECT 1 FROM standard_review_scheduled_reminders scheduled WHERE scheduled.reviewer_id=v.assigned_reviewer_id AND scheduled.reminder_date=@day AND scheduled.reminder_slot=@slot)
+    AND NOT EXISTS (SELECT 1 FROM standard_review_timed_reminders scheduled WHERE scheduled.reviewer_id=v.assigned_reviewer_id AND scheduled.reminder_date=@day AND scheduled.reminder_time=@slot)
     ORDER BY v.submitted_at,v.id`).all({ activeIds: JSON.stringify(activeIds),
-      at: new Date(now).toISOString(), day: slot.day, slot: slot.hour });
+      at: new Date(now).toISOString(), day: slot.day, slot: slot.time });
 }
 
 function isCurrentPendingItem(d, item) {
@@ -82,8 +85,8 @@ function pendingGuard(d, items) {
 function claimItems(d, items, now, automaticClaim) {
   return d.transaction(() => {
     if (automaticClaim) {
-      const claimed = d.prepare('INSERT OR IGNORE INTO standard_review_scheduled_reminders(reviewer_id,reminder_date,reminder_slot,attempted_at) VALUES(?,?,?,?)')
-        .run(automaticClaim.reviewerId, automaticClaim.day, automaticClaim.hour, now);
+      const claimed = d.prepare('INSERT OR IGNORE INTO standard_review_timed_reminders(reviewer_id,reminder_date,reminder_time,attempted_at) VALUES(?,?,?,?)')
+        .run(automaticClaim.reviewerId, automaticClaim.day, automaticClaim.time, now);
       if (!claimed.changes) return [];
     }
     return items.filter(item => {
@@ -113,12 +116,16 @@ export function reviewWaitingText(submittedAt, at) {
 }
 
 async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, automaticAt, slot, currentUsers) {
+  if (!pushAllowed("standardReview")) return { status: "disabled" };
+  const allowed = capturePushGuard("standardReview");
   return withPublicationQueue(webhook, async () => {
+    if (!allowed()) return { status: "disabled" };
     const prepared = prepareManual?.();
     const checkedAt = automaticAt?.();
     if (automaticAt && checkedAt === null) return;
     const now = prepared?.now ?? checkedAt ?? at;
     if (prepared) { items = [prepared.item]; reviewer = prepared.reviewer; }
+    const previous = items.map(item => d.prepare("SELECT * FROM standard_review_reminders WHERE version_id=? AND submitted_at=?").get(item.id, item.submitted_at));
     const claimed = claimItems(d, items, now, prepared ? null : { reviewerId: reviewer.id, ...slot });
     if (!claimed.length) {
       if (!prepared) return;
@@ -145,10 +152,12 @@ async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, a
     const binding = reviewer.wecomUserid;
     try {
       for (const [index, part] of parts.entries()) {
+        if (!allowed()) { status = "disabled"; break; }
+        if (automaticAt && automaticAt() === null) { status = "cancelled"; break; }
         await send(reviewer.wecomUserid, `【待审提醒 ${text(reviewer.name || reviewer.username)} ${index + 1}/${parts.length}】\n${part}`,
           { shouldSend: () => {
             const current = currentUsers().find(user => user.id === reviewer.id);
-            return eligible(current) && current.wecomUserid === binding && stillPending()
+            return allowed() && eligible(current) && current.wecomUserid === binding && stillPending()
               && (!automaticAt || automaticAt() !== null);
           } });
         sentParts++;
@@ -156,6 +165,16 @@ async function sendGroup(d, webhook, reviewer, items, at, send, prepareManual, a
     } catch (error) {
       status = appNotificationStatus(error);
       console.error(`[standards-reminder] ${status}; reviewer=${reviewer.id}; count=${claimed.length}`);
+    }
+    if (!allowed() && sentParts === 0 && prepared && ["disabled", "cancelled"].includes(status)) {
+      d.transaction(() => {
+        for (const [index,item] of items.entries()) {
+          d.prepare("DELETE FROM standard_review_reminders WHERE version_id=? AND submitted_at=? AND last_attempt_at=?").run(item.id,item.submitted_at,now);
+          const old=previous[index];
+          if(old) d.prepare("INSERT OR IGNORE INTO standard_review_reminders(version_id,submitted_at,last_attempt_at,last_sent_at,status) VALUES(?,?,?,?,?)").run(old.version_id,old.submitted_at,old.last_attempt_at,old.last_sent_at,old.status);
+        }
+      })();
+      return { status: "disabled" };
     }
     d.transaction(() => {
       for (const item of claimed) d.prepare(`UPDATE standard_review_reminders SET status=?,
@@ -188,16 +207,17 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
   const d = getDB();
   initializeReminderSchema(d);
   const runningSlots = new Set();
-  let tasks = [];
+  let tasks = [], unsubscribe;
+  let installing = false;
   async function tick() {
-    if (isReleaseMaintenance()) return;
+    if (installing || !pushAllowed("standardReview") || isReleaseMaintenance()) return;
     const configuration = config();
     const webhook = appQueueKey(configuration);
     if (!isWecomAppConfigured(configuration.app || readWecomAppConfig())) return;
     const at = now();
     const slot = reminderSlot(at, configuration);
     if (!slot) return;
-    const slotKey = `${slot.day}:${slot.hour}`;
+    const slotKey = `${slot.day}:${slot.time}`;
     if (runningSlots.has(slotKey)) return;
     runningSlots.add(slotKey);
     try {
@@ -226,6 +246,8 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
   return {
     tick,
     async remind(id, user, expected) {
+      manualItem(d, id, user, expected);
+      if (!pushAllowed("standardReview")) return { status: "disabled" };
       const prepare = () => {
         const item = manualItem(d, id, user, expected);
         const reviewer = users().find(candidate => candidate.id === item.assigned_reviewer_id && eligible(candidate));
@@ -243,9 +265,22 @@ export function createStandardReviewReminders({ now = Date.now, users = listUser
       return { ...result, nextReminderAt: nextReminderAt(now(), configuration) };
     },
     start(cron) {
-      if (tasks.length) return;
-      tasks = ["10 8 * * *", "0 13 * * *"].map(expression => cron.schedule(expression, safelyTick, { timezone: "Asia/Shanghai" }));
+      if (unsubscribe) return;
+      const rebuild = () => {
+        for (const task of tasks) { task.stop(); task.destroy?.(); }
+        tasks = [];
+        if (!pushAllowed("standardReview")) return;
+        installing = true;
+        try {
+          tasks = readPushSettings().reviewTimes.map(time => {
+            const [hour, minute] = time.split(":").map(Number);
+            return cron.schedule(`${minute} ${hour} * * *`, safelyTick, { timezone: "Asia/Shanghai" });
+          });
+        } finally { installing = false; }
+      };
+      unsubscribe = onPushSettingsChange(rebuild);
+      rebuild();
     },
-    stop() { for (const task of tasks) { task.stop(); task.destroy?.(); } tasks = []; },
+    stop() { unsubscribe?.(); unsubscribe = undefined; for (const task of tasks) { task.stop(); task.destroy?.(); } tasks = []; },
   };
 }

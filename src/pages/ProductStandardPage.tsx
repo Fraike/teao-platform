@@ -402,7 +402,10 @@ function ProductStandardPageContent() {
   const columns = useMemo<TableColumnsType<StandardListItem>>(() => {
     const isMyReview = (record: StandardListItem) => record.status === "pending_review" && Boolean(currentUserId && record.submittedById && record.submittedById !== currentUserId)
       && (record.assignedReviewerId ? record.assignedReviewerId === currentUserId : canReview);
-    const fields = activeStandardFields(activeCategoryObj).filter(field => field.key !== "winter_test_standard");
+    const fields = activeStandardFields(activeCategoryObj).filter(field =>
+      field.key !== "winter_test_standard"
+      && !(field.key === "import_note"
+        && ["barrel_damper", "rack_damper", "lock_sync", "air_pull_handle"].includes(activeCategoryObj?.key || "")));
     const toFieldColumn = (field: (typeof fields)[number]) => ({
       title: field.key === "test_standard" ? "测试标准" : field.label,
       key: field.key,
@@ -649,7 +652,7 @@ function ProductStandardPageContent() {
           resetVersion={resetVersion}
           onApply={applyFilters.search}
         />
-        <Button size="small" onClick={resetFilters} icon={<ClearOutlined />}>
+        <Button className={styles.resetFilterButton} size="small" onClick={resetFilters} icon={<ClearOutlined />}>
           重置筛选
         </Button>
         <div className={styles.standardCount}>标准总数：{standardsScope === authScope && overallTotal !== null ? overallTotal : "—"} 条 · 当前筛选：{visibleTotal} 条</div>

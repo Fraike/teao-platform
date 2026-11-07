@@ -49,4 +49,4 @@ export interface WecomTokenRequest {
 export type WecomAppErrorCode = 'APP_NOT_CONFIGURED' | 'RECIPIENT_UNBOUND' | 'SEND_CANCELLED'
   | 'SEND_RESULT_UNCERTAIN' | 'TOKEN_FAILED' | 'SEND_REJECTED';
 
-export type WecomAppNotificationStatus = 'not_configured' | 'unbound' | 'cancelled' | 'unknown' | 'failed';
+export type WecomAppNotificationStatus = 'not_configured' | 'unbound' | 'cancelled' | 'unknown' | 'failed' | 'disabled';

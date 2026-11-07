@@ -1,3 +1,4 @@
+import { capturePushGuard, pushDisabledError } from './push-policy.ts';
 import type {
   WecomAppConfig, WecomAppDependencies, WecomAppErrorCode, WecomAppNotificationStatus,
   WecomAppSendOptions, WecomApiBody, WecomTokenCache, WecomTokenRequest,
@@ -13,6 +14,7 @@ export function isWecomAppConfigured(config = readWecomAppConfig()) {
 export function appNotificationStatus(error: unknown): WecomAppNotificationStatus {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
   const statuses: Record<string, WecomAppNotificationStatus> = { APP_NOT_CONFIGURED: 'not_configured', RECIPIENT_UNBOUND: 'unbound', SEND_CANCELLED: 'cancelled', SEND_RESULT_UNCERTAIN: 'unknown' };
+  if (code === 'PUSH_DISABLED') return 'disabled';
   return statuses[code] || 'failed';
 }
 export function createWecomAppClient({ config = readWecomAppConfig, fetch: request = (...args) => fetch(...args), now = Date.now, reserve = createWecomRateLimiter() } : WecomAppDependencies = {}) {
@@ -60,4 +62,10 @@ export function createWecomAppClient({ config = readWecomAppConfig, fetch: reque
   } };
 }
 const client = createWecomAppClient();
-export const sendWecomAppText = (userid: string, content: string, options?: WecomAppSendOptions) => client.send(userid, content, options);
+export const sendWecomAppText = (userid: string, content: string, options?: WecomAppSendOptions) => {
+  const allowed = capturePushGuard('standardReview');
+  return client.send(userid, content, { shouldSend: () => {
+    if (!allowed()) throw pushDisabledError();
+    return !options?.shouldSend || options.shouldSend();
+  } });
+};

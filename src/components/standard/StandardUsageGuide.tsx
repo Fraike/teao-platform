@@ -20,7 +20,7 @@ export function StandardUsageGuide() {
               ]} />
               <p className={styles.returnNote}>驳回后：查看驳回原因 → 修改草稿 → 重新提交审核。</p>
               <p className={styles.returnNote}>提交后需要修改：本人点击“撤回审核” → 修改草稿 → 重新选择审核人提交。</p>
-              <p className={styles.returnNote}>提交时提醒指定审核人；仍待审核的标准在工作日08:00、13:00各提醒一次，也可手动催审。通知中可查看分类、产品信息并打开对应标准。</p>
+              <p className={styles.returnNote}>企业微信推送开启时，提交会提醒指定审核人；仍待审核的标准按系统设置的工作日时间提醒，也可手动催审。通知中可查看分类、产品信息并打开对应标准。</p>
               <p className={styles.note}>管理员可直接“保存并发布”，无需审核。</p>
               <p className={styles.note}>需停用产品时：管理员或有“直接停用”权限的人员可直接停用；有提交权限的其他人员点击停用图标申请，选择审核人，批准前标准继续生效。</p>
             </> },

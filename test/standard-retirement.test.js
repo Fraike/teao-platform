@@ -1,3 +1,5 @@
+import { enableTestPushes } from './push-enabled-fixture.js';
+enableTestPushes();
 import assert from 'node:assert/strict';import {mkdtempSync} from 'node:fs';import os from 'node:os';import path from 'node:path';
 process.env.DATA_DIR=mkdtempSync(path.join(os.tmpdir(),'standard-retire-'));
 const s=await import('../server/services/standard-store.js');s.initDB();

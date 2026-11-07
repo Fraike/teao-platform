@@ -1,3 +1,4 @@
+import { greaseCategoryFields, validateGreaseAmount } from "../shared/standard-grease.ts";
 import { STANDARD_CATEGORY_NAMES } from "../shared/product-classification.ts";
 import { initializeRetirementSchema } from "./standard-retirement-schema.js";
 import { resolveStandardImportStatus } from "./standard-source-policy.js";
@@ -378,6 +379,8 @@ function validatePayload(data) {
   if (data.fields !== undefined && (!data.fields || typeof data.fields !== "object" || Array.isArray(data.fields) || Object.values(data.fields).some(v => typeof v !== "string" || v.length > 20000))) {
     throw httpError(400, "规格参数必须为文本，单项最多20000字");
   }
+  const greaseError = validateGreaseAmount(data.fields?.grease_amount_g);
+  if (greaseError) throw httpError(400, greaseError);
 }
 
 function parseFields(raw) {
@@ -508,7 +511,7 @@ export function listCategories() {
   return d
     .prepare("SELECT * FROM standard_categories ORDER BY sort ASC")
     .all()
-    .map((row) => ({ key: row.key, name: row.name, fields: seasonalStandardFields(JSON.parse(row.fields)) }));
+    .map((row) => ({ key: row.key, name: row.name, fields: greaseCategoryFields(row.key, seasonalStandardFields(JSON.parse(row.fields))) }));
 }
 
 export function listStandards(options = {}) {
@@ -684,7 +687,7 @@ export function updateStandard(id, data, user) {
       description: diffDesc(STANDARD_TYPE_LABELS[prevType] || prevType, STANDARD_TYPE_LABELS[standardType] || standardType),
     });
   }
-  for (const field of CATEGORY_SEED.find((c) => c.key === categoryKey)?.fields ?? []) {
+  for (const field of greaseCategoryFields(categoryKey, CATEGORY_SEED.find((c) => c.key === categoryKey)?.fields ?? [])) {
     const prev = prevFields[field.key] ?? "";
     const next = fields[field.key] ?? "";
     if (prev !== next) {

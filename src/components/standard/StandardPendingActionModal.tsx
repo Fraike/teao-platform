@@ -52,6 +52,7 @@ export function StandardPendingActionModal({ target, onClose, onCompleted }: Sta
       onCompleted(result.data);
       onClose();
       if (deleting) message.success("待审内容已删除并归档，已发布版本与历史记录保留");
+      else if (result.notification?.status === "disabled") message.info("已驳回；企业微信推送已关闭，未发送通知");
       else if (result.notification?.status === "sent" && result.notification.mentionedSubmitter) message.success("已驳回并通知提交人");
       else if (result.notification?.status === "sent") message.warning("已驳回并发送群通知；提交人未绑定企微，未能 @ 本人");
       else message.warning("已驳回并退回草稿；提交人通知未确认送达，请核查群记录或通知配置");
