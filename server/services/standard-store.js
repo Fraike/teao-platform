@@ -1,3 +1,4 @@
+import { canMaintainStandards } from "./standard-maintenance.ts";
 import { greaseCategoryFields, validateGreaseAmount } from "../shared/standard-grease.ts";
 import { STANDARD_CATEGORY_NAMES } from "../shared/product-classification.ts";
 import { initializeRetirementSchema } from "./standard-retirement-schema.js";
@@ -374,6 +375,7 @@ function validatePayload(data) {
   for (const key of ["customer", "model", "customerPartNo", "vehicleModel"]) {
     if (data[key] !== undefined && (typeof data[key] !== "string" || data[key].length > 2000)) throw httpError(400, `${key} 必须为不超过2000字的文本`);
   }
+  if (data.maintenance !== undefined && typeof data.maintenance !== "boolean") throw httpError(400, "校对参数必须为布尔值");
   if (data.standardType !== undefined && !isValidStandardType(data.standardType)) throw httpError(400, "无效的标准性质");
   if (data.categoryKey !== undefined && !isValidCategory(data.categoryKey)) throw httpError(400, "无效的产品分类");
   if (data.fields !== undefined && (!data.fields || typeof data.fields !== "object" || Array.isArray(data.fields) || Object.values(data.fields).some(v => typeof v !== "string" || v.length > 20000))) {
@@ -588,6 +590,7 @@ function queuePublishedStandard(d, id, user, options = {}) {
 
 export function createStandard(data, user) {
   validatePayload(data);
+  if (data.maintenance === true) throw httpError(400, "校对模式仅用于修改已有发布标准，新增仍需审核");
   if (!data.customer?.trim()) throw httpError(400, "客户名不能为空");
   if (!data.model?.trim()) throw httpError(400, "产品型号不能为空");
   const d = getDB();
@@ -639,8 +642,42 @@ export function createStandard(data, user) {
   return getStandard(standardId);
 }
 
+function assertMaintenanceTarget(d, id, data, user) {
+  if (!canMaintainStandards(user)) throw httpError(403, "校对模式或校对权限已关闭，请刷新后按正常流程操作");
+  const latest = latestVersion(d, id);
+  checkRevision(latest, data);
+  const published = d.prepare("SELECT id FROM product_standard_versions WHERE standard_id=? AND status='published'").get(id);
+  if (!published) throw httpError(409, "校对仅用于已有生效标准，新增、停用或删除记录不能直接生效");
+  if (latest.status !== 'published' && latest.status !== 'draft') throw httpError(409, "请先处理待审核内容，再进行校对");
+  if (latest.status === 'draft' && (latest.created_by_id !== user.id || latest.updated_by_id !== user.id)) {
+    throw httpError(409, "存在其他人员的修订草稿，请先处理草稿");
+  }
+  if (d.prepare("SELECT 1 FROM standard_retirement_requests WHERE standard_id=? AND status='pending'").get(id)) {
+    throw httpError(409, "存在待审核的停用申请，请先处理申请");
+  }
+}
+
+function updateMaintainedStandard(id, data, user) {
+  const d = getDB();
+  return d.transaction(() => {
+    assertMaintenanceTarget(d, id, data, user);
+    // Reuse normal validation, version allocation and field differences without granting admin rights.
+    updateStandard(id, { ...data, maintenance: false }, user);
+    if (!canMaintainStandards(user)) throw httpError(403, "校对权限或模式已变化，请刷新后重试");
+    const latest = latestVersion(d, id), now = new Date().toISOString();
+    d.prepare("UPDATE product_standard_versions SET status='archived' WHERE standard_id=? AND status='published' AND id!=?").run(id, latest.id);
+    d.prepare(`UPDATE product_standard_versions SET status='published',published_at=?,revision=revision+1,
+      reviewed_by='',reviewed_by_id='',reviewed_at=NULL,review_comment='',
+      assigned_reviewer_id='',assigned_reviewer_name='' WHERE id=?`).run(now, latest.id);
+    cancelStandardPublications(d, id);
+    appendChange(d, id, { versionId: latest.id, fieldKey: 'maintenance_publication', fieldLabel: '校对更新 · 免审核', description: '校对更新 · 免审核，保存后直接生效，未发送企业微信通知' }, user, now);
+    return getStandard(id);
+  })();
+}
+
 export function updateStandard(id, data, user) {
   validatePayload(data);
+  if (data.maintenance === true) return updateMaintainedStandard(id, data, user);
   const d = getDB();
   const standard = findStandardById(d, id);
   if (!standard) throw httpError(404, "标准不存在");

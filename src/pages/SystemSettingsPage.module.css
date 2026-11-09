@@ -28,3 +28,13 @@
   .card :global(.ant-card-body) { padding: 0 14px; }
   .row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px 0; }
 }
+
+.maintenanceCard { margin-top: 14px; margin-bottom: 14px; }
+.maintenanceHeading, .maintenanceFooter { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.maintenanceCard p { margin: 8px 0; color: var(--ant-color-text-secondary, #667085); font-size: 13px; line-height: 1.6; }
+.maintenanceFooter { margin-top: 12px; font-size: 12px; color: var(--ant-color-text-secondary, #667085); }
+
+.maintainerField { display: grid; gap: 6px; margin-top: 12px; }
+.maintainerSelect { width: 100%; }
+.sectionHeading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 18px 0 12px; }
+.sectionHeading .title:global(.ant-typography) { font-size: 17px; margin: 0; }

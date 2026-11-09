@@ -286,6 +286,8 @@ export interface StandardRowSelectionStore {
 }
 
 export interface StandardPageResponse {
+  canMaintain?: boolean;
+  maintenanceEnabled?: boolean;
   overallTotal: number;
   canRetire?: boolean;
   canImport?: boolean;

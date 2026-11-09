@@ -36,6 +36,7 @@ export function registerAdminRoutes(app) {
     if (!permission || typeof enabled !== "boolean") {
       return res.status(400).json({ error: "参数错误" });
     }
+    if (permission === "engineering_maintain") return res.status(400).json({ error: "请在系统设置的临时校对模式中管理免审核人员" });
     const result = await setUserPermission(req.params.id, permission, enabled);
     if (result.error) {
       return res.status(400).json({ error: result.error });

@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync} from 'node:fs';import os from 'node:os';import path from 'node:path';import {test} from 'node:test';
+const directory=mkdtempSync(path.join(os.tmpdir(),'standard-maintenance-flow-'));
+process.env.DATA_DIR=directory;process.env.PRODUCTION_CONFIG_PATH=path.join(directory,'production.json');
+const s=await import('../server/services/standard-store.js');s.initDB();
+const admin={id:'admin',name:'管理员',role:'admin'};
+const editor={id:'editor',name:'校对员',role:'user',status:'active',permissions:['engineering_submit','engineering_maintain']};
+const other={id:'other',name:'其他人',role:'user',status:'active',permissions:['engineering_submit']};
+const expected=d=>({versionId:d.versions[0].id,revision:d.versions[0].revision});
+const input=serial=>({serialNo:serial,categoryKey:'gear_damper',customer:'客户',model:'型号',fields:{test_standard:'12-18'}});
+const mode=enabled=>writeFileSync(path.join(directory,'standard-maintenance.json'),JSON.stringify({enabled,revision:1,updatedAt:'',updatedBy:'test'}));
+
+test('maintenance publishes authorized edits with history, no reviewer and no new announcements',()=>{
+  mode(true);let d=s.createStandard(input('MAINT-1'),admin);const before=expected(d);
+  const count=s.getDB().prepare('SELECT COUNT(*) n FROM standard_publication_outbox').get().n;
+  d=s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{test_standard:'20-30'}},editor);
+  assert.equal(d.versions[0].status,'published');assert.equal(d.versions[0].updatedById,editor.id);
+  assert.equal(d.versions[0].reviewedById,'');assert.equal(d.versions[0].reviewedBy,'');
+  assert.equal(d.versions[1].status,'archived');assert.equal(d.versions[1].fields.test_standard,'12-18');
+  assert.equal(s.getStandard(d.id,{onlyPublished:true}).versions[0].fields.test_standard,'20-30');
+  assert.ok(d.changes.some(c=>c.description.includes('校对更新')&&c.description.includes('免审核')));
+  assert.ok(d.changes.some(c=>c.fieldKey==='test_standard'&&c.author==='校对员'));
+  assert.equal(s.getDB().prepare('SELECT COUNT(*) n FROM standard_publication_outbox').get().n,count);
+  assert.throws(()=>s.updateStandard(d.id,{...before,maintenance:true,fields:{}},editor),e=>e.status===409);
+});
+
+test('mode, permission, ownership, original publication and pending states are enforced',()=>{
+  mode(true);let d=s.createStandard(input('MAINT-2'),admin);
+  for(const actor of [other,{...editor,permissions:['engineering_maintain']},{...editor,status:'pending'},admin])assert.throws(()=>s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{}},actor),e=>e.status===403);
+  mode(false);assert.throws(()=>s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{}},editor),e=>e.status===403);
+  mode(true);
+  d=s.updateStandard(d.id,{...expected(d),fields:{test_standard:'30-40'}},other);
+  assert.throws(()=>s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{}},editor),e=>e.status===409);
+  d=s.discardDraftStandard(d.id,expected(d),other);
+  d=s.updateStandard(d.id,{...expected(d),fields:{test_standard:'40-50'}},editor);
+  d=s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{test_standard:'50-60'}},editor);
+  assert.equal(d.versions[0].status,'published');
+  d=s.updateStandard(d.id,{...expected(d),fields:{test_standard:'60-70'}},editor);
+  d=s.submitStandard(d.id,editor,expected(d));
+  assert.throws(()=>s.updateStandard(d.id,{...expected(d),maintenance:true,fields:{}},editor),e=>e.status===409);
+  const fresh=s.createStandard(input('MAINT-NEW'),editor);
+  assert.equal(fresh.versions[0].status,'draft');
+  assert.throws(()=>s.updateStandard(fresh.id,{...expected(fresh),maintenance:true,fields:{}},editor),e=>e.status===409);
+  assert.throws(()=>s.createStandard({...input('MAINT-SPOOF'),maintenance:true},editor),e=>e.status===400);
+  let stopped=s.createStandard(input('MAINT-STOPPED'),admin);
+  stopped=s.retireStandard(stopped.id,{...expected(stopped),reason:'停用测试'},admin);
+  assert.throws(()=>s.updateStandard(stopped.id,{...expected(stopped),maintenance:true,fields:{}},editor),e=>e.status===409);
+  let removed=s.createStandard(input('MAINT-DELETED'),editor);
+  const old=expected(removed);s.discardDraftStandard(removed.id,old,editor);
+  assert.throws(()=>s.updateStandard(removed.id,{...old,maintenance:true,fields:{}},editor),e=>e.status===409);
+  const valid=s.createStandard(input('MAINT-INVALID'),admin);
+  assert.throws(()=>s.updateStandard(valid.id,{...expected(valid),maintenance:true,fields:{grease_amount_g:'0.5'}},editor),e=>e.status===400);
+  assert.equal(s.getStandard(valid.id).versions[0].revision,valid.versions[0].revision);
+});

@@ -112,11 +112,13 @@ function ProductStandardPageContent() {
   });
   const { data: pendingData, loading: pendingLoading, error: pendingError, refresh: refreshPending } = usePendingReviewOverview(authScope);
   const [pendingDrawer, setPendingDrawer] = useTabState<{ scope: string; category: string } | null>("standard:pendingDrawer",null);
-  const [access, setAccess] = useTabState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean } | null>("standard:access",()=>initial.cache&&typeof initial.cache.response.canEdit==='boolean'&&typeof initial.cache.response.canReview==='boolean'?{scope:authScope,canEdit:initial.cache.response.canEdit,canReview:initial.cache.response.canReview,canRetire:initial.cache.response.canRetire}:null);
+  const [access, setAccess] = useTabState<{ scope: string; canEdit: boolean; canReview: boolean; canRetire?: boolean; canMaintain?: boolean; maintenanceEnabled?: boolean } | null>("standard:access",()=>initial.cache&&typeof initial.cache.response.canEdit==='boolean'&&typeof initial.cache.response.canReview==='boolean'?{scope:authScope,canEdit:initial.cache.response.canEdit,canReview:initial.cache.response.canReview,canRetire:initial.cache.response.canRetire,canMaintain:initial.cache.response.canMaintain,maintenanceEnabled:initial.cache.response.maintenanceEnabled}:null);
   const canEdit = access?.scope === authScope ? access.canEdit : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_submit"));
   const canReview = access?.scope === authScope ? access.canReview : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_review"));
 
   const canDirectPublish = user?.role === "admin";
+  const canMaintain = access?.scope === authScope && access.canMaintain === true;
+  const maintenanceEnabled = access?.scope === authScope && access.maintenanceEnabled === true;
   const canRetire = access?.scope === authScope && typeof access.canRetire === "boolean" ? access.canRetire : user?.role === "admin" || Boolean(user?.permissions?.includes("engineering_retire"));
 
   const [categories, setCategories] = useTabState<StandardCategory[]>("standard:categories",initial.session.snapshot?.cache?.categories||[]);
@@ -209,7 +211,7 @@ function ProductStandardPageContent() {
       setCompletedQuery(completionQuery);
       void refreshPending(response.version ?? "", force);
       if (typeof response.canEdit === "boolean" && typeof response.canReview === "boolean") {
-        setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canRetire: response.canRetire });
+        setAccess({ scope: authScope, canEdit: response.canEdit, canReview: response.canReview, canRetire: response.canRetire, canMaintain: response.canMaintain, maintenanceEnabled: response.maintenanceEnabled });
       }
       setTotal(response.total ?? response.data.length);
       setOverallTotal(response.overallTotal ?? null);
@@ -366,13 +368,6 @@ function ProductStandardPageContent() {
     setFormOpen(true);
   };
 
-  const openEdit = (detail: StandardDetail) => {
-    setDetailOpen(false);
-    setFormInitial(detail);
-    setCopySource(null);
-    setFormOpen(true);
-  };
-
   const copyStandard = useCallback(async (id: string) => {
     setPreparing(true);
     try {
@@ -389,7 +384,11 @@ function ProductStandardPageContent() {
   const editStandard = useCallback(async (id: string) => {
     setPreparing(true);
     try {
-      const res = await api.get<{ ok: boolean; data: StandardDetail }>(`/api/standards/${id}?summary=true`);
+      const res = await api.get<{ ok: boolean; data: StandardDetail; canEdit?: boolean; canReview?: boolean; canMaintain?: boolean; maintenanceEnabled?: boolean }>(`/api/standards/${id}?summary=true`);
+      if (typeof res.canEdit === "boolean" && typeof res.canReview === "boolean") {
+        setAccess(previous => ({ ...previous, scope: authScope, canEdit: res.canEdit!, canReview: res.canReview!, canMaintain: res.canMaintain, maintenanceEnabled: res.maintenanceEnabled }));
+        if (!res.canEdit) { message.warning("编辑权限已变化，请刷新后查看"); return; }
+      }
       setDetailOpen(false);
       setFormInitial(res.data);
       setCopySource(null);
@@ -397,7 +396,9 @@ function ProductStandardPageContent() {
     } catch (err) {
       message.error((err as Error).message || "加载失败");
     } finally {setPreparing(false);}
-  }, [setCopySource,setDetailOpen,setFormInitial,setFormOpen,setPreparing]);
+  }, [authScope,setAccess,setCopySource,setDetailOpen,setFormInitial,setFormOpen,setPreparing]);
+
+  const openEdit = (detail: StandardDetail) => { void editStandard(detail.id); };
 
   const columns = useMemo<TableColumnsType<StandardListItem>>(() => {
     const isMyReview = (record: StandardListItem) => record.status === "pending_review" && Boolean(currentUserId && record.submittedById && record.submittedById !== currentUserId)
@@ -597,7 +598,7 @@ function ProductStandardPageContent() {
         <Title level={4} className={styles.title}>产品标准</Title>
         <StandardUsageGuide />
         <div className={styles.notes}>
-          <span>审核后发布</span>
+          <span>{maintenanceEnabled ? <Tag color="gold">校对模式已开启</Tag> : "审核后发布"}</span>
           <span>文件编码：TA-WI-ZP-10</span>
           <span className={styles.timeBadge}>数据更新时间：<strong>{lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString("zh-CN", { hour12: false }) : "—"}</strong></span>
           <span className={styles.timeBadge}>上次刷新：<strong>{refreshedAt ? new Date(refreshedAt).toLocaleTimeString("zh-CN", { hour12: false }) : "—"}</strong></span>
@@ -703,6 +704,7 @@ function ProductStandardPageContent() {
       />
       {canEdit && <StandardFormModal
         directPublish={canDirectPublish}
+        maintenance={canMaintain}
         open={formOpen}
         categories={categories}
         initial={formInitial}

@@ -26,15 +26,15 @@ test('administrator can edit switches, add/delete reminder times and save the la
   const data: PushSettings = { enabled:true,standardPublicationEnabled:false,standardReviewEnabled:false,reviewTimes:['08:10','13:00'],productionEnabled:true,productionTime:'13:00',revision:3,productionRevision:'production-token',updatedAt:'',updatedBy:'',nextReviewAt:null,nextProductionAt:null,productionScheduleLegacy:false };
   const oldGet=api.get, oldPut=api.put;
   let saved: PushSettingsInput | undefined;
-  api.get=(async()=>({ok:true,data})) as typeof api.get;
+  api.get=(async(url:string)=>({ok:true,data:url.endsWith('standard-maintainers') ? {candidates:[],selectedIds:[],revision:'staff-v1'} : url.endsWith('standard-maintenance') ? {enabled:false,revision:1,updatedAt:'',updatedBy:''} : data})) as typeof api.get;
   api.put=(async(_url:string,body:PushSettingsInput)=>{saved=body;return {ok:true,data:{...data,...body,revision:4}};}) as typeof api.put;
   const root=createRoot(document.getElementById('root')!);
   const findButton=(label:string)=>[...document.querySelectorAll('button')].find(button=>button.textContent?.replace(/\s/g,'')===label)!;
   try {
     await act(async()=>root.render(createElement(SystemSettingsPage)));
-    assert.equal(document.querySelectorAll('[role="switch"]').length,4);
-    await act(()=>document.querySelector<HTMLButtonElement>('[role="switch"]')!.click());
-    assert.equal(document.querySelector('[role="switch"]')!.getAttribute('aria-checked'),'false');
+    assert.equal(document.querySelectorAll('[role="switch"]').length,5);
+    await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="系统推送总开关"]')!.click());
+    assert.equal(document.querySelector('[aria-label="系统推送总开关"]')!.getAttribute('aria-checked'),'false');
     await act(()=>findButton('添加审核时间').click());
     assert.equal(document.querySelectorAll('input[aria-label^="审核时间"]').length,3);
     const deletes=[...document.querySelectorAll('button')].filter(button=>button.textContent?.replace(/\s/g,'')==='删除');

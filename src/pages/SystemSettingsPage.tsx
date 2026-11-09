@@ -1,53 +1,114 @@
-import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, Space, Spin, Switch, TimePicker, Tag, Typography, message } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Card, Form, Select, Space, Spin, Switch, TimePicker, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { api } from '../lib/api';
 import type { PushSettings, PushSettingsInput } from '../types/pushSettings';
+import type { StandardMaintenanceSettings, StandardMaintainerRoster } from '../types/standardMaintenance';
 import styles from './SystemSettingsPage.module.css';
 
 const endpoint = '/api/admin/system-settings/push';
 const timeValue = (time: string) => dayjs(`2000-01-01T${time}:00`);
 const displayTime = (time: string | null) => time ? new Date(time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '未安排';
 
+const maintenanceEndpoint = '/api/admin/system-settings/standard-maintenance';
+const rosterEndpoint = '/api/admin/system-settings/standard-maintainers';
+
+async function loadSettings(signal?: AbortSignal) {
+  const [push, maintenance, roster] = await Promise.all([
+    api.get<{ data: PushSettings }>(endpoint, { signal }),
+    api.get<{ data: StandardMaintenanceSettings }>(maintenanceEndpoint, { signal }),
+    api.get<{ data: StandardMaintainerRoster }>(rosterEndpoint, { signal }),
+  ]);
+  return { push: push.data, maintenance: maintenance.data, roster: roster.data };
+}
+
 export function SystemSettingsPage() {
   const [settings, setSettings] = useState<PushSettings | null>(null);
   const [draft, setDraft] = useState<PushSettingsInput | null>(null);
+  const [maintenance, setMaintenance] = useState<StandardMaintenanceSettings | null>(null);
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+  const [roster, setRoster] = useState<StandardMaintainerRoster | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const apply = useCallback((data: Awaited<ReturnType<typeof loadSettings>>) => {
+    setSettings(data.push); setDraft(data.push);
+    setMaintenance(data.maintenance); setMaintenanceEnabled(data.maintenance.enabled);
+    setRoster(data.roster); setSelectedIds(data.roster.selectedIds); setError('');
+  }, []);
   const load = async () => {
     setBusy(true);
-    try {
-      const response = await api.get<{ ok: true; data: PushSettings }>(endpoint);
-      setSettings(response.data); setDraft(response.data); setError('');
-    } catch (err) { setError((err as Error).message); }
+    try { apply(await loadSettings()); }
+    catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
   useEffect(() => {
-    let active = true;
-    void api.get<{ ok: true; data: PushSettings }>(endpoint).then(response => {
-      if (active) { setSettings(response.data); setDraft(response.data); }
-    }).catch((err: Error) => { if (active) setError(err.message); });
-    return () => { active = false; };
-  }, []);
+    const controller = new AbortController();
+    void loadSettings(controller.signal).then(data => { if (!controller.signal.aborted) apply(data); })
+      .catch((err: Error) => { if (!controller.signal.aborted) setError(err.message); });
+    return () => controller.abort();
+  }, [apply]);
+  const pushChanged = Boolean(draft && settings && JSON.stringify(draft) !== JSON.stringify(settings));
+  const modeChanged = Boolean(maintenance && maintenance.enabled !== maintenanceEnabled);
+  const rosterChanged = Boolean(roster && JSON.stringify([...selectedIds].sort()) !== JSON.stringify([...roster.selectedIds].sort()));
+  const changed = pushChanged || modeChanged || rosterChanged;
   const save = async () => {
-    if (!draft || !settings) return;
+    if (!draft || !settings || !maintenance || !roster || !changed) return;
     setBusy(true);
+    const saved: string[] = [];
+    let rosterRevision = roster.revision;
+    const saveMode = async () => {
+      const response = await api.put<{ data: StandardMaintenanceSettings }>(maintenanceEndpoint, { enabled: maintenanceEnabled, revision: maintenance.revision, ...(maintenanceEnabled ? { rosterRevision } : {}) });
+      setMaintenance(response.data); setMaintenanceEnabled(response.data.enabled); saved.push('校对模式');
+    };
     try {
-      const response = await api.put<{ ok: true; data: PushSettings }>(endpoint, { ...draft, revision: settings.revision });
-      setSettings(response.data); setDraft(response.data); setError(''); message.success('推送设置已保存');
-    } catch (err) { setError((err as Error).message); }
-    finally { setBusy(false); }
+      // Close first when disabling; activate only after the selected users are saved.
+      if (modeChanged && !maintenanceEnabled) await saveMode();
+      if (rosterChanged) {
+        const response = await api.put<{ data: StandardMaintainerRoster }>(rosterEndpoint, { selectedIds, revision: roster.revision });
+        rosterRevision = response.data.revision;
+        setRoster(response.data); setSelectedIds(response.data.selectedIds); saved.push('校对人员');
+      }
+      if (modeChanged && maintenanceEnabled) await saveMode();
+      if (pushChanged) {
+        const response = await api.put<{ data: PushSettings }>(endpoint, { ...draft, revision: settings.revision });
+        setSettings(response.data); setDraft(response.data); saved.push('推送设置');
+      }
+      setError(''); message.success('设置已保存');
+    } catch (err) {
+      setError(saved.length ? `已保存${saved.join('、')}。其余设置未保存：${(err as Error).message}` : (err as Error).message);
+    } finally { setBusy(false); }
   };
-  if (!settings || !draft) return <div className={styles.page}>{error ? <Alert type="error" title={error} action={<Button onClick={() => void load()}>重试</Button>} /> : <Spin />}</div>;
+  if (!settings || !draft || !maintenance || !roster) return <div className={styles.page}>{error ? <Alert type="error" title={error} action={<Button disabled={busy} onClick={() => void load()}>刷新设置</Button>} /> : <Spin />}</div>;
   const toggle = (key: 'enabled' | 'standardPublicationEnabled' | 'standardReviewEnabled' | 'productionEnabled', label: string) => <Switch aria-label={label} checkedChildren="开启" unCheckedChildren="关闭" checked={draft[key]} onChange={value => setDraft({ ...draft, [key]: value })} />;
   const status = (enabled: boolean) => <Tag color={settings.enabled && enabled ? 'green' : 'default'}>{settings.enabled && enabled ? '已开启' : '已暂停'}</Tag>;
   return <div className={styles.page}>
     <div className={styles.header}>
-      <div><Typography.Title level={3} className={styles.title}>系统推送设置</Typography.Title>
-        <Typography.Text type="secondary">北京时间 · 沿用工作日规则 · 修改后保存生效</Typography.Text></div>
-      <Space><Button disabled={busy} onClick={() => void load()}>刷新配置</Button><Button type="primary" loading={busy} onClick={() => void save()}>保存设置</Button></Space>
+      <div><Typography.Title level={3} className={styles.title}>系统设置</Typography.Title>
+        <Typography.Text type="secondary">管理产品标准校对与企业微信推送</Typography.Text></div>
+      <Space wrap>{changed && <Tag color="gold">有未保存修改</Tag>}
+        <Button disabled={busy} onClick={() => void load()}>刷新设置</Button><Button type="primary" disabled={!changed} loading={busy} onClick={() => void save()}>保存设置</Button></Space>
     </div>
     {error && <Alert type="error" title={error} showIcon />}
+    <Card className={styles.maintenanceCard}>
+      <div className={styles.maintenanceHeading}><strong>产品标准临时校对模式</strong>
+        <Space><Tag color={maintenance.enabled ? 'orange' : 'default'}>{maintenance.enabled ? '已开启' : '已关闭'}</Tag>
+          <Switch aria-label="产品标准临时校对模式" checkedChildren="开启" unCheckedChildren="关闭" checked={maintenanceEnabled} disabled={busy} onChange={setMaintenanceEnabled} /></Space>
+      </div>
+      <p>模式开启后，选中的员工可免审核修改已有发布标准；新增、复制仍需审核。</p>
+      <div className={styles.maintainerField}>
+        <Typography.Text strong>免审核校对人员</Typography.Text>
+        <Select mode="multiple" aria-label="免审核校对人员" className={styles.maintainerSelect} disabled={busy}
+          value={selectedIds} onChange={setSelectedIds} optionFilterProp="label" maxTagCount="responsive"
+          placeholder="搜索姓名或账号，选择校对人员"
+          notFoundContent="暂无符合条件的人员"
+          options={roster.candidates.map(user => ({ value: user.id, label: `${user.name || user.username} · ${user.username}` }))} />
+        <Typography.Text type="secondary">仅显示已激活且具备产品标准提交权限的普通用户。关闭模式后名单保留，但免审核权限不生效。</Typography.Text>
+      </div>
+      <div className={styles.maintenanceFooter}>模式最近更新：{maintenance.updatedAt ? displayTime(maintenance.updatedAt) : '尚未保存'} · {maintenance.updatedBy || '—'}</div>
+    </Card>
+    <div className={styles.sectionHeading}><Typography.Title level={4} className={styles.title}>企业微信推送</Typography.Title>
+      <Typography.Text type="secondary">北京时间 · 沿用工作日规则</Typography.Text></div>
     <Form disabled={busy}>
       <div className={styles.master}>
         <div><strong>系统推送总开关</strong><p>统一控制企业微信推送，关闭后保留各项设置。</p></div>

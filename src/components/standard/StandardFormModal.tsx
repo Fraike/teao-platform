@@ -3,7 +3,7 @@ import {useTabPage,useTabBusy,useTabDirty,useTabState,useTabForm} from "../../li
 import { groupStandardFields, activeStandardFields } from "../../lib/standardFieldGroups";
 import { useAuthStore } from "../../lib/authStore";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Form, Input, Select, Radio, Checkbox, Space, Button, Modal, message } from "antd";
+import { Form, Alert, Input, Select, Radio, Checkbox, Space, Button, Modal, message } from "antd";
 import { api } from "../../lib/api";
 import type {
   StandardCategory,
@@ -24,6 +24,7 @@ interface StandardFormModalProps {
   defaultCategoryKey?: string;
   onClose: () => void;
   directPublish?: boolean;
+  maintenance?: boolean;
   onSaved: (detail: StandardDetail) => void;
 }
 
@@ -58,8 +59,10 @@ export function StandardFormModal({
   onClose,
   onSaved,
   directPublish: publishOverride,
+  maintenance = false,
 }: StandardFormModalProps) {
-  const administrator = useAuthStore(state => state.user?.role === "admin");
+  const currentUser = useAuthStore(state => state.user);
+  const administrator = currentUser?.role === "admin";
   const directPublish = publishOverride ?? administrator;
   const [form] = Form.useForm<FormValues>();
   const tab=useTabPage();
@@ -76,6 +79,10 @@ export function StandardFormModal({
   const categoryKey = Form.useWatch("categoryKey", form);
   const isEdit = Boolean(initial);
   const isCopy = Boolean(copySource) && !isEdit;
+  const workingVersion = pickSource(initial);
+  const maintenanceEdit = Boolean(maintenance && !directPublish && isEdit && initial?.versions.some(version => version.status === "published"));
+  const maintenanceBlocked = maintenanceEdit && workingVersion?.status !== "published"
+    && !(workingVersion?.status === "draft" && workingVersion.createdById === currentUser?.id && workingVersion.updatedById === currentUser?.id);
   const canInheritDrawings = Boolean(copySource?.versions.some(version => version.status === "published"));
 
   const activeCategory = useMemo(
@@ -136,6 +143,7 @@ export function StandardFormModal({
   };
 
   const handleSubmit = async () => {
+    if (maintenanceBlocked) return;
     const values = await form.validateFields().catch(() => null);
     if (!values) return;
     const source = pickSource(initial ?? copySource ?? null);
@@ -144,6 +152,7 @@ export function StandardFormModal({
     try {
       const payload = {
         serialNo: values.serialNo.trim(),
+        ...(maintenanceEdit ? { maintenance: true } : {}),
         ...(isCopy && canInheritDrawings && values.inheritDrawings ? { copyDrawingSourceId: copySource!.id } : {}),
         customer: values.customer?.trim() ?? "",
         vehicleModel: values.vehicleModel?.trim() ?? "",
@@ -157,7 +166,7 @@ export function StandardFormModal({
       const result = isEdit
         ? await api.put<StandardReviewResponse>(`/api/standards/${initial!.id}`, payload)
         : await api.post<StandardReviewResponse>("/api/standards", payload);
-      message.success(result.data.versions[0]?.status === "published" ? "已保存并发布" : isEdit ? "已保存草稿" : "已新增标准草稿");
+      message.success(result.data.versions[0]?.status === "published" ? maintenanceEdit ? "校对更新已生效，未发送企业微信通知" : "已保存并发布" : isEdit ? "已保存草稿" : "已新增标准草稿");
       if (result.notification?.status === "disabled") message.info("标准已生效；推送已关闭，本次公告已跳过");
       else if (result.notification && result.notification.status !== "sent") message.warning(result.notification.status === "not_configured"
         ? "标准已生效，未配置企业微信群；公告已留存，可在详情中补发"
@@ -187,13 +196,15 @@ export function StandardFormModal({
       footer={
         <Space>
           <Button onClick={handleClose}>取消</Button>
-          <Button type="primary" loading={saving} onClick={handleSubmit}>
-            {directPublish ? "保存并发布" : "保存草稿"}
+          <Button type="primary" loading={saving} disabled={maintenanceBlocked} onClick={handleSubmit}>
+            {maintenanceEdit ? "保存并生效（校对）" : directPublish ? "保存并发布" : "保存草稿"}
           </Button>
         </Space>
       }
     >
       <div className={styles.body}>
+        {maintenanceEdit && <Alert type={maintenanceBlocked ? "warning" : "info"} showIcon
+          title={maintenanceBlocked ? "存在待审内容或其他人的修订草稿，请先处理后再校对" : "校对模式：保存后立即生效，保留历史，不发送企业微信通知"} />}
         {directPublish && pickSource(initial)?.status === "pending_review" && <p>此标准正在待审，保存后将直接发布并结束本次待审流程，操作记录保留。</p>}
         <Form form={form} layout="vertical" onValuesChange={(changed: Partial<FormValues>) => {
           setDirty(true);

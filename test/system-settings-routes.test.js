@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 let saved;
+mock.module('../server/services/users.js', { namedExports: {
+  listStandardMaintainers: () => ({ candidates: [], selectedIds: [], revision: 'staff-v1' }),
+  setStandardMaintainers: async () => ({ candidates: [], selectedIds: [], revision: 'staff-v1' }),
+} });
 mock.module('../server/middleware/jwt-auth.js', { namedExports: {
   jwtAuth: (req, res, next) => req.user ? next() : res.status(401).json({ error: '未登录' }),
   adminAuth: (req, res, next) => req.user.role === 'admin' ? next() : res.status(403).json({ error: '无权限' }),

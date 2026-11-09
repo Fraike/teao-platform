@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { test, after } from 'node:test';
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'maintenance-routes-'));
+process.env.DATA_DIR = directory;
+process.env.STANDARD_MAINTENANCE_PATH = path.join(directory, 'standard-maintenance.json');
+process.env.JWT_SECRET = 'maintenance-local-test-secret-32-characters';
+const require = createRequire(new URL('../server/package.json', import.meta.url));
+const jwt = require('jsonwebtoken');
+const { registerSystemSettingsRoutes } = await import('../server/routes/system-settings.js');
+const { setUserPermission, getUserById, listStandardMaintainers, setStandardMaintainers } = await import('../server/services/users.js');
+const routes = new Map();
+registerSystemSettingsRoutes({ get: (url, ...handlers) => routes.set(`GET ${url}`, handlers), put: (url, ...handlers) => routes.set(`PUT ${url}`, handlers) });
+const user = { id: 'a', username: 'admin-a', role: 'admin', status: 'active', permissions: [] };
+const persist = () => fs.writeFileSync(path.join(directory, 'users.json'), JSON.stringify({ users: [user] }));
+persist();
+const token = jwt.sign({ id: user.id, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+function request(method, authorization, body) {
+  const result = { status: 200, body: undefined };
+  const res = { status(code) { result.status = code; return res; }, json(value) { result.body = value; return res; } };
+  const req = { headers: { authorization }, body };
+  const handlers = [...routes.get(`${method} /api/admin/system-settings/standard-maintenance`)];
+  const next = () => handlers.shift()?.(req, res, next);
+  next();
+  return result;
+}
+after(() => fs.rmSync(directory, { recursive: true, force: true }));
+test('admin route envelope, optimistic lock and current user authorization with an old token', async () => {
+  assert.ok(routes.has('GET /api/admin/system-settings/push'));
+  assert.ok(routes.has('PUT /api/admin/system-settings/push'));
+  for (const method of ['GET', 'PUT']) assert.equal(request(method).status, 401);
+  assert.deepEqual(request('GET', `Bearer ${token}`).body, { ok: true, data: { enabled: false, revision: 0, updatedAt: '', updatedBy: '' } });
+  assert.equal(request('PUT', `Bearer ${token}`, { enabled: 'true', revision: 0 }).status, 400);
+  const saved = request('PUT', `Bearer ${token}`, { enabled: true, revision: 0, rosterRevision: listStandardMaintainers().revision });
+  assert.equal(saved.body.ok, true);
+  assert.equal(saved.body.data.updatedBy, 'admin-a');
+  assert.equal(request('PUT', `Bearer ${token}`, { enabled: false, revision: 0 }).status, 409);
+  user.role = 'user'; persist();
+  for (const method of ['GET', 'PUT']) assert.equal(request(method, `Bearer ${token}`, { enabled: false, revision: 1 }).status, 403);
+  assert.equal(getUserById(user.id).permissions.includes('engineering_maintain'), false);
+  assert.equal((await setUserPermission(user.id, 'engineering_maintain', true)).ok, true);
+  user.role = 'admin'; user.status = 'disabled'; persist();
+  assert.equal(request('PUT', `Bearer ${token}`, { enabled: false, revision: 1 }).status, 401);
+  assert.equal(JSON.parse(fs.readFileSync(process.env.STANDARD_MAINTENANCE_PATH)).revision, 1);
+});
+
+
+test('roster changes only eligible users, preserves submit permissions and detects concurrent edits', async () => {
+  const admin={...user,role:'admin',status:'active'};
+  const editor={id:'editor',username:'editor',name:'编辑员',role:'user',status:'active',permissions:['engineering_submit']};
+  const pending={...editor,id:'pending',status:'pending'};
+  const reader={...editor,id:'reader',permissions:[]};
+  fs.writeFileSync(path.join(directory,'users.json'),JSON.stringify({users:[admin,editor,pending,reader]}));
+  assert(routes.has('GET /api/admin/system-settings/standard-maintainers'));
+  assert(routes.has('PUT /api/admin/system-settings/standard-maintainers'));
+  const initial=listStandardMaintainers();
+  assert.deepEqual(initial.candidates.map(u=>u.id),['editor']);
+  await assert.rejects(setStandardMaintainers({...initial,selectedIds:['pending']},admin.id),e=>e.status===400);
+  await assert.rejects(setStandardMaintainers({...initial,selectedIds:['editor']},editor.id),e=>e.status===403);
+  const saved=await setStandardMaintainers({...initial,selectedIds:['editor']},admin.id);
+  assert.deepEqual(saved.selectedIds,['editor']);
+  const closed = request('PUT', `Bearer ${token}`, { enabled: false, revision: 1 });
+  assert.equal(closed.status, 200);
+  const activation = { enabled: true, revision: closed.body.data.revision };
+  const stale = request('PUT', `Bearer ${token}`, { ...activation, rosterRevision: initial.revision });
+  assert.equal(stale.status, 409);
+  assert.match(stale.body.error, /校对人员名单已变化/);
+  assert.equal(request('GET', `Bearer ${token}`).body.data.enabled, false);
+  assert.equal(request('PUT', `Bearer ${token}`, activation).status, 409, '启用必须携带名单版本');
+  assert.equal(request('PUT', `Bearer ${token}`, { ...activation, rosterRevision: saved.revision }).body.data.enabled, true);
+  assert.deepEqual(getUserById('editor').permissions,['engineering_submit','engineering_maintain']);
+  await assert.rejects(setStandardMaintainers({...initial,selectedIds:[]},admin.id),e=>e.status===409);
+  await setStandardMaintainers({...saved,selectedIds:[]},admin.id);
+  assert.deepEqual(getUserById('editor').permissions,['engineering_submit']);
+});

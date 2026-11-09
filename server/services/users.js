@@ -39,7 +39,7 @@ if (isPlaceholderSecret) {
 const SESSION_DURATION_SECONDS = 15 * 24 * 60 * 60;
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
-const ALL_PERMISSIONS = ["business", "production", "production_import", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_review", "engineering_retire", "product_drawing_manage"];
+const ALL_PERMISSIONS = ["business", "production", "production_import", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_maintain", "engineering_review", "engineering_retire", "product_drawing_manage"];
 
 const userMutex = createMutex();
 
@@ -284,6 +284,40 @@ export function listUsers() {
     ...u,
     ...(passwordResetRequest ? { passwordResetRequest: { id: passwordResetRequest.id, requestedAt: passwordResetRequest.requestedAt } } : {}),
   }));
+}
+
+function standardMaintainerRoster(users) {
+  const eligible = users.filter(user => user.role !== 'admin' && user.status === 'active' && user.permissions?.includes('engineering_submit'))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const candidates = eligible.map(({ id, name, username }) => ({ id, name, username }));
+  const selectedIds = eligible.filter(user => user.permissions.includes('engineering_maintain')).map(user => user.id);
+  const revision = crypto.createHash('sha256').update(JSON.stringify([candidates, selectedIds])).digest('hex');
+  return { candidates, selectedIds, revision };
+}
+
+export function listStandardMaintainers() {
+  return standardMaintainerRoster(readUsersUnsafe());
+}
+
+export async function setStandardMaintainers(input, actorId) {
+  const fail = (status, message) => Object.assign(new Error(message), { status });
+  if (!Array.isArray(input?.selectedIds) || input.selectedIds.some(id => typeof id !== 'string')
+    || new Set(input.selectedIds).size !== input.selectedIds.length || typeof input.revision !== 'string') {
+    throw fail(400, '校对人员参数无效');
+  }
+  return withUsers(users => {
+    if (!users.some(user => user.id === actorId && user.role === 'admin' && user.status === 'active')) throw fail(403, '仅管理员可设置校对人员');
+    const current = standardMaintainerRoster(users);
+    if (input.revision !== current.revision) throw fail(409, '校对人员或提交权限已变化，请刷新后重试');
+    const selected = new Set(input.selectedIds), candidates = new Set(current.candidates.map(user => user.id));
+    if ([...selected].some(id => !candidates.has(id))) throw fail(400, '只能选择已激活且具备提交权限的普通用户');
+    for (const user of users) {
+      if (user.role === 'admin') continue;
+      user.permissions = (user.permissions || []).filter(permission => permission !== 'engineering_maintain');
+      if (selected.has(user.id)) user.permissions.push('engineering_maintain');
+    }
+    return standardMaintainerRoster(users);
+  });
 }
 
 export function listPendingRegistrations() {

@@ -1,3 +1,4 @@
+import { canMaintainStandards, readStandardMaintenance } from "../services/standard-maintenance.ts";
 import { canDirectRetire, retirementReviewers, createRetirementRequest, listRetirementRequests, reviewRetirementRequest } from "../services/standard-retirement.js";
 import { createHash } from "node:crypto";
 import { jwtAuth, requirePermission } from "../middleware/jwt-auth.js";
@@ -39,11 +40,11 @@ function canReview(user) {
 
 function actorName(req) {
   const user = getUserById(req.user.id);
-  return { id: user.id, name: user.name || user.username, role: user.role };
+  return { id: user.id, name: user.name || user.username, role: user.role, status: user.status, permissions: user.permissions };
 }
 
 function viewerVersion(user) {
-  return createHash("sha256").update(JSON.stringify([getStandardQueryVersion(), user.id, user.role, [...(user.permissions || [])].sort()])).digest("hex");
+  return createHash("sha256").update(JSON.stringify([getStandardQueryVersion(), readStandardMaintenance().revision, user.id, user.role, [...(user.permissions || [])].sort()])).digest("hex");
 }
 
 // 标准操作按最新用户权限校验，撤权立即生效。
@@ -101,7 +102,7 @@ export function registerStandardRoutes(app) {
         vehicleModel: req.query.vehicleModel, page: req.query.page, pageSize: req.query.all === "true" ? null : req.query.pageSize,
       });
       res.locals.responseRows = result.data.length;
-      res.json({ ok: true, ...result, version: viewerVersion(req.user), canEdit: canEdit(req.user), canReview: canReview(req.user), canImport: req.user.role === "admin", canRetire: canDirectRetire(req.user) });
+      res.json({ ok: true, ...result, version: viewerVersion(req.user), canEdit: canEdit(req.user), canReview: canReview(req.user), canImport: req.user.role === "admin", canRetire: canDirectRetire(req.user), canMaintain: canMaintainStandards(req.user), maintenanceEnabled: readStandardMaintenance().enabled });
     } catch (err) {
       console.error("[standards] list error:", err);
       res.status(err.status || 500).json({ error: "查询失败", detail: err.message });
@@ -123,7 +124,7 @@ export function registerStandardRoutes(app) {
     try {
       const standard = getStandard(req.params.id, { onlyPublished: !canEdit(req.user) && !canReview(req.user), reviewerId:req.user.id, includeHistory: req.query.summary !== "true", includeCurrentComments: req.query.comments === "current", includeDeleted: req.user.role === "admin" && req.query.includeDeleted === "true" });
       if (!standard) return res.status(404).json({ error: "标准不存在" });
-      res.json({ ok: true, data: standard, ...(req.query.comments === "current" ? { currentCommentsIncluded: true } : {}) });
+      res.json({ ok: true, data: standard, canEdit: canEdit(req.user), canReview: canReview(req.user), canMaintain: canMaintainStandards(req.user), maintenanceEnabled: readStandardMaintenance().enabled, ...(req.query.comments === "current" ? { currentCommentsIncluded: true } : {}) });
     } catch (err) {
       console.error("[standards] detail error:", err);
       res.status(500).json({ error: "查询失败", detail: err.message });
