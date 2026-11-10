@@ -1,7 +1,25 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import './standard-frontend-dom.ts';
-import {setQuotationUserScope,useQuotationStore,useIntlQuotationStore} from '../src/lib/store.ts';
+import {prepareQuotationCopy,setQuotationUserScope,useQuotationStore,useIntlQuotationStore} from '../src/lib/store.ts';
+
+test('quotation and cost data work without native structuredClone',async()=>{
+ const native=Object.getOwnPropertyDescriptor(globalThis,'structuredClone');
+ Reflect.deleteProperty(globalThis,'structuredClone');
+ try{
+  const {useQuoteStore}=await import('../src/lib/costStore.ts');
+  useQuoteStore.getState().resetToExample();
+  for(const store of [useQuotationStore,useIntlQuotationStore]){
+   store.getState().resetToSample();
+   const source=store.getState().quotation;
+   const copy=prepareQuotationCopy(source);
+   assert.deepEqual(copy.products,source.products);
+   assert.notEqual(copy.products[0],source.products[0]);
+  }
+ }finally{
+  if(native)Object.defineProperty(globalThis,'structuredClone',native);
+ }
+});
 test('quotation drafts isolate accounts and preserve legacy drafts',()=>{
  localStorage.setItem('teao-quotation', 'legacy');
  for(const store of [useQuotationStore,useIntlQuotationStore]){

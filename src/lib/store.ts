@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { cloneQuoteData } from "./cloneQuoteData";
 import type { Quotation, Product, MoldItem, CustomerInfo } from "../types/quotation";
 import { sampleQuotation } from "./sample";
 import { sampleIntlQuotation } from "./sample-intl";
@@ -17,7 +18,7 @@ export function quoteNoForDate(no: string, date: string): string {
 }
 
 export function prepareQuotationCopy(quotation: Quotation, date = new Date().toISOString().slice(0, 10)): Quotation {
-  const copy = structuredClone(quotation);
+  const copy = cloneQuoteData(quotation);
   const datedQuoteNo = quoteNoForDate(copy.quoteMeta.no, date);
   const revisionMatch = datedQuoteNo.match(/-R(\d+)$/i);
   const nextQuoteNo = revisionMatch
@@ -106,7 +107,7 @@ function load(key: string, opts: QuotationStoreOptions): Quotation {
     const raw = storageKey ? localStorage.getItem(storageKey) : null;
     if (raw) return normalizeQuotation(JSON.parse(raw) as Quotation, opts);
   } catch { /* ignore */ }
-  return normalizeQuotation(structuredClone(opts.sampleData), opts);
+  return normalizeQuotation(cloneQuoteData(opts.sampleData), opts);
 }
 
 function save(key: string, state: Quotation) {
@@ -238,7 +239,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
       }),
 
     resetToSample: () => {
-      const next = structuredClone(opts.sampleData);
+      const next = cloneQuoteData(opts.sampleData);
       next.quoteMeta.no = quoteNoForDate(next.quoteMeta.no, next.quoteMeta.date);
       save(opts.storageKey, next);
       set({ quotation: next });

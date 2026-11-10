@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { cloneQuoteData } from "./cloneQuoteData";
 import type {
   QuoteFormState,
   QuoteBasicInfo,
@@ -33,7 +34,7 @@ interface QuoteStore {
 
 const initialQuote = (): QuoteFormState => {
   const saved = loadFromStorage();
-  return saved ?? structuredClone(exampleQuote);
+  return saved ?? cloneQuoteData(exampleQuote);
 };
 
 function generateId(): string {
@@ -103,7 +104,7 @@ export const useQuoteStore = create<QuoteStore>((set, get) => ({
     }),
 
   resetToExample: () => {
-    const next = structuredClone(exampleQuote);
+    const next = cloneQuoteData(exampleQuote);
     saveToStorage(next);
     set({ quote: next });
   },

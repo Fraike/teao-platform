@@ -5,9 +5,75 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>特澳科技后台</title>
+    <style>
+      #app-startup { box-sizing: border-box; max-width: 460px; margin: 12vh auto 24px; padding: 24px; border: 1px solid #d9e2ef; border-radius: 8px; background: #fff; color: #1f2937; font: 16px/1.6 system-ui, sans-serif; }
+      #app-startup[hidden], #root[hidden], #app-startup-retry[hidden] { display: none !important; }
+      #app-startup h1 { margin: 0 0 8px; font-size: 22px; }
+      #app-startup p { margin: 0 0 16px; }
+    </style>
   </head>
   <body>
+    <section id="app-startup" aria-live="polite">
+      <h1 id="app-startup-title">页面未能启动</h1>
+      <p id="app-startup-message">请使用较新的 Edge 或 Chrome 打开。若仍无法访问，请将页面地址和截图发给系统管理员。</p>
+      <a id="app-startup-retry" href="">重新加载</a>
+    </section>
     <div id="root"></div>
+    <script>
+      (function () {
+        var panel = document.getElementById('app-startup');
+        var title = document.getElementById('app-startup-title');
+        var message = document.getElementById('app-startup-message');
+        var retry = document.getElementById('app-startup-retry');
+        var root = document.getElementById('root');
+        var ready = false;
+        var failed = false;
+        var timer;
+
+        function showFailure(heading, detail) {
+          clearTimeout(timer);
+          title.textContent = heading;
+          message.textContent = detail;
+          retry.hidden = false;
+          root.hidden = true;
+          panel.hidden = false;
+        }
+
+        function crash() {
+          failed = true;
+          showFailure('页面运行异常', '请重新加载页面。若问题持续，请将页面地址和截图发给系统管理员。');
+        }
+
+        if (!('noModule' in document.createElement('script')) || typeof Promise !== 'function') {
+          showFailure('浏览器版本不受支持', '请更新 Edge 或 Chrome 后重新打开。若无法更新，请联系系统管理员。');
+          return;
+        }
+
+        title.textContent = '正在加载特澳科技后台';
+        message.textContent = '请稍候。';
+        retry.hidden = true;
+        window.addEventListener('teao:app-ready', function () {
+          if (failed) return;
+          ready = true;
+          clearTimeout(timer);
+          root.hidden = false;
+          panel.hidden = true;
+        });
+        window.addEventListener('teao:app-crash', crash);
+        window.addEventListener('error', function (event) {
+          if (ready || failed) return;
+          if (event.target && event.target.tagName === 'SCRIPT') {
+            failed = true;
+            showFailure('页面资源加载失败', '请重新加载页面。若仍无法打开，请更新浏览器或联系系统管理员。');
+          } else if (event.target === window) {
+            crash();
+          }
+        }, true);
+        timer = setTimeout(function () {
+          showFailure('页面加载超时', '请检查网络后重新加载。若问题持续，请联系系统管理员。');
+        }, 15000);
+      }());
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
