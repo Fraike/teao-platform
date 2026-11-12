@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { buildAssemblyLineOptions, buildInjectionSummary, getInjectionShiftVisual, normalizePersonnel, personnelToTags, splitPersonnelNames, sortRecordsByOrderQty } from "../src/lib/productionEntry.ts";
 
-assert.equal(buildAssemblyLineOptions().length, 22);
+assert.equal(buildAssemblyLineOptions().length, 23);
 assert.deepEqual(buildAssemblyLineOptions().slice(0, 3), ['1#', '2#', '3#']);
-assert.deepEqual(buildAssemblyLineOptions().slice(-2), ['80#自动线', '98#自动线']);
+assert.deepEqual(buildAssemblyLineOptions().slice(-3), ['80#自动线', '98#自动线', '102#自动线']);
 
 const copyModule = await import("../src/lib/productionCopy.ts").catch(() => null);
 assert.ok(copyModule, "生产日报复制值构建器应存在");

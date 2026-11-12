@@ -1,3 +1,4 @@
+import { CUSTOMER_ACCOUNT_PERMISSION, CUSTOMER_ACCOUNT_TITLE } from "./customerSystemAccount.ts";
 import type { UserPermissionSection } from "../types/userPermissions";
 
 export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
@@ -8,6 +9,7 @@ export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
       { key: "production", label: "生产管理", description: "装配与注塑日报录入、修改、导出及生产汇总。" },
       { key: "hr", label: "人事管理", description: "员工资料查看、录入与维护。" },
       { key: "tools", label: "公共工具", description: "技术资料与生产流程查阅。" },
+      { key: CUSTOMER_ACCOUNT_PERMISSION, label: `查看${CUSTOMER_ACCOUNT_TITLE}`, description: "查看全部第三方账号、打开网站和复制当前密码。" },
       { key: "basic_data", label: "基础资料", description: "商品、客户、供应商与客户商品资料查询。" },
     ],
   },

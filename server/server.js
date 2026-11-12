@@ -18,6 +18,7 @@ import { registerQuotationRoutes } from "./routes/quotations.js";
 import { registerStandardRoutes } from "./routes/standards.js";
 import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerSystemSettingsRoutes } from "./routes/system-settings.js";
+import { registerCustomerAccountRoutes } from "./routes/customer-system-accounts.ts";
 import { registerFeedbackRoutes } from "./routes/feedback.js";
 import { createProductionScheduler } from "./services/production-report-scheduler.js";
 import { createStandardReviewReminders } from "./services/standard-review-reminders.js";
@@ -25,6 +26,7 @@ import { productionQueryMetrics } from "./middleware/request-metrics.js";
 import { productionRecoveryLock } from "./middleware/production-recovery-lock.js";
 
 const app = express();
+registerCustomerAccountRoutes(app);
 app.use(express.json({ limit: "20mb" }));
 app.use(productionQueryMetrics);
 app.use(productionRecoveryLock);

@@ -1,7 +1,7 @@
 export const ASSEMBLY_LINES = [
   ...Array.from({length: 15}, (_, index) => `${index + 1}#`),
   ...Array.from({length: 5}, (_, index) => `${index + 1}#组装线`),
-  '80#自动线', '98#自动线',
+  '80#自动线', '98#自动线', '102#自动线',
 ];
 
 const aliases: Record<string, string> = {

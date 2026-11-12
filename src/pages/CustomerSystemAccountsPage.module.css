@@ -1,0 +1,53 @@
+.page {
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.title:global(.ant-typography) {
+  margin: 0 0 4px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.search {
+  width: min(100%, 340px);
+}
+
+.url {
+  overflow-wrap: anywhere;
+}
+
+.username {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inlineButton {
+  padding-inline: 0;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 8px;
+  }
+}
+
+.accountName {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}

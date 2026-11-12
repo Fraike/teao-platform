@@ -30,6 +30,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { AppLocaleProvider } from "./components/AppLocaleProvider";
 import { FeedbackEntry } from "./components/feedback/FeedbackEntry";
 import { getNavigationItem, getVisibleMenuItems, NAVIGATION_GROUPS } from "./lib/navigation";
+import { CUSTOMER_ACCOUNT_PATH, CUSTOMER_ACCOUNT_PERMISSION } from "./lib/customerSystemAccount";
 import { getSidebarLayout } from "./lib/sidebarLayout";
 import styles from "./App.module.css";
 import "./components/PageLoader.css";
@@ -44,6 +45,7 @@ const QuotationPage = lazy<{headerHeight:number}>(() => import("./pages/Quotatio
 const QuotationPageIntl = lazy<{headerHeight:number}>(() => import("./pages/QuotationPageIntl"));
 const QuotationManagementPage = lazy<Record<string,never>>(() => import("./pages/QuotationManagementPage"));
 const CostCalculatorPage = lazy<{headerHeight:number}>(() => import("./pages/CostCalculatorPage"));
+const CustomerSystemAccountsPage = lazy<Record<string, never>>(() => import("./pages/CustomerSystemAccountsPage").then(m => ({ default: m.CustomerSystemAccountsPage })));
 const ProcessCenter = lazy<Record<string,never>>(() => import("./pages/ProcessCenter"));
 const ProductionReportPage = lazy<Record<string,never>>(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
 const ProductionEntryPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryPage").then((m) => ({ default: m.ProductionEntryPage })));
@@ -89,6 +91,7 @@ function renderTabPage(location:Location) {
                 <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
                 <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
                 <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
+                <Route path={CUSTOMER_ACCOUNT_PATH} element={<AuthGuard permission={CUSTOMER_ACCOUNT_PERMISSION}><CustomerSystemAccountsPage /></AuthGuard>} />
                 <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
                 <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
                 <Route path="/materials" element={<AuthGuard><MaterialDataPage /></AuthGuard>} />
@@ -232,7 +235,7 @@ function AppLayout() {
 
   const defaultOpenKeys = (() => {
     const group = getVisibleMenuItems(user).find((item) => item.key === selectedKey)?.group;
-    return NAVIGATION_GROUPS.filter((item) => item.key === group).map((item) => item.key);
+    return NAVIGATION_GROUPS.filter((item) => item.key === group || (user?.role === "admin" && item.key === "tools")).map((item) => item.key);
   })();
 
   const sidebarLayout = getSidebarLayout(isMobile);
@@ -260,6 +263,7 @@ function AppLayout() {
         </div>
 
         <Menu
+          key={user?.role === "admin" ? "admin" : "default"}
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}

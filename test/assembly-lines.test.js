@@ -12,12 +12,15 @@ const store=await import('../server/services/production-store.js');store.initDB(
 const db=store.getDB();
 const entry=line=>({date:'2026-11-06',line,customer:'测试客户',productName:'测试商品',dailyQty:10,defects:1});
 
-test('22 distinct choices, approved aliases and strict writes/import validation',()=>{
- assert.equal(new Set(ASSEMBLY_LINES).size,22);
+test('23 distinct choices, approved aliases and strict writes/import validation',()=>{
+ assert.equal(new Set(ASSEMBLY_LINES).size,23);
  assert.deepEqual(ASSEMBLY_LINES.slice(0,3),['1#','2#','3#']);
  assert(ASSEMBLY_LINES.includes('1#')&&ASSEMBLY_LINES.includes('1#组装线'));
  for(const [from,to] of [['2#线组装','2#组装线'],['组装线','1#组装线'],['自动线','80#自动线'],['98#','98#自动线'],['12#组装线','12#']])assert.equal(normalizeAssemblyLine(from),to);
  assert.throws(()=>store.createEntry(entry('99#'),'test'),/未知装配产线/);
+ const newLine=store.createEntry(entry('102#自动线'),'test');
+ assert.equal(db.prepare('SELECT line FROM assembly_records WHERE id=?').get(newLine.id).line,'102#自动线');
+ store.validateProductionImportRecords('assembly',[entry('102#自动线')]);
  const record=store.createEntry(entry('2组装线'),'test');
  assert.equal(db.prepare('SELECT line FROM assembly_records WHERE id=?').get(record.id).line,'2#组装线');
  assert.throws(()=>store.updateEntry(record.id,{line:'其他'},'test'),/未知装配产线/);
