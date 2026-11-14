@@ -11,7 +11,7 @@ import { StandardDraftActionButton } from "../components/standard/StandardDraftA
 import { getStandardDraftAction } from "../lib/standardDraftActions";
 import { StandardRemindButton } from "../components/standard/StandardRemindButton";
 import { createRef, lazy, Suspense, memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { Button, Select, Tag, Typography, Empty, message, Space, Tooltip, Modal } from "antd";
+import { Button, Select, Tag, Typography, Empty, message, Space, Tooltip, Popover, Modal } from "antd";
 import type { InputRef } from "antd";
 import { StandardCategoryTabs } from "../components/standard/StandardCategoryTabs";
 import { StandardPendingOverview } from "../components/standard/StandardPendingOverview";
@@ -75,6 +75,16 @@ const FIELD_COLUMN_WIDTHS: Record<string, number> = {
   lock_direction: 84, torque_direction: 84, rib_return: 100,
   spring: 110, clip: 100, seat: 100, axis_core: 100, pull_cord: 110,
   gear_spec: 220, marking: 160, remark: 180, import_note: 160,
+};
+
+const COMPACT_STANDARD_WIDTHS = { torque_standard: 96, test_standard: 100 };
+const COMPACT_MARKING_WIDTHS = { ...COMPACT_STANDARD_WIDTHS, marking: 144 };
+const CATEGORY_FIELD_COLUMN_WIDTHS: Record<string, Record<string, number>> = {
+  gear_damper: { ...COMPACT_STANDARD_WIDTHS, gear_spec: 190 },
+  barrel_damper: COMPACT_MARKING_WIDTHS,
+  rack_damper: COMPACT_MARKING_WIDTHS,
+  air_pull_handle: COMPACT_MARKING_WIDTHS,
+  sanitary_damper: { part_type: 88, oil_no: 88, fall_time: 92, step: 92, length: 92 },
 };
 
 const STATUS_OPTIONS: { value: StandardStatus | "all"; label: string }[] = [
@@ -410,12 +420,16 @@ function ProductStandardPageContent() {
     const toFieldColumn = (field: (typeof fields)[number]) => ({
       title: field.key === "test_standard" ? "测试标准" : field.label,
       key: field.key,
-      width: FIELD_COLUMN_WIDTHS[field.key] ?? (field.key.endsWith("_torque") ? 108 : 136),
+      width: CATEGORY_FIELD_COLUMN_WIDTHS[activeCategoryObj?.key ?? ""]?.[field.key]
+        ?? FIELD_COLUMN_WIDTHS[field.key] ?? (field.key.endsWith("_torque") ? 108 : 136),
       render: (_: unknown, record: StandardListItem) => field.key === "test_standard"
         ? <SeasonalTestStandard summer={record.fields.test_standard} winter={record.fields.winter_test_standard} />
         : field.key === "gear_spec"
         ? <GearSpecification value={record.fields[field.key] || ""} />
         : <span className={styles.parameterValue}>{record.fields[field.key] || (field.key === "part_type" && (record.fields.lid_standard || record.fields.seat_standard) ? "旧版盖＋座" : "—")}</span>,
+      ...(activeCategoryObj?.key === "air_pull_cord" && field.key === "grease_amount_g"
+        ? { title: "油量（克）", width: 92 }
+        : {}),
     });
     const fieldColumns: TableColumnsType<StandardListItem> = groupStandardFields(fields).flatMap<TableColumnsType<StandardListItem>[number]>(group => group.name
       ? [{ title: group.name, key: group.name, children: group.fields.map(toFieldColumn) }]
@@ -432,7 +446,12 @@ function ProductStandardPageContent() {
         width: 110,
         fixed: "left",
         render: (value: string, record: StandardListItem) => (
-          <div className={styles.productDrawingLink}><Link className={styles.serialValue} title={`查看商品 ${value}`} onClick={()=>rememberRow(record.id)} to={`/materials/number?${new URLSearchParams({number:value,standardId:record.id,returnTo:'/product-standards'})}`}>{value}</Link><StandardDrawingBadge id={`${record.id}:${value}`} /></div>
+          <div className={styles.productDrawingLink}>
+            <Popover content="点击查看产品图纸" classNames={{ container: styles.drawingHint }} trigger={["hover", "focus"]}>
+              <Link className={styles.serialValue} onClick={()=>rememberRow(record.id)} to={`/materials/number?${new URLSearchParams({number:value,standardId:record.id,returnTo:'/product-standards'})}`}>{value}</Link>
+            </Popover>
+            <StandardDrawingBadge id={`${record.id}:${value}`} />
+          </div>
         ),
       },
       {

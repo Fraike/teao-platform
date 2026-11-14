@@ -100,7 +100,10 @@ test('import entry is removed and retirement is restricted to reviewers and admi
 test('URL status/category changes select the latest route without stale parameter writes', async () => {
   clearStandardQueryCache();
   const originalGet = api.get;
-  const routeCategories = [...categories, { key: 'air_pull_cord', name: '拉绳阻尼器', fields: [] }];
+  const oilField = { key: 'grease_amount_g', label: '油量（阻尼脂）（g）' };
+  const gearField = { key: 'gear_spec', label: '齿轮规格' };
+  const routeCategories = [{ ...categories[0], fields: [...categories[0].fields, oilField, gearField] },
+    { key: 'air_pull_cord', name: '拉绳阻尼器', fields: [oilField] }];
   const routeItems: StandardListItem[] = [item('gear-published', 'Alpha'),
     { ...item('gear-draft', 'Alpha'), status: 'draft' },
     { ...item('air-draft', 'Alpha'), categoryKey: 'air_pull_cord', categoryName: '拉绳阻尼器', status: 'draft' }];
@@ -113,16 +116,25 @@ test('URL status/category changes select the latest route without stale paramete
   let navigate: ReturnType<typeof useNavigate>;
   function RouteControl() { navigate = useNavigate(); return null; }
   const root = createRoot(document.getElementById('root')!);
+  const columnWidth = (label: string) => {
+    const header = [...document.querySelectorAll('th')].find(cell => cell.textContent === label);
+    assert.ok(header, label);
+    return document.querySelectorAll('col')[header.cellIndex]?.style.width;
+  };
   try {
     await act(async () => root.render(createElement(MemoryRouter, { initialEntries: ['/?status=draft&category=air_pull_cord'] },
       createElement(RouteControl), createElement(ProductStandardPage))));
     await wait(80);
     assert.equal(rows().length, 1);
     assert.ok(rows()[0]?.includes('SN-air-draft'));
+    assert.ok([...document.querySelectorAll('th')].some(header => header.textContent === '油量（克）'));
+    assert.equal(columnWidth('油量（克）'), '92px');
     await act(async () => { await navigate!('/?status=published&category=gear_damper'); });
     await wait(80);
     assert.equal(rows().length, 1);
     assert.ok(rows()[0]?.includes('SN-gear-published'));
+    assert.ok([...document.querySelectorAll('th')].some(header => header.textContent === oilField.label));
+    assert.equal(columnWidth('齿轮规格'), '190px');
     await act(async () => {
       void navigate!('/?status=draft&category=air_pull_cord');
       await navigate!('/?status=draft&category=gear_damper');
@@ -148,6 +160,12 @@ test('page exposes notes, uses native scrolling and toggles a single highlighted
     assert.ok(document.body.textContent?.includes('20转/分钟'));
     assert.equal(document.querySelector('[aria-label="表格横向滚动"]'), null);
     let [first, second] = Array.from(document.querySelectorAll('.ant-table-row'));
+    const drawingLink = first.querySelector('a[href^="/materials/number"]');
+    assert.ok(drawingLink);
+    await act(() => drawingLink.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
+    await wait(180);
+    const drawingHint = [...document.querySelectorAll('.ant-popover')].find(tip => tip.textContent?.includes('点击查看产品图纸'));
+    assert.equal(drawingHint?.textContent, '点击查看产品图纸');
     await click(first);
     assert.equal(first.getAttribute('aria-selected'), 'true');
     await click(second);

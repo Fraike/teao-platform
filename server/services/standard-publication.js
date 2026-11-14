@@ -21,16 +21,27 @@ function cell(value) {
 function publicationMetadata(standard, version, options) {
   const actor = options.reviewerName || version.reviewedBy || (options.directPublish ? version.updatedBy || version.createdBy : "") || "未记录";
   return [["标准", standard.serialNo || "—"], ["版本", `V${version.versionNo}`],
-    ["客户", version.customer || "—"], [options.directPublish ? "发布人" : "审核人", actor]];
+    ["客户", version.customer || "—"], ["产品型号", version.model?.trim() || "—"],
+    [options.directPublish ? "发布人" : "审核人", actor]];
 }
 
 export function buildStandardPublicationMessages(standard, version, category, options = {}) {
-  const metadata = publicationMetadata(standard, version, options).map(([label, value]) => `${label}：${cell(value)}`).join("\n\n");
+  const overflowMetadata = [];
+  // Bound repeated headers after Markdown escaping so each packet has room for parameter rows.
+  const metadata = publicationMetadata(standard, version, options).map(([label, value]) => {
+    const escaped = cell(value);
+    if (Buffer.byteLength(escaped, "utf8") <= 384) return `${label}：${escaped}`;
+    overflowMetadata.push([label, value]);
+    const [preview] = splitStandardPublication(String(value), 160);
+    return `${label}：${cell(preview)}…（全文见表格）`;
+  }).join("\n\n");
   const heading = `# ${options.directPublish ? "产品标准已发布" : "产品标准审核通过 · 已发布"}\n\n${metadata}\n\n`;
   const limit = 4096 - 160;
   const packets = []; let current = heading;
   const flush = () => { if (current !== heading) packets.push(current.trimEnd()); current = heading; };
-  for (const section of publicationSections(standard, version, category, options)) {
+  const sections = publicationSections(standard, version, category);
+  if (overflowMetadata.length) sections.unshift({ title: "完整发布信息", rows: overflowMetadata });
+  for (const section of sections) {
     const header = `## ${section.title}\n\n| 属性 | 标准内容 |\n| --- | --- |\n`;
     if (!section.rows.length) current += header;
     let needsHeader = true;

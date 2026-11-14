@@ -217,6 +217,12 @@
 }
 
 .serialValue { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawingHint:global(.ant-popover-container) {
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
 .rowActions {
   display: flex;
   flex-direction: column;

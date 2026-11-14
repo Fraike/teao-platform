@@ -6,13 +6,25 @@ const category = { fields: [{ key: "gear_spec", label: "齿轮规格" }, { key: 
 let messages = buildStandardPublicationMessages(standard, version, category, { reviewerName: "审核员", comment: "已核对" });
 assert.equal(messages.length, 1); assert.equal(messages[0].type, "markdown_v2"); assert(messages.every(item=>!item.mentions?.length));
 assert(messages.every(item => item.type === "markdown_v2"));
+assert.match(messages[0].content, /客户：[^\n]+\n\n产品型号：RD-T001/);
 let content = messages.map(item => item.content).join("\n");
 for (const value of ["| 属性 | 标准内容 |", "完整标准参数", "齿轮A", "齿轮B", "V2", "SP-TABLE", "参数\\*内容"]) assert(content.includes(value), value);
 assert(messages.every(item => Buffer.byteLength(item.content, "utf8") <= (item.type === "text" ? 2048 : 4096)));
 messages = buildStandardPublicationMessages(standard, { ...version, fields: { remark: "超长参数😀\n".repeat(1500) } }, category, {});
 assert(messages.length > 2); assert(messages.every(item => Buffer.byteLength(item.content, "utf8") <= (item.type === "text" ? 2048 : 4096)));
 assert(messages.every(item => item.content.includes("| 属性 | 标准内容 |")));
+assert(messages.every(item => item.content.includes("产品型号：RD-T001")));
 assert.equal(messages.map(item => item.content).join("").split("超长参数😀").length - 1, 1500);
+const longModel = "型号😀|".repeat(400);
+const longIdentity = buildStandardPublicationMessages(standard, {
+  ...version, model: longModel, customer: "客户".repeat(1000),
+}, category);
+assert(longIdentity.length > 1);
+assert(longIdentity.every(item => Buffer.byteLength(item.content, "utf8") <= 4096));
+const modelParts = longIdentity.flatMap(item => [...item.content.matchAll(/^\| 产品型号(?:（续）)? \| (.*) \|$/gm)]);
+assert.equal(modelParts.map(match => match[1]).join(""), longModel.replaceAll("|", "\\|"));
+assert(longIdentity.some(item => item.content.includes("参数\\*内容")));
 const sanitary = buildStandardPublicationMessages({ ...standard, categoryKey: "sanitary_damper" }, { ...version, fields: { part_type: "盖" } }, { fields: [{ key: "part_type", label: "产品部位" }] }, { directPublish: true, reviewerName: "管理员" });
+assert(sanitary.every(item => item.content.includes("产品型号：RD-T001")));
 content = sanitary.map(item => item.content).join("");assert(!content.includes("客户料号"));assert(!content.includes("项目代号"));assert(content.includes("产品标准已发布"));assert(content.includes("发布人：管理员"));assert(!content.includes("审核人："));assert(!content.includes("原始批注"));
 console.log("Native publication tables: complete attributes, escaping, repeated headers, byte bounds, long values and direct publication passed.");

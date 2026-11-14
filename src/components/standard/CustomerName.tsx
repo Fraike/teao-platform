@@ -14,7 +14,7 @@ interface CustomerNameProps {
 export function CustomerName({ value }: CustomerNameProps) {
   const { name, isAuto } = parseCustomerName(value);
 
-  const label = <span className={styles.name}>{name || "-"}</span>;
+  const label = <span className={styles.name} title={isAuto ? undefined : name}>{name || "-"}</span>;
 
   if (!isAuto) return label;
 
@@ -24,6 +24,7 @@ export function CustomerName({ value }: CustomerNameProps) {
       placement="top"
       content={
         <div className={styles.tip}>
+          <div className={styles.fullName}>{name}</div>
           <div className={styles.tipTitle}>汽车客户</div>
           <div className={styles.tipDesc}>测试条件：20转/分钟（特殊除外）</div>
         </div>

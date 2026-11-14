@@ -49,5 +49,11 @@ try {
  const result=await s.confirmStandardImport([{...input,serialNo:'import'}],a,p.token);
  assert.equal(result.inserted,1);
  assert(result.backupPath);
+ const longModel = '型'.repeat(2000);
+ let longStandard = s.createStandard({...input, serialNo:'long-model', model:longModel}, a);
+ longStandard = s.submitStandard(longStandard.id,a,expected(longStandard));
+ longStandard = s.reviewStandard(longStandard.id,{approve:true,...expected(longStandard)},b);
+ assert.equal(longStandard.versions[0].status, 'published');
+ assert.equal(longStandard.versions[0].model, longModel);
  console.log('standard review regression passed');
 } finally {s.closeDB();}
