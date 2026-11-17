@@ -381,7 +381,7 @@ export function App() {
   return (
     <AppLocaleProvider>
       <BrowserRouter>
-        <AntApp>
+        <AntApp className={styles.appShell}>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
