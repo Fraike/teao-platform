@@ -1,0 +1,37 @@
+.page { padding:16px; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; min-width:0; }
+.actions { margin-block:6px; }
+.full { width: 100%; }
+.search { width:min(360px,100%); min-width:min(260px,100%); margin-block:4px; }
+@media print {
+  .printMode * { visibility: hidden; }
+  .printMode .print, .printMode .print * { visibility: visible; }
+  .printMode .print { position: absolute; inset: 0 auto auto 0; width: 100%; background: white; }
+}
+.toolbar,.planTools,.planHeading { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.toolbar :global(h4.ant-typography),.planHeading :global(h5.ant-typography) { margin:0; }
+.syncStatus { display:flex; gap:4px; flex-wrap:wrap; }
+.syncStatus :global(.ant-tag) { white-space:normal; }
+.planHeading { padding:10px 0; }
+.filters { margin-bottom:8px; }
+.filters :global(.ant-select) { min-width:110px; }
+.stockLayout { display:grid; grid-template-columns:minmax(180px,230px) minmax(0,1fr); gap:16px; align-items:start; }
+.results { min-width:0; }
+.columnPicker { display:grid; gap:6px; }
+.formBody { max-height:65vh; overflow:auto; padding:2px 8px 2px 2px; display:grid; gap:12px; }
+.formSection { padding:16px; border:1px solid #e4e7ec; border-radius:8px; background:#fafbfc; }
+.formSection :global(h5.ant-typography) { margin:0 0 12px; }
+.twoCols,.configRow { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 16px; }
+.formSection :global(.ant-input-number) { width:100%; }
+.configRow { padding:12px; margin-bottom:8px; border:1px solid #e4e7ec; border-radius:6px; background:#fff; }
+.configRow > button { justify-self:start; }
+@media (max-width:680px) {
+  .stockLayout,.twoCols,.configRow { grid-template-columns:minmax(0,1fr); }
+  .page { padding:10px; }
+  .formSection { padding:10px; }
+}
+@media print {
+  @page { size: landscape; }
+  .print :global(.ant-table-content) { overflow:visible !important; }
+  .print :global(table) { width:100% !important; min-width:0 !important; }
+  .print :global(.ant-table-cell) { white-space:normal; overflow-wrap:anywhere; padding:4px !important; }
+}

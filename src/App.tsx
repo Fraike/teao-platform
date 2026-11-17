@@ -47,6 +47,9 @@ const QuotationManagementPage = lazy<Record<string,never>>(() => import("./pages
 const CostCalculatorPage = lazy<{headerHeight:number}>(() => import("./pages/CostCalculatorPage"));
 const CustomerSystemAccountsPage = lazy<Record<string, never>>(() => import("./pages/CustomerSystemAccountsPage").then(m => ({ default: m.CustomerSystemAccountsPage })));
 const ProcessCenter = lazy<Record<string,never>>(() => import("./pages/ProcessCenter"));
+const AssemblySchedulingPage = import.meta.env?.DEV === true
+  ? lazy<Record<string,never>>(() => import("./pages/AssemblySchedulingPage").then(m => ({default:m.AssemblySchedulingPage})))
+  : null;
 const ProductionReportPage = lazy<Record<string,never>>(() => import("./pages/ProductionReportPage").then((m) => ({ default: m.ProductionReportPage })));
 const ProductionEntryPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryPage").then((m) => ({ default: m.ProductionEntryPage })));
 const ProductionEntryInjectionPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryInjectionPage").then((m) => ({ default: m.ProductionEntryInjectionPage })));
@@ -60,7 +63,7 @@ const SupplierDataPage = lazy<Record<string,never>>(() => import("./pages/Suppli
 const CustomerProductPage = lazy<Record<string,never>>(() => import("./pages/CustomerProductPage").then((m) => ({ default: m.CustomerProductPage })));
 const ProductStandardPage = lazy<Record<string,never>>(() => import("./pages/ProductStandardPage").then((m) => ({ default: m.ProductStandardPage })));
 
-const { Header, Sider, Content, Footer } = Layout;
+const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 const NAV_GROUP_ICONS: Record<string, React.ReactNode> = {
@@ -88,6 +91,7 @@ function renderTabPage(location:Location) {
                 <Route path="/quotation-intl" element={<AuthGuard permission="business"><QuotationPageIntl headerHeight={56} /></AuthGuard>} />
                 <Route path="/quotation-management" element={<AuthGuard permission="business"><QuotationManagementPage /></AuthGuard>} />
                 <Route path="/cost" element={<AuthGuard permission="business"><CostCalculatorPage headerHeight={56} /></AuthGuard>} />
+                {AssemblySchedulingPage && <Route path="/assembly-scheduling" element={<AuthGuard permission="production"><AssemblySchedulingPage /></AuthGuard>} />}
                 <Route path="/production-report" element={<AuthGuard permission="production"><ProductionReportPage /></AuthGuard>} />
                 <Route path="/production-entry" element={<AuthGuard permission="production"><ProductionEntryPage /></AuthGuard>} />
                 <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
@@ -367,16 +371,6 @@ function AppLayout() {
           {location.pathname==='/materials/number'&&renderTabPage(location)}
         </Content>
 
-        <Footer className={styles.footer}>
-          <a
-            href="http://beian.miit.gov.cn/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.footerLink}
-          >
-            粤ICP备13044030号-7
-          </a>
-        </Footer>
       </Layout>
     </Layout>
     </UNSAFE_LocationContext.Provider>

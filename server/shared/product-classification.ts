@@ -69,7 +69,7 @@ export function classifyProduct(material: ProductMaterial | null, standards: Pro
   const group = keys.length && keys.every(key => Boolean(STANDARD_CATEGORY_NAMES[key])) ? 'finished' : 'unclassified';
   return { categoryId: `${group}:pending`, category: '待分类', group } as const;
 }
-export function countProductCategories(tree: ProductCategoryNode[], products: ProductArchive[]): ProductCategoryNode[] {
+export function countProductCategories(tree: ProductCategoryNode[], products: Pick<ProductArchive,"id"|"categoryId"|"category"|"group">[]): ProductCategoryNode[] {
   const clone = tree.map(function copy(node): ProductCategoryNode { return { ...node, children: node.children.map(copy), count: 0 }; });
   const index = indexProductCategories(clone), counts = new Map<string, number>();
   for (const p of new Map(products.map(product => [product.id, product])).values()) {

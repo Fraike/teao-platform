@@ -1,4 +1,5 @@
 import { CUSTOMER_ACCOUNT_PERMISSION, CUSTOMER_ACCOUNT_TITLE } from "./customerSystemAccount.ts";
+import { assemblySchedulingAvailable } from "./navigation.ts";
 import type { UserPermissionSection } from "../types/userPermissions";
 
 export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
@@ -16,6 +17,7 @@ export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
   {
     key: "actions", title: "页面内操作", description: "单独授权需要额外开放的操作。",
     permissions: [
+      ...(assemblySchedulingAvailable ? [{ key: "production_schedule", label: "PMC 装配排单", description: "读取订单与库存、调整并发布装配日计划。", requires: "production" }] : []),
       { key: "production_import", label: "生产日报导入", description: "导入 Excel 并全量覆盖日报数据，需先开通生产管理。", requires: "production" },
       { key: "product_drawing_manage", label: "商品图纸管理", description: "上传、确认后直接发布和停用商品图纸，无需审核。" },
       { key: "engineering_submit", label: "产品标准提交审核", description: "新增、复制、修改标准草稿，并选择审核人提交。" },

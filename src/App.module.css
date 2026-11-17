@@ -97,7 +97,7 @@
 .mainLayout {
   min-width: 0;
   min-height: 0;
-  height: 100dvh;
+  height: 100%;
 }
 
 .rootLayout {
@@ -136,20 +136,6 @@
   box-sizing: border-box;
 }
 
-.footer {
-  flex: 0 0 auto;
-  padding: 4px 16px;
-  color: #999;
-  font-size: 12px;
-  line-height: 20px;
-  text-align: center;
-  background: #f5f5f5;
-}
-
-.footerLink {
-  color: #999;
-  text-decoration: none;
-}
 .productTabLabel {display:flex;flex-direction:column;align-items:flex-start;line-height:1.3;max-width:220px;}
 .productTabLabel span,.productTabLabel small {max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .productTabLabel small {color:#667085;font-size:11px;margin-top:3px;}

@@ -5,6 +5,8 @@ import { PORT, readConfig } from "./config.js";
 import { getDB as getStandardDB } from "./services/standard-store.js";
 import { createPublicationWorker } from "./services/standard-publication-outbox.js";
 import { registerHistoryRoutes } from "./routes/history.js";
+import { registerAssemblySchedulingRoutes } from "./routes/assembly-scheduling.ts";
+import { generateScheduledDraft } from "./services/assembly-scheduling.ts";
 import { registerProductionRoutes } from "./routes/production.js";
 import { initDefaultAdmin } from "./services/users.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -26,6 +28,7 @@ import { productionQueryMetrics } from "./middleware/request-metrics.js";
 import { productionRecoveryLock } from "./middleware/production-recovery-lock.js";
 
 const app = express();
+const assemblySchedulingAvailable = process.env.NODE_ENV === "development";
 registerCustomerAccountRoutes(app);
 app.use(express.json({ limit: "20mb" }));
 app.use(productionQueryMetrics);
@@ -37,6 +40,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true, service: "teao-api" }
 registerHistoryRoutes(app);
 registerQuotationRoutes(app);
 registerProductionRoutes(app);
+if (assemblySchedulingAvailable) registerAssemblySchedulingRoutes(app);
 registerAuthRoutes(app);
 registerAdminRoutes(app);
 registerEmployeeRoutes(app);
@@ -73,6 +77,12 @@ const standardPublicationWorker = createPublicationWorker(getStandardDB(), readC
     }
     console.log(`teao-api running on port ${PORT}`);
     productionScheduler.start();
+    if (assemblySchedulingAvailable) {
+      cron.schedule("* * * * *", () => {
+        try { generateScheduledDraft(); }
+        catch { console.error("[assembly-scheduling] 次日草案生成失败"); }
+      });
+    }
     productServices.start(cron);
     standardReviewReminders.start(cron);
     standardPublicationWorker.start(cron);

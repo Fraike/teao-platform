@@ -1,6 +1,8 @@
 import { CUSTOMER_ACCOUNT_PATH, CUSTOMER_ACCOUNT_PERMISSION, CUSTOMER_ACCOUNT_TITLE } from "./customerSystemAccount.ts";
 import type { User } from "../types/auth";
 
+export const assemblySchedulingAvailable = import.meta.env?.DEV === true;
+
 export type NavigationIcon = "app" | "shop" | "file" | "global" | "calculator" | "chart" | "tool" | "team" | "read" | "database" | "setting";
 
 export interface NavigationItem {
@@ -41,6 +43,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { key: "/quotation-intl", title: "国际报价", description: "海外客户英文报价与贸易条款", category: "业务系统", group: "business", permission: "business", icon: "global", color: "#722ed1", menu: true, dashboard: true },
   { key: "/quotation-management", title: "报价管理", description: "查看、复制和管理历史报价", category: "业务系统", group: "business", permission: "business", icon: "file", color: "#13c2c2", menu: true, dashboard: true },
   { key: "/cost", title: "成本计算", description: "材料、工序、包装与利润分析", category: "业务系统", group: "business", permission: "business", icon: "calculator", color: "#52c41a", menu: true, dashboard: true },
+  ...(assemblySchedulingAvailable ? ([{ key: "/assembly-scheduling", title: "装配排单", description: "订单与库存、次日计划和发布", category: "生产管理", group: "production", permission: "production", icon: "tool", color: "#1677ff", menu: true, dashboard: true }] satisfies NavigationItem[]) : []),
   { key: "/production-report", title: "生产日报汇总", description: "装配部、注塑部生产数据汇总", category: "生产管理", group: "production", permission: "production", icon: "chart", color: "#13c2c2", menu: true, dashboard: true },
   { key: "/production-entry", title: "装配部生产日报", description: "装配部生产日报录入与导入", category: "生产管理", group: "production", permission: "production", icon: "tool", color: "#1677ff", menu: true, dashboard: true },
   { key: "/production-entry-injection", title: "注塑部生产日报", description: "注塑部生产日报录入与导入", category: "生产管理", group: "injection", permission: "production", icon: "tool", color: "#722ed1", menu: true, dashboard: true },

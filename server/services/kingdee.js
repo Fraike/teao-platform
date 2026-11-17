@@ -16,6 +16,7 @@ function ensureCredentials() {
 
 // ---- Token 缓存 ----
 let cachedToken = null;
+let tokenRefresh = null;
 let cachedDomain = null;
 let tokenExpiresAt = 0; // 毫秒时间戳
 
@@ -86,6 +87,7 @@ function isSuccess(data) {
 
 // ---- 通用 API 调用 ----
 
+/** @param {string} method @param {string} path @param {Record<string, string> | null} queryParams @param {string | null} body @param {Record<string, string> | null} extraHeaders */
 export async function callApi(method, path, queryParams = null, body = null, extraHeaders = null, retries = 3) {
   ensureCredentials();
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -126,6 +128,7 @@ export async function callApi(method, path, queryParams = null, body = null, ext
         data = { raw: text, status_code: response.status };
       }
 
+      if (response.status === 429 && !isSuccess(data)) data.status_code = 429;
       if (!isSuccess(data) && attempt < retries) {
         console.warn(`[kingdee] 第${attempt}次尝试失败, 1秒后重试...`);
         await new Promise((r) => setTimeout(r, 1000));
@@ -178,11 +181,16 @@ export async function ensureToken() {
   if (cachedToken && now < tokenExpiresAt) {
     return { token: cachedToken, domain: cachedDomain };
   }
+  if (!tokenRefresh) tokenRefresh = refreshToken().finally(() => {tokenRefresh = null;});
+  return tokenRefresh;
+}
+
+async function refreshToken() {
   const { appKey, appSecret, domain } = await getAppKeySecret();
   const token = await getAppToken(appKey, appSecret);
   cachedToken = token;
   cachedDomain = domain;
-  tokenExpiresAt = now + 23 * 60 * 60 * 1000; // 23h，提前1小时刷新
+  tokenExpiresAt = Date.now() + 23 * 60 * 60 * 1000; // 23h，提前1小时刷新
   console.log("[kingdee] token 已刷新");
   return { token, domain };
 }

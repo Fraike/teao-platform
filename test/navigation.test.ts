@@ -4,6 +4,7 @@ import { getNavigationItem, getVisibleNavigationItems } from "../src/lib/navigat
 const admin = { id: "admin", name: "管理员", username: "admin", role: "admin" as const, permissions: [] };
 const productionUser = { id: "p1", name: "生产员", username: "production", role: "user" as const, permissions: ["production"] };
 
+assert.equal(getNavigationItem("/assembly-scheduling"), undefined);
 assert.equal(getNavigationItem("/production-entry")?.title, "装配部生产日报");
 assert.equal(getNavigationItem("/production-entry-injection")?.title, "注塑部生产日报");
 assert.equal(getNavigationItem("/materials/RD-01")?.title, "商品详情");
