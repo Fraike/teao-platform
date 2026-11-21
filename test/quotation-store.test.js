@@ -82,6 +82,32 @@ try {
   );
   assert.equal(deleteQuotation(tierCreated.id, "tester"), true);
 
+  const moldQuote = structuredClone(quotation);
+  moldQuote.quoteMeta.no = "Q-MOLD-RULES";
+  moldQuote.molds = [
+    { id: "m1", name: "模具A", totalCost: 10000, amortizeQty: 50000 },
+    { id: "m2", name: "模具B", totalCost: 5000, amortizeQty: 10000 },
+  ];
+  const moldSaved = createQuotation({ market: "domestic", quotation: moldQuote }, "tester");
+  assert.equal(moldSaved.quotation.molds.length, 2);
+  for (const invalid of [
+    { ...moldQuote, products: [...moldQuote.products, { ...moldQuote.products[0], id: "p2" }] },
+    ...[0, -1, 1.5, Infinity].map(amortizeQty => ({ ...moldQuote, molds: [{ ...moldQuote.molds[0], amortizeQty }] })),
+    ...[-1, NaN, Infinity].map(totalCost => ({ ...moldQuote, molds: [{ ...moldQuote.molds[0], totalCost }] })),
+    { ...moldQuote, molds: [null] },
+    { ...moldQuote, molds: {} },
+  ]) {
+    assert.throws(() => createQuotation({ market: "domestic", quotation: invalid }, "tester"), /模具/);
+    assert.throws(() => updateQuotation(moldSaved.id, { market: "domestic", quotation: invalid }, "tester"), /模具/);
+    assert.equal(getQuotation(moldSaved.id).quotation.molds[0].amortizeQty, 50000);
+  }
+  const internationalMolds = createQuotation({ market: "international", quotation: {
+    ...moldQuote, products: [...moldQuote.products, { ...moldQuote.products[0], id: "p2" }],
+  } }, "tester");
+  assert.equal(internationalMolds.productCount, 2);
+  deleteQuotation(internationalMolds.id, "tester");
+  deleteQuotation(moldSaved.id, "tester");
+
   const listed = listQuotations({ keyword: "测试客户" });
   assert.equal(listed.total, 1);
   assert.equal(listed.data[0].quotation, undefined);

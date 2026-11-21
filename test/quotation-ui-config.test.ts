@@ -20,6 +20,7 @@ assert.deepEqual(DEFAULT_TERMS, [
   "3. 交货地点：贵司工厂，交期10-15天。",
   "4. 付款方式：月结。",
   "5. 报价有效期：本报价单自发出之日起30天内有效。",
+  "6. 结算方式：入库结算。",
 ]);
 
 assert.equal(isSupportedImageFile({ type: "image/png" }), true);

@@ -18,6 +18,8 @@ type ProductRow = Product & { index: number };
 export default function ProductCard() {
   const isMobile = useIsMobile();
   const products = useQuotationStore((s) => s.quotation.products);
+  const hasMolds = useQuotationStore((s) => s.quotation.molds.length > 0);
+  const productLimitReached = hasMolds && products.length >= 1;
   const addProduct = useQuotationStore((s) => s.addProduct);
   const removeProduct = useQuotationStore((s) => s.removeProduct);
   const duplicateProduct = useQuotationStore((s) => s.duplicateProduct);
@@ -156,6 +158,8 @@ export default function ProductCard() {
             type="text"
             size="small"
             icon={<CopyOutlined />}
+            disabled={hasMolds}
+            title={hasMolds ? "有模具分摊时只能有一个产品" : "复制产品"}
             onClick={() => duplicateProduct(r.id)}
           />
           <Popconfirm
@@ -181,7 +185,8 @@ export default function ProductCard() {
         </span>
       }
       extra={
-        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={addProduct}>
+        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={addProduct} disabled={productLimitReached}
+          title={productLimitReached ? "有模具分摊时只能有一个产品" : undefined}>
           添加产品
         </Button>
       }

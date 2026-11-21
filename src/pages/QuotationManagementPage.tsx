@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { MoldPriceSummary } from "../components/MoldPriceSummary";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -339,6 +340,7 @@ function QuotationDetailDrawer({ record, onClose, onEdit, onCopy }: { record: Ma
                 { title: "总费用", dataIndex: "totalCost", align: "left", render: (value: number) => value.toLocaleString("zh-CN", { minimumFractionDigits: 2 }) },
                 { title: "分摊数量", dataIndex: "amortizeQty", align: "left" },
               ]} />
+              {record.market === "domestic" && <MoldPriceSummary products={quotation.products} molds={quotation.molds} />}
             </div>
           )}
           {quotation.terms.length > 0 && (

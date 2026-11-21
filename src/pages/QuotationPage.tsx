@@ -20,6 +20,7 @@ import { useQuotationStore } from "../lib/store";
 import { useIsMobile } from "../lib/useIsMobile";
 import { api } from "../lib/api";
 import type { ManagedQuotation } from "../types/quotation";
+import { validateMoldPricing } from "../lib/moldPricing";
 import { confirmTierPricing } from "../components/confirmTierPricing";
 
 import { useQuotationDraftTab } from "../lib/useDraftTab";
@@ -50,8 +51,13 @@ export default function QuotationPage({ headerHeight }: Props) {
   const activeEditingId = editingQueryId ? editingId : null;
 
   const confirmTierValidation = useCallback(async (): Promise<boolean> => {
+    const moldError = validateMoldPricing(quotation.products, quotation.molds);
+    if (moldError) {
+      messageApi.warning(moldError);
+      return false;
+    }
     return confirmTierPricing(quotation.products, "zh", tab.container);
-  }, [quotation.products, tab.container]);
+  }, [quotation.products, quotation.molds, tab.container, messageApi]);
 
   const handleExportPDF = useCallback(async () => {
     if (!previewRef.current) return;

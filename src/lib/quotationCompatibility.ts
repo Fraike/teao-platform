@@ -20,7 +20,7 @@ export type TaxSelection = "included" | "excluded";
 export function taxSelectionFromNote(taxNote: string | undefined): TaxSelection {
   const normalized = taxNote?.trim() ?? "";
   if (!normalized) return "excluded";
-  return normalized.includes("不含税") || normalized.includes("不含增值税") ? "excluded" : "included";
+  return /不含(?:\d+(?:\.\d+)?%的?)?(?:增值税|税)|未税/.test(normalized) ? "excluded" : "included";
 }
 
 export function taxNoteFromSelection(selection: TaxSelection): string {
@@ -45,4 +45,10 @@ export function ensureUniqueProductIds(
 
 export function removeProductById(products: Product[], productId: string): Product[] {
   return products.filter((product) => product.id !== productId);
+}
+export function syncDomesticTaxTerm(terms: string[], taxNote: string | undefined): string[] {
+  const tax = isTaxIncluded(taxNote) ? "含13%税" : "不含13%税";
+  return terms.map((term, index) => index === 0
+    ? term.replace(/不含(?:\d+(?:\.\d+)?%的?)?(?:增值税|税)|未税|含(?:\d+(?:\.\d+)?%的?)?(?:增值税|税)/, tax)
+    : term);
 }

@@ -1,3 +1,4 @@
+import { MoldPriceSummary } from "./MoldPriceSummary";
 import { useState, useMemo, useEffect } from "react";
 import {
   Drawer,
@@ -256,6 +257,7 @@ function RecordDetail({ record }: { record: QuotationRecord }) {
               })}
             </tbody>
           </table>
+          <MoldPriceSummary products={record.products} molds={record.molds} />
         </>
       )}
 

@@ -9,6 +9,7 @@
 @media(max-width:768px){.page{padding:16px;}.search{width:100%;}.select{flex:1;}}
 .catalogLayout {display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start;margin-top:20px;}
 .categories {border:1px solid #e4e7ec;background:#fafbfc;padding:14px 10px;border-radius:8px;min-width:0;}
+.catalogLayout > .categories {position:sticky;top:12px;max-height:calc(100dvh - 108px);overflow-y:auto;overscroll-behavior:contain;}
 .categories h3 {font-size:15px;margin:0 8px 12px;}
 .categories :global(.ant-tree) {background:transparent;margin-top:12px;font-size:13px;}
 .categories :global(.ant-tree-node-content-wrapper) {min-height:36px;line-height:36px;}
@@ -19,7 +20,7 @@
 .sectionTitle {display:flex;align-items:baseline;gap:12px;}
 .sectionTitle h5 {margin:0;}
 .categoryLink {padding:0;white-space:normal;text-align:left;height:auto;}
-@media(max-width:768px){.catalogLayout{grid-template-columns:1fr;gap:16px;}.categories{max-height:300px;overflow:auto;}.categories :global(.ant-tree){font-size:14px;}}
+@media(max-width:768px){.catalogLayout{grid-template-columns:1fr;gap:16px;}.catalogLayout > .categories{position:static;max-height:300px;overflow:auto;}.categories :global(.ant-tree){font-size:14px;}}
 .seriesGrid {display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
 .seriesCard {display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-height:175px;padding:20px;border:1px solid #e4e7ec;border-radius:10px;background:#fff;text-align:left;cursor:pointer;font:inherit;transition:border-color .15s,box-shadow .15s;overflow-wrap:anywhere;}
 .seriesCard:hover {border-color:#1677ff;box-shadow:0 4px 14px #1677ff12;}

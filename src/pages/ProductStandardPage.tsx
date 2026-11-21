@@ -54,6 +54,14 @@ import styles from "./ProductStandardPage.module.css";
 
 const { Title } = Typography;
 
+const TEST_STANDARD_COLUMN_TITLES: Record<string, string> = {
+  gear_damper: "测试标准（gf.cm）",
+  barrel_damper: "测试标准（gf.cm）",
+  rack_damper: "测试标准（gf.cm）",
+  air_pull_cord: "测试标准（Kgf.cm）",
+  air_pull_handle: "测试标准（Kgf.cm）",
+};
+
 function createColumnFilterControl() {
   const inputRef = createRef<InputRef>();
   let frame: number | undefined;
@@ -418,7 +426,9 @@ function ProductStandardPageContent() {
       && !(field.key === "import_note"
         && ["barrel_damper", "rack_damper", "lock_sync", "air_pull_handle"].includes(activeCategoryObj?.key || "")));
     const toFieldColumn = (field: (typeof fields)[number]) => ({
-      title: field.key === "test_standard" ? "测试标准" : field.label,
+      title: field.key === "test_standard"
+        ? TEST_STANDARD_COLUMN_TITLES[activeCategoryObj?.key ?? ""] ?? "测试标准"
+        : field.label,
       key: field.key,
       width: CATEGORY_FIELD_COLUMN_WIDTHS[activeCategoryObj?.key ?? ""]?.[field.key]
         ?? FIELD_COLUMN_WIDTHS[field.key] ?? (field.key.endsWith("_torque") ? 108 : 136),

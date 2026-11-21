@@ -1,5 +1,6 @@
 import { Card, Table, Button, Input, InputNumber, Popconfirm } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { MoldPriceSummary } from "./MoldPriceSummary";
 import type { MoldItem } from "../types/quotation";
 import type { ColumnsType } from "antd/es/table";
 import { useQuotationStore, useIntlQuotationStore } from "../lib/store";
@@ -54,6 +55,9 @@ const EN: MoldCardLabels = {
 };
 
 function MoldCard({ useStore, labels }: { useStore: StoreHook; labels: MoldCardLabels }) {
+  const products = useStore((s) => s.quotation.products);
+  const isDomestic = useStore === useQuotationStore;
+  const cannotAdd = isDomestic && products.length !== 1;
   const molds = useStore((s) => s.quotation.molds);
   const addMold = useStore((s) => s.addMold);
   const removeMold = useStore((s) => s.removeMold);
@@ -112,6 +116,7 @@ function MoldCard({ useStore, labels }: { useStore: StoreHook; labels: MoldCardL
           value={r.amortizeQty}
           onChange={(v: number | null) => update(r.id, "amortizeQty", v ?? 0)}
           min={1}
+          precision={isDomestic ? 0 : undefined}
           suffix="PCS"
         />
       ),
@@ -151,13 +156,15 @@ function MoldCard({ useStore, labels }: { useStore: StoreHook; labels: MoldCardL
     <Card
       title={<span style={{ fontSize: 14, fontWeight: 600 }}>{labels.title}</span>}
       extra={
-        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={addMold}>
+        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={addMold} disabled={cannotAdd}
+          title={cannotAdd ? "请先保留一个产品，再添加模具费用" : undefined}>
           {labels.addButton}
         </Button>
       }
       size="small"
       styles={{ body: { padding: "8px 12px" } }}
     >
+      {cannotAdd && <p>有模具分摊费用时只能有一个产品，请先保留一个产品。</p>}
       <Table<MoldRow>
         columns={columns}
         dataSource={dataSource}
@@ -166,6 +173,7 @@ function MoldCard({ useStore, labels }: { useStore: StoreHook; labels: MoldCardL
         scroll={{ x: 600 }}
         bordered
       />
+      {isDomestic && <MoldPriceSummary products={products} molds={molds} />}
     </Card>
   );
 }

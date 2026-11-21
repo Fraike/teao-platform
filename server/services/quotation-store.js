@@ -104,6 +104,19 @@ function validateProductTiers(product, index) {
   }
 }
 
+function validateDomesticMolds(quotation) {
+  const molds = quotation.molds ?? [];
+  if (!Array.isArray(molds)) throw validationError("模具费用格式无效");
+  if (molds.length === 0) return;
+  if (quotation.products.length !== 1) {
+    throw validationError("有模具分摊费用时只能有一个产品，请先保留一个产品。");
+  }
+  if (molds.some(mold => !mold || !Number.isFinite(mold.totalCost) || mold.totalCost < 0
+    || !Number.isSafeInteger(mold.amortizeQty) || mold.amortizeQty <= 0)) {
+    throw validationError("请填写有效的模具费用和分摊数量（正整数）。");
+  }
+}
+
 function validateQuotation(market, quotation) {
   if (market !== "domestic" && market !== "international") {
     throw validationError("报价类型无效");
@@ -138,6 +151,7 @@ function validateQuotation(market, quotation) {
     }
     validateProductTiers(product, index);
   });
+  if (market === "domestic") validateDomesticMolds(quotation);
 
   const snapshot = JSON.stringify(quotation);
   if (Buffer.byteLength(snapshot, "utf8") > 15 * 1024 * 1024) {

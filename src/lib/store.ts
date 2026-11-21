@@ -4,7 +4,7 @@ import type { Quotation, Product, MoldItem, CustomerInfo } from "../types/quotat
 import { sampleQuotation } from "./sample";
 import { sampleIntlQuotation } from "./sample-intl";
 import { DEFAULT_PRODUCT_TABLE_COLUMN_WIDTHS, DEFAULT_AMORTIZE_QTY, DEFAULT_TERMS, DEFAULT_TERMS_EN } from "./constants";
-import { ensureUniqueProductIds, removeProductById } from "./quotationCompatibility";
+import { ensureUniqueProductIds, removeProductById, syncDomesticTaxTerm } from "./quotationCompatibility";
 
 // ---- helpers ----
 
@@ -56,6 +56,10 @@ export interface QuotationStoreOptions {
   };
 }
 
+function quotationTerms(terms: string[], taxNote: string | undefined, opts: QuotationStoreOptions) {
+  return opts.storageKey === "quotation-data-v2" ? syncDomesticTaxTerm(terms,taxNote) : terms;
+}
+
 function normalizeQuotation(data: Quotation, opts: QuotationStoreOptions): Quotation {
   const d = opts.defaults;
   const quoteMeta = {
@@ -67,8 +71,12 @@ function normalizeQuotation(data: Quotation, opts: QuotationStoreOptions): Quota
     taxNote: data.quoteMeta.taxNote ?? d.taxNote,
   };
 
+  const legacyDefault = data.terms?.length === 5
+    && data.terms.every((term,index) => term === DEFAULT_TERMS[index]);
+  const terms = opts.storageKey === "quotation-data-v2" && legacyDefault ? [...DEFAULT_TERMS] : data.terms;
   return {
     ...data,
+    terms:quotationTerms(terms ?? opts.defaults.defaultTerms,quoteMeta.taxNote,opts),
     customer: { ...d.customerDefaults, ...data.customer },
     quoteMeta: {
       ...quoteMeta,
@@ -158,6 +166,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     setProducts: (products) =>
       set((s) => {
+        if (opts.storageKey === "quotation-data-v2" && s.quotation.molds.length > 0 && products.length > 1) return s;
         const next = { ...s.quotation, products };
         save(opts.storageKey, next);
         return { quotation: next };
@@ -165,6 +174,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     addProduct: () =>
       set((s) => {
+        if (opts.storageKey === "quotation-data-v2" && s.quotation.molds.length > 0 && s.quotation.products.length >= 1) return s;
         const products = [
           ...s.quotation.products,
           { id: genId(), name: "", partNo: "", spec: "", unit: "PCS", price: 0 },
@@ -184,6 +194,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     duplicateProduct: (id) =>
       set((s) => {
+        if (opts.storageKey === "quotation-data-v2" && s.quotation.molds.length > 0) return s;
         const target = s.quotation.products.find((p) => p.id === id);
         if (!target) return s;
         const products = [...s.quotation.products, { ...target, id: genId() }];
@@ -211,6 +222,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     addMold: () =>
       set((s) => {
+        if (opts.storageKey === "quotation-data-v2" && s.quotation.products.length !== 1) return s;
         const molds = [
           ...s.quotation.molds,
           { id: genId(), name: "", totalCost: 0, amortizeQty: DEFAULT_AMORTIZE_QTY },
@@ -239,7 +251,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
       }),
 
     resetToSample: () => {
-      const next = cloneQuoteData(opts.sampleData);
+      const next = normalizeQuotation(cloneQuoteData(opts.sampleData),opts);
       next.quoteMeta.no = quoteNoForDate(next.quoteMeta.no, next.quoteMeta.date);
       save(opts.storageKey, next);
       set({ quotation: next });
@@ -247,7 +259,7 @@ export function createQuotationStore(opts: QuotationStoreOptions) {
 
     resetTerms: () => {
       set((s) => {
-        const next = { ...s.quotation, terms: [...opts.defaults.defaultTerms] };
+        const next = { ...s.quotation, terms: quotationTerms([...opts.defaults.defaultTerms],s.quotation.quoteMeta.taxNote,opts) };
         save(opts.storageKey, next);
         return { quotation: next };
       });

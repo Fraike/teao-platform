@@ -59,3 +59,53 @@ test('authentication login, fetchMe and logout select draft owner',async()=>{
   assert.notEqual(useQuotationStore.getState().quotation.customer.name,'login draft');
  }finally{useAuthStore.getState().logout();api.post=originalPost;api.get=originalGet;}
 });
+
+test('domestic tax selection synchronizes first term and default settlement is persistent',()=>{
+ setQuotationUserScope('tax-terms');
+ const store=useQuotationStore;
+ store.getState().resetToSample();
+ assert.match(store.getState().quotation.terms[0],/不含13%税单价/);
+ assert.equal(store.getState().quotation.terms[5],'6. 结算方式：入库结算。');
+ store.getState().setQuoteMeta(meta=>({...meta,taxNote:'含税'}));
+ assert.match(store.getState().quotation.terms[0],/含13%税单价/);
+ store.getState().setTerms(['1. 以上价格为含13%税单价，运费另计。','2. 客户自定义条款。']);
+ store.getState().setQuoteMeta(meta=>({...meta,taxNote:'不含税'}));
+ assert.deepEqual(store.getState().quotation.terms,['1. 以上价格为不含13%税单价，运费另计。','2. 客户自定义条款。']);
+ setQuotationUserScope(null);setQuotationUserScope('tax-terms');
+ assert.match(store.getState().quotation.terms[0],/不含13%税/);
+ store.getState().resetTerms();
+ assert.match(store.getState().quotation.terms[0],/不含13%税/);
+ assert.equal(store.getState().quotation.terms[5],'6. 结算方式：入库结算。');
+ const international=useIntlQuotationStore.getState().quotation.terms;
+ useIntlQuotationStore.getState().setQuoteMeta(meta=>({...meta,taxNote:'含税'}));
+ assert.deepEqual(useIntlQuotationStore.getState().quotation.terms,international);
+ setQuotationUserScope(null);
+});
+
+
+test('domestic molds require one product and guard all product insertion actions',()=>{
+ setQuotationUserScope('mold-rules');
+ const store=useQuotationStore;
+ store.getState().resetToSample();
+ store.getState().addMold();
+ assert.equal(store.getState().quotation.molds.length,0);
+ const product=store.getState().quotation.products[0];
+ store.getState().setProducts([product]);
+ store.getState().addMold();store.getState().addMold();
+ assert.equal(store.getState().quotation.molds.length,2);
+ store.getState().addProduct();store.getState().duplicateProduct(product.id);
+ store.getState().setProducts([product,{...product,id:'another'}]);
+ assert.equal(store.getState().quotation.products.length,1);
+ setQuotationUserScope(null);setQuotationUserScope('mold-rules');
+ assert.equal(store.getState().quotation.molds.length,2);
+ store.getState().removeMold(store.getState().quotation.molds[0].id);
+ store.getState().removeMold(store.getState().quotation.molds[0].id);
+ store.getState().addProduct();
+ assert.equal(store.getState().quotation.products.length,2);
+ useIntlQuotationStore.getState().resetToSample();
+ useIntlQuotationStore.getState().addMold();
+ const count=useIntlQuotationStore.getState().quotation.products.length;
+ useIntlQuotationStore.getState().addProduct();
+ assert.equal(useIntlQuotationStore.getState().quotation.products.length,count+1);
+ setQuotationUserScope(null);
+});

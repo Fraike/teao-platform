@@ -1,3 +1,4 @@
+import { MoldPriceSummary } from "./MoldPriceSummary";
 import { forwardRef, Fragment } from "react";
 import { useQuotationStore } from "../lib/store";
 import { COMPANY_INFO, LOGO_PATH, STAMP_PATH } from "../lib/constants";
@@ -303,6 +304,7 @@ const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_props, re
             </table>
           </div>
         )}
+        <MoldPriceSummary products={products} molds={molds} compact />
 
         {/* ========== 条款 ========== */}
         {terms.length > 0 && (
