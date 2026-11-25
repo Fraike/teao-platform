@@ -1,0 +1,45 @@
+.page, .accountSelect {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header .title {
+  margin: 0;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(175px, 230px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.departmentList {
+  display: grid;
+  gap: 8px;
+}
+
+.memberList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 640px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .departmentList {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}

@@ -1,3 +1,4 @@
+import { ENGINEERING_CHANGE_PERMISSION } from '../../server/shared/engineering-change-content.ts';
 import { CUSTOMER_ACCOUNT_PATH, CUSTOMER_ACCOUNT_PERMISSION, CUSTOMER_ACCOUNT_TITLE } from "./customerSystemAccount.ts";
 import type { User } from "../types/auth";
 
@@ -47,6 +48,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { key: "/production-report", title: "生产日报汇总", description: "装配部、注塑部生产数据汇总", category: "生产管理", group: "production", permission: "production", icon: "chart", color: "#13c2c2", menu: true, dashboard: true },
   { key: "/production-entry", title: "装配部生产日报", description: "装配部生产日报录入与导入", category: "生产管理", group: "production", permission: "production", icon: "tool", color: "#1677ff", menu: true, dashboard: true },
   { key: "/production-entry-injection", title: "注塑部生产日报", description: "注塑部生产日报录入与导入", category: "生产管理", group: "injection", permission: "production", icon: "tool", color: "#722ed1", menu: true, dashboard: true },
+  { key: "/organization", title: "组织架构", description: "部门、在职员工与负责人", category: "人事管理", group: "hr", icon: "team", color: "#1677ff", menu: true, dashboard: true },
   { key: "/employees", title: "员工管理", description: "员工档案与合同管理", category: "人事管理", group: "hr", permission: "hr", icon: "team", color: "#eb2f96", menu: true, dashboard: true },
   { key: CUSTOMER_ACCOUNT_PATH, title: CUSTOMER_ACCOUNT_TITLE, description: "打开第三方网站、查看登录账号和密码", category: "工具", group: "tools", permission: CUSTOMER_ACCOUNT_PERMISSION, icon: "tool", color: "#fa8c16", menu: true, dashboard: true },
   { key: "/process", title: "流程查询", description: "查看已录入的 12 个关键流程", category: "工具", group: "tools", permission: "tools", icon: "read", color: "#fa8c16", menu: true, dashboard: true },
@@ -56,6 +58,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { key: "/suppliers", title: "供应商资料", description: "供应商信息查询", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#08979c", menu: true, dashboard: true },
   { key: "/customer-products", title: "客户商品资料", description: "客户与商品对应资料", category: "基础资料", group: "basic-data", permission: "basic_data", icon: "database", color: "#597ef7", menu: true, dashboard: true },
   { key: "/product-standards", title: "产品标准", description: "产品生产标准的发布与审核", category: "工程管理", group: "engineering", icon: "read", color: "#fa541c", menu: true, dashboard: true },
+  { key: "/engineering-changes", title: "工程变更", description: "工程变更申请、会签与报废复核", category: "工程管理", group: "engineering", permission: ENGINEERING_CHANGE_PERMISSION, icon: "file", color: "#1677ff", menu: true, dashboard: true },
   { key: "/admin", title: "用户管理", description: "账号审核、权限和密码管理", category: "系统管理", group: "system", adminOnly: true, icon: "setting", color: "#faad14", menu: false, dashboard: true },
 ];
 

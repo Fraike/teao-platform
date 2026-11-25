@@ -1,4 +1,4 @@
-import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect, useTabForm, useTabPage, useTabDirty } from "../lib/tabPageContext";
+import { useTabState, useTabPageAdapter, useTabBusy, useTabInitialEffect, useTabForm, useTabPage } from "../lib/tabPageContext";
 import { useCallback } from "react";
 import { Button, Tag, message, Popconfirm, Typography, Tooltip, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
@@ -7,6 +7,7 @@ import type { User } from "../types/auth";
 import styles from "./AdminPage.module.css";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { UserPermissionDrawer } from "../components/admin/UserPermissionDrawer";
+import { UserRegistrationReviewModal } from "../components/admin/UserRegistrationReviewModal";
 import { summarizeUserPermissions } from "../lib/userPermissions";
 
 const { Title } = Typography;
@@ -20,15 +21,15 @@ export function AdminPage() {
   const [resetting, setResetting] = useTabState("AdminPage.resetting", false);
   const [resetForm] = Form.useForm<{ newPassword: string; confirmPassword: string }>();
   const [reviewingId, setReviewingId] = useTabState<string | null>("AdminPage.reviewingId", null);
+  const [approvalTargetId, setApprovalTargetId] = useTabState<string | null>("AdminPage.approvalTargetId", null);
+  const approvalUser = users.find(user => user.id === approvalTargetId) ?? null;
   const [permissionTargetId, setPermissionTargetId] = useTabState<string | null>("AdminPage.permissionTargetId", null);
   const permissionUser = users.find(user => user.id === permissionTargetId) ?? null;
 
   const tab = useTabPage();
-  const [wecomDrafts, setWecomDrafts] = useTabState<Record<string, string>>("admin.wecom.drafts", {});
   const [resetDirty, setResetDirty] = useTabState("admin.reset.dirty", false);
   const [writing, setWriting] = useTabState("admin.writing", 0);
   useTabForm(resetForm, "admin.reset", {dirty: !!resetTarget && resetDirty});
-  useTabDirty(Object.keys(wecomDrafts).some(id => wecomDrafts[id] !== (users.find(user => user.id === id)?.wecomUserid || "")));
   useTabBusy(loading || resetting || reviewingId !== null || writing > 0);
 
   const fetchUsers = useCallback(async () => {
@@ -49,10 +50,11 @@ export function AdminPage() {
     fetchUsers();
   }, [], loaded);
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (id: string, wecomUserid: string) => {
     setWriting(count => count + 1);
     try {
-      await api.post(`/api/admin/users/${id}/approve`);
+      await api.post(`/api/admin/users/${id}/approve`, { wecomUserid });
+      setApprovalTargetId(null);
       message.success("已通过审核");
       fetchUsers();
     } catch (err) {
@@ -89,22 +91,6 @@ export function AdminPage() {
   const handleTogglePermission = async (id: string, permission: string, enabled: boolean) => {
     const result = await api.put<{ ok: boolean; permissions: string[] }>(`/api/admin/users/${id}/permissions`, { permission, enabled });
     setUsers(current => current.map(user => user.id === id ? { ...user, permissions: result.permissions } : user));
-  };
-
-  const handleUpdateWecom = async (id: string, value: string) => {
-    setWriting(count => count + 1);
-    try {
-      await api.put(`/api/admin/users/${id}/wecom`, { wecomUserid: value.trim() });
-      await fetchUsers();
-      setWecomDrafts(current => {
-        if (current[id]?.trim() !== value.trim()) return current;
-        const next = { ...current };
-        delete next[id];
-        return next;
-      });
-    } catch (err) {
-      message.error((err as Error).message);
-    } finally { setWriting(count => count - 1); }
   };
 
   const openResetModal = (user: User) => {
@@ -157,26 +143,6 @@ export function AdminPage() {
       ),
     },
     {
-      title: "企业微信账号",
-      dataIndex: "wecomUserid",
-      key: "wecomUserid",
-      width: 180,
-      render: (_: React.Key, record: User) => (
-        <Input
-          key={`${record.id}-${record.wecomUserid || ""}`}
-          value={wecomDrafts[record.id] ?? record.wecomUserid ?? ""}
-          onChange={event => setWecomDrafts(current => ({...current, [record.id]: event.target.value}))}
-          placeholder="用于审核@提醒"
-          size="small"
-          onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
-          onBlur={(e) => {
-            const value = e.target.value.trim();
-            if (value !== (record.wecomUserid || "")) handleUpdateWecom(record.id, value);
-          }}
-        />
-      ),
-    },
-    {
       title: "权限配置",
       key: "permissions",
       width: 230,
@@ -222,14 +188,7 @@ export function AdminPage() {
           <div className={styles.actionRow}>
             {record.status === "pending" ? (
               <>
-                <Popconfirm
-                  title="确认通过该用户的注册申请？"
-                  onConfirm={() => handleApprove(record.id)}
-                >
-                  <Button type="link" size="small">
-                    通过
-                  </Button>
-                </Popconfirm>
+                <Button type="link" size="small" onClick={() => setApprovalTargetId(record.id)}>通过</Button>
                 <Popconfirm
                   title="确认驳回该用户的注册申请？此操作不可撤销。"
                   onConfirm={() => handleReject(record.id)}
@@ -266,6 +225,8 @@ export function AdminPage() {
         pagination={false}
         minWidth={1170}
       />
+      {approvalUser && <UserRegistrationReviewModal key={approvalUser.id} user={approvalUser} busy={writing > 0}
+        onClose={() => setApprovalTargetId(null)} onApprove={value => void handleApprove(approvalUser.id, value)} />}
       <UserPermissionDrawer key={permissionUser?.id ?? "closed"} open={permissionUser !== null} user={permissionUser}
         onClose={() => setPermissionTargetId(null)} onChange={async (permission, enabled) => {
           if (permissionUser) await handleTogglePermission(permissionUser.id, permission, enabled);

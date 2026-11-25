@@ -1,3 +1,4 @@
+import type { PushChannel } from '../../src/types/pushSettings.ts';
 import { capturePushGuard, pushDisabledError } from './push-policy.ts';
 import type {
   WecomAppConfig, WecomAppDependencies, WecomAppErrorCode, WecomAppNotificationStatus,
@@ -62,8 +63,8 @@ export function createWecomAppClient({ config = readWecomAppConfig, fetch: reque
   } };
 }
 const client = createWecomAppClient();
-export const sendWecomAppText = (userid: string, content: string, options?: WecomAppSendOptions) => {
-  const allowed = capturePushGuard('standardReview');
+export const sendWecomAppText = (userid: string, content: string, options?: WecomAppSendOptions, channel: PushChannel = 'standardReview') => {
+  const allowed = capturePushGuard(channel);
   return client.send(userid, content, { shouldSend: () => {
     if (!allowed()) throw pushDisabledError();
     return !options?.shouldSend || options.shouldSend();

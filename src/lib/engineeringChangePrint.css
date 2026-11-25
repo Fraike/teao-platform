@@ -1,0 +1,13 @@
+body { margin: 0; background: #eef0f3; color: #171d24; font: 14px/1.55 system-ui, sans-serif; }
+header { padding: 12px 24px; background: #fff; }
+button { padding: 8px 14px; }
+main { box-sizing: border-box; max-width: 860px; margin: 16px auto; padding: 24px; background: #fff; }
+h1 { font-size: 22px; }
+h2 { font-size: 16px; border-bottom: 1px solid #dae0e6; padding-bottom: 5px; break-after: avoid; }
+p, h1 { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print {
+  @page { size: A4; margin: 15mm; }
+  body { background: white; }
+  header { display: none; }
+  main { margin: 0; padding: 0; }
+}

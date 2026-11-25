@@ -3,13 +3,17 @@ import {
   Modal, Form, Input, Select, DatePicker, Radio, Button, message,
   Row, Col, Divider,
 } from "antd";
+import { useEffect } from "react";
 import dayjs from "dayjs";
 import { api } from "../lib/api";
+import type { EmployeeWecomBinding } from "../types/organization";
 import type { Employee } from "../types/employee";
 
 interface EmployeeFormModalProps {
   open: boolean;
   employee: Employee | null;
+  wecomBinding?: EmployeeWecomBinding;
+  canManageWecom: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -37,22 +41,28 @@ function parseIdCard(idCard: string): { birthDate: string; gender: "男" | "女"
 }
 
 export function EmployeeFormModal({
-  open, employee, onClose, onSuccess,
+  open, employee, wecomBinding, canManageWecom, onClose, onSuccess,
 }: EmployeeFormModalProps) {
   const [form] = Form.useForm();
   const [saving, setSaving] = useTabState("employee.form.saving", false);
   const [dirty, setDirty] = useTabState("employee.form.dirty", false);
+  const [wecomDirty, setWecomDirty] = useTabState("employee.form.wecomDirty", false);
   const tab = useTabPage();
   useTabForm(form, "employee.editor", { dirty: open && dirty });
   useTabBusy(saving);
   const isEdit = !!employee;
+  const linkedUserId = wecomBinding?.userId;
+  const canEditWecom = canManageWecom && Boolean(linkedUserId);
 
   useTabInitialEffect("employee.editor.initialize", () => {
     setDirty(false);
+    setWecomDirty(false);
     if (open) {
       if (employee) {
         form.setFieldsValue({
           ...employee,
+          employeeNo: employee.employeeNo ?? "",
+          wecomUserid: wecomBinding?.wecomUserid ?? "",
           entryDate: employee.entryDate ? dayjs(employee.entryDate) : null,
           birthDate: employee.birthDate ? dayjs(employee.birthDate) : null,
           contractStartDate: employee.contractStartDate ? dayjs(employee.contractStartDate) : null,
@@ -63,6 +73,10 @@ export function EmployeeFormModal({
       }
     }
   }, [open, employee?.id], true, { synchronous: true });
+
+  useEffect(() => {
+    if (open && isEdit && !wecomDirty) form.setFieldValue("wecomUserid", wecomBinding?.wecomUserid ?? "");
+  }, [form, isEdit, open, wecomBinding?.wecomUserid, wecomDirty]);
 
   const handleIdCardBlur = () => {
     const idCard: string = form.getFieldValue("idCard") || "";
@@ -80,8 +94,9 @@ export function EmployeeFormModal({
   const onFinish = async (values: Record<string, unknown>) => {
     setSaving(true);
     try {
+      const { wecomUserid, ...employeeValues } = values;
       const data = {
-        ...values,
+        ...employeeValues,
         birthDate: values.birthDate
           ? (values.birthDate as dayjs.Dayjs).format("YYYY-MM-DD")
           : "",
@@ -97,7 +112,10 @@ export function EmployeeFormModal({
       };
 
       if (isEdit) {
-        await api.put(`/api/employees/${employee!.id}`, data);
+        const value = typeof wecomUserid === "string" ? wecomUserid.trim() : "";
+        const wecomUpdate = canEditWecom && wecomDirty && value !== (wecomBinding?.wecomUserid ?? "")
+          ? { wecomBinding: { userId: linkedUserId, value } } : {};
+        await api.put(`/api/employees/${employee!.id}`, { ...data, ...wecomUpdate });
         message.success("员工信息已更新");
       } else {
         await api.post("/api/employees", data);
@@ -123,7 +141,10 @@ export function EmployeeFormModal({
       destroyOnHidden
     >
       <Form
-        onValuesChange={() => setDirty(true)}
+        onValuesChange={changed => {
+          setDirty(true);
+          if (Object.hasOwn(changed, "wecomUserid")) setWecomDirty(true);
+        }}
         form={form}
         layout="vertical"
         onFinish={onFinish}
@@ -143,7 +164,7 @@ export function EmployeeFormModal({
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="employeeNo" label="工号">
+            <Form.Item name="employeeNo" label="工号" rules={[{ required: true, whitespace: true, message: "请输入工号" }]}>
               <Input placeholder="如 TA-004" />
             </Form.Item>
           </Col>
@@ -216,6 +237,15 @@ export function EmployeeFormModal({
             </Form.Item>
           </Col>
         </Row>
+
+        {isEdit && <Row gutter={16}>
+          <Col xs={24} sm={12}>
+            <Form.Item name="wecomUserid" label="企业微信账号"
+              extra={!linkedUserId ? "关联平台账号后可填写" : !canManageWecom ? "由管理员修改" : undefined}>
+              <Input maxLength={64} readOnly={!canEditWecom} placeholder="请输入企业微信账号" />
+            </Form.Item>
+          </Col>
+        </Row>}
 
         <Row gutter={16}>
           <Col span={24}>

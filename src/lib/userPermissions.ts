@@ -1,3 +1,4 @@
+import { ENGINEERING_CHANGE_PERMISSION } from '../../server/shared/engineering-change-content.ts';
 import { CUSTOMER_ACCOUNT_PERMISSION, CUSTOMER_ACCOUNT_TITLE } from "./customerSystemAccount.ts";
 import { assemblySchedulingAvailable } from "./navigation.ts";
 import type { UserPermissionSection } from "../types/userPermissions";
@@ -11,6 +12,7 @@ export const USER_PERMISSION_SECTIONS: UserPermissionSection[] = [
       { key: "hr", label: "人事管理", description: "员工资料查看、录入与维护。" },
       { key: "tools", label: "公共工具", description: "技术资料与生产流程查阅。" },
       { key: CUSTOMER_ACCOUNT_PERMISSION, label: `查看${CUSTOMER_ACCOUNT_TITLE}`, description: "查看全部第三方账号、打开网站和复制当前密码。" },
+      { key: ENGINEERING_CHANGE_PERMISSION, label: "工程变更", description: "开放工程变更入口及已授权单据，审批按单据分派。" },
       { key: "basic_data", label: "基础资料", description: "商品、客户、供应商与客户商品资料查询。" },
     ],
   },

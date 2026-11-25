@@ -116,6 +116,7 @@ export function onPushSettingsChange(listener: (settings: PushSettings) => void)
 }
 export function pushAllowed(channel: PushChannel): boolean {
   const settings = readPushSettings();
+  if (channel === 'engineeringChange') return settings.enabled;
   const keys = { standardPublication: 'standardPublicationEnabled', standardReview: 'standardReviewEnabled', production: 'productionEnabled' } as const;
   return settings.enabled && settings[keys[channel]] === true;
 }

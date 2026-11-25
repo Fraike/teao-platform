@@ -59,7 +59,8 @@ export async function refreshAuthToken(): Promise<string | null> {
 
 async function request<T>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  readSuccess?: (response: Response) => Promise<T>,
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -81,6 +82,7 @@ async function request<T>(
     }
   }
 
+  if (res.ok && readSuccess) return readSuccess(res);
   const data = await res.json();
   if (!res.ok) {
     throw new ApiError(data.error || `请求失败 (${res.status})`, res.status, typeof data.code === "string" ? data.code : undefined, typeof data.retryAt === "string" ? data.retryAt : undefined);
@@ -89,6 +91,7 @@ async function request<T>(
 }
 
 export const api = {
+  getBlob: (url: string, options?: RequestInit) => request<Blob>(url, options, res => res.blob()),
   get: <T>(url: string, options?: RequestInit) => request<T>(url, options),
   post: <T>(url: string, body?: unknown, options: RequestInit = {}) =>
     request<T>(url, { ...options, method: "POST", body: JSON.stringify(body) }),

@@ -1,4 +1,6 @@
-import { listUsers, approveUser, rejectUser, resetUserPassword, setUserPermission, setUserWecomUserid, reviewUserPasswordRecovery } from "../services/users.js";
+import { listUsers, approveUser, rejectUser, resetUserPassword, setUserPermission, setUserWecomUserid, reviewUserPasswordRecovery, getPendingWecomSuggestion, previewUserWecomImport, importUserWecomDirectory } from "../services/users.js";
+import { organizationStore } from './organization.ts';
+import { listEmployees } from '../services/employees.js';
 import { jwtAuth, adminAuth } from "../middleware/jwt-auth.js";
 
 export function registerAdminRoutes(app) {
@@ -15,8 +17,28 @@ export function registerAdminRoutes(app) {
     res.json(listUsers());
   });
 
+  const directoryHandler = action => async (req, res) => {
+    try { res.json({ ok: true, data: await action(req.body) }); }
+    catch (error) {
+      const status = [400, 409].includes(error.status) ? error.status : 500;
+      res.status(status).json({ error: status === 500 ? '通讯录处理失败，请稍后重试' : error.message });
+    }
+  };
+  app.post("/api/admin/wecom-directory/preview", jwtAuth, adminAuth,
+    directoryHandler(body => previewUserWecomImport(body?.members, listEmployees(), organizationStore().confirmedLinks())));
+  app.put("/api/admin/wecom-directory", jwtAuth, adminAuth,
+    directoryHandler(body => importUserWecomDirectory(body?.members, listEmployees, organizationStore().confirmedLinks, body?.bindingRevision)));
+
+  app.get("/api/admin/users/:id/wecom-suggestion", jwtAuth, adminAuth, (req, res) => {
+    try {
+      const result = getPendingWecomSuggestion(req.params.id, organizationStore().confirmedLinks());
+      if (result.error) return res.status(400).json({ error: result.error });
+      res.json({ ok: true, data: result });
+    } catch { res.status(500).json({ error: '通讯录读取失败，请稍后重试' }); }
+  });
+
   app.post("/api/admin/users/:id/approve", jwtAuth, adminAuth, async (req, res) => {
-    const result = await approveUser(req.params.id);
+    const result = await approveUser(req.params.id, req.body?.wecomUserid);
     if (result.error) {
       return res.status(400).json({ error: result.error });
     }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, Form, Select, Space, Spin, Switch, TimePicker, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Form, Modal, Select, Space, Spin, Switch, TimePicker, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { api } from '../lib/api';
 import type { PushSettings, PushSettingsInput } from '../types/pushSettings';
 import type { StandardMaintenanceSettings, StandardMaintainerRoster } from '../types/standardMaintenance';
+import { ChangeSettingsForm } from '../components/engineeringChange/ChangeSettingsForm';
 import styles from './SystemSettingsPage.module.css';
 
 const endpoint = '/api/admin/system-settings/push';
@@ -23,6 +24,7 @@ async function loadSettings(signal?: AbortSignal) {
 }
 
 export function SystemSettingsPage() {
+  const [engineeringOpen, setEngineeringOpen] = useState(false);
   const [settings, setSettings] = useState<PushSettings | null>(null);
   const [draft, setDraft] = useState<PushSettingsInput | null>(null);
   const [maintenance, setMaintenance] = useState<StandardMaintenanceSettings | null>(null);
@@ -79,17 +81,30 @@ export function SystemSettingsPage() {
       setError(saved.length ? `已保存${saved.join('、')}。其余设置未保存：${(err as Error).message}` : (err as Error).message);
     } finally { setBusy(false); }
   };
-  if (!settings || !draft || !maintenance || !roster) return <div className={styles.page}>{error ? <Alert type="error" title={error} action={<Button disabled={busy} onClick={() => void load()}>刷新设置</Button>} /> : <Spin />}</div>;
+  const engineeringSettings = <>
+    <Card size="small" title="工程变更流程" extra={<Button onClick={() => setEngineeringOpen(true)}>人员与部门设置</Button>}>
+      <Typography.Text type="secondary">设置默认 PMC、仓库复核人和企微入口，部门主管从组织架构读取。</Typography.Text>
+    </Card>
+    {engineeringOpen && <Modal open title="工程变更人员与部门设置" footer={null} width={720} onCancel={() => setEngineeringOpen(false)}>
+      <ChangeSettingsForm onSaved={() => { setEngineeringOpen(false); void message.success('已保存工程变更流程设置'); }} />
+    </Modal>}
+  </>;
+  if (!settings || !draft || !maintenance || !roster) return <div className={styles.page}>
+    <Typography.Title level={3} className={styles.title}>系统设置</Typography.Title>
+    {engineeringSettings}
+    {error ? <Alert type="error" title={error} action={<Button disabled={busy} onClick={() => void load()}>刷新设置</Button>} /> : <Spin />}
+  </div>;
   const toggle = (key: 'enabled' | 'standardPublicationEnabled' | 'standardReviewEnabled' | 'productionEnabled', label: string) => <Switch aria-label={label} checkedChildren="开启" unCheckedChildren="关闭" checked={draft[key]} onChange={value => setDraft({ ...draft, [key]: value })} />;
   const status = (enabled: boolean) => <Tag color={settings.enabled && enabled ? 'green' : 'default'}>{settings.enabled && enabled ? '已开启' : '已暂停'}</Tag>;
   return <div className={styles.page}>
     <div className={styles.header}>
       <div><Typography.Title level={3} className={styles.title}>系统设置</Typography.Title>
-        <Typography.Text type="secondary">管理产品标准校对与企业微信推送</Typography.Text></div>
+        <Typography.Text type="secondary">管理产品标准校对、工程变更流程和企业微信推送</Typography.Text></div>
       <Space wrap>{changed && <Tag color="gold">有未保存修改</Tag>}
         <Button disabled={busy} onClick={() => void load()}>刷新设置</Button><Button type="primary" disabled={!changed} loading={busy} onClick={() => void save()}>保存设置</Button></Space>
     </div>
     {error && <Alert type="error" title={error} showIcon />}
+    {engineeringSettings}
     <Card className={styles.maintenanceCard}>
       <div className={styles.maintenanceHeading}><strong>产品标准临时校对模式</strong>
         <Space><Tag color={maintenance.enabled ? 'orange' : 'default'}>{maintenance.enabled ? '已开启' : '已关闭'}</Tag>

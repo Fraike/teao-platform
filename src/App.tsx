@@ -1,3 +1,4 @@
+import { ENGINEERING_CHANGE_PERMISSION } from '../server/shared/engineering-change-content.ts';
 import {lazyWithFallback as lazy} from './lib/lazyWithFallback';
 import type {Location} from 'react-router-dom';
 import {TabPageHost} from './components/TabPageHost';
@@ -55,12 +56,14 @@ const ProductionEntryPage = lazy<Record<string,never>>(() => import("./pages/Pro
 const ProductionEntryInjectionPage = lazy<Record<string,never>>(() => import("./pages/ProductionEntryInjectionPage").then((m) => ({ default: m.ProductionEntryInjectionPage })));
 const SystemSettingsPage = lazy<Record<string,never>>(() => import("./pages/SystemSettingsPage").then((m) => ({ default: m.SystemSettingsPage })));
 const AdminPage = lazy<Record<string,never>>(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const OrganizationPage = lazy<Record<string,never>>(() => import("./pages/OrganizationPage").then(m => ({ default: m.OrganizationPage })));
 const EmployeePage = lazy<Record<string,never>>(() => import("./pages/EmployeePage").then((m) => ({ default: m.EmployeePage })));
 const MaterialDataPage = lazy<Record<string,never>>(() => import("./pages/MaterialDataPage").then((m) => ({ default: m.MaterialDataPage })));
 const MaterialDetailPage = lazy<Record<string,never>>(() => import("./pages/MaterialDetailPage").then((m) => ({ default: m.MaterialDetailPage })));
 const CustomerDataPage = lazy<Record<string,never>>(() => import("./pages/CustomerDataPage").then((m) => ({ default: m.CustomerDataPage })));
 const SupplierDataPage = lazy<Record<string,never>>(() => import("./pages/SupplierDataPage").then((m) => ({ default: m.SupplierDataPage })));
 const CustomerProductPage = lazy<Record<string,never>>(() => import("./pages/CustomerProductPage").then((m) => ({ default: m.CustomerProductPage })));
+const EngineeringChangePage = lazy<Record<string,never>>(() => import("./pages/EngineeringChangePage").then(m => ({ default: m.EngineeringChangePage })));
 const ProductStandardPage = lazy<Record<string,never>>(() => import("./pages/ProductStandardPage").then((m) => ({ default: m.ProductStandardPage })));
 
 const { Header, Sider, Content } = Layout;
@@ -97,12 +100,14 @@ function renderTabPage(location:Location) {
                 <Route path="/production-entry-injection" element={<AuthGuard permission="production"><ProductionEntryInjectionPage /></AuthGuard>} />
                 <Route path={CUSTOMER_ACCOUNT_PATH} element={<AuthGuard permission={CUSTOMER_ACCOUNT_PERMISSION}><CustomerSystemAccountsPage /></AuthGuard>} />
                 <Route path="/process" element={<AuthGuard permission="tools"><ProcessCenter /></AuthGuard>} />
+                <Route path="/organization" element={<AuthGuard><OrganizationPage /></AuthGuard>} />
                 <Route path="/employees" element={<AuthGuard permission="hr"><EmployeePage /></AuthGuard>} />
                 <Route path="/materials" element={<AuthGuard><MaterialDataPage /></AuthGuard>} />
                 <Route path="/materials/:id" element={<AuthGuard><MaterialDetailPage /></AuthGuard>} />
                 <Route path="/customers" element={<AuthGuard permission="basic_data"><CustomerDataPage /></AuthGuard>} />
                 <Route path="/suppliers" element={<AuthGuard permission="basic_data"><SupplierDataPage /></AuthGuard>} />
                 <Route path="/customer-products" element={<AuthGuard permission="basic_data"><CustomerProductPage /></AuthGuard>} />
+                <Route path="/engineering-changes" element={<AuthGuard permission={ENGINEERING_CHANGE_PERMISSION}><EngineeringChangePage /></AuthGuard>} />
                 <Route path="/product-standards" element={<AuthGuard><ProductStandardPage /></AuthGuard>} />
               </Routes>
   </Suspense>;

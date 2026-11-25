@@ -9,13 +9,20 @@ import {
 } from "@ant-design/icons";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
+import { useAuthStore } from "../lib/authStore";
+import { organizationApi } from "../lib/organization";
+import type { EmployeeWecomBinding } from "../types/organization";
 import type { Employee } from "../types/employee";
 import { EmployeeFormModal } from "../components/EmployeeFormModal";
+import { WecomDirectoryImport } from "../components/admin/WecomDirectoryImport";
 import { EmployeeImportModal } from "../components/EmployeeImportModal";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import styles from "./EmployeePage.module.css";
 
 const { Title } = Typography;
+const accountLabels = {
+  linked: "已关联", unlinked: "待关联", pending: "待审核", unregistered: "未注册", disabled: "已停用",
+};
 
 const DEPARTMENT_OPTIONS = [
   "装配部", "注塑部", "品质部", "生管部", "工程部",
@@ -23,6 +30,11 @@ const DEPARTMENT_OPTIONS = [
 ];
 
 export function EmployeePage() {
+  const isAdmin = useAuthStore(state => state.user?.role === "admin");
+  const [bindings, setBindings] = useTabState<EmployeeWecomBinding[]>("employee.wecom.bindings", []);
+  const bindingsByEmployeeId = new Map(bindings.map(row => [
+    row.employeeId ? `id:${row.employeeId}` : `number:${row.employeeNo}`, row,
+  ]));
   const [employees, setEmployees] = useTabState<Employee[]>("EmployeePage.employees", []);
   const [loaded, setLoaded] = useTabState("EmployeePage.loaded", false);
   useTabPageAdapter(loaded);
@@ -52,6 +64,8 @@ export function EmployeePage() {
     try {
       const data = await api.get<Employee[]>("/api/employees");
       setEmployees(data);
+      const { data: accounts } = await organizationApi.bindings();
+      setBindings(accounts);
       setLoaded(true);
     } catch (err) {
       message.error((err as Error).message);
@@ -59,11 +73,14 @@ export function EmployeePage() {
       setLoaded(true);
       setLoading(false);
     }
-  }, [setEmployees, setLoaded, setLoading]);
+  }, [setBindings, setEmployees, setLoaded, setLoading]);
 
   useTabInitialEffect("employees.initial", () => {
     fetchEmployees();
   }, [], loaded);
+
+  const bindingFor = (employee: Employee) => bindingsByEmployeeId.get(`id:${employee.id}`) ??
+    (employee.employeeNo ? bindingsByEmployeeId.get(`number:${employee.employeeNo}`) : undefined);
 
   const handleAdd = () => {
     setEditingEmployee(null);
@@ -149,6 +166,17 @@ export function EmployeePage() {
       render: (d: string) => <Tag>{d}</Tag>,
     },
     { title: "职位", dataIndex: "position", key: "position", width: 110 },
+    ...(activeTab === "active" ? [{
+      title: "企业微信账号", key: "wecom", width: 165,
+      render: (_: unknown, employee: Employee) => {
+        const binding = bindingFor(employee);
+        if (!binding) return "—";
+        return <Space size={4} wrap>
+          <Tag color={binding.status === "linked" ? "success" : undefined}>{accountLabels[binding.status]}</Tag>
+          {isAdmin && binding.userId ? <Button type="link" size="small" onClick={() => handleEdit(employee)}>{binding.wecomUserid || "填写企微账号"}</Button> : binding.wecomUserid}
+        </Space>;
+      },
+    }] : []),
     { title: "性别", dataIndex: "gender", key: "gender", width: 55 },
     { title: "出生日期", dataIndex: "birthDate", key: "birthDate", width: 105 },
     { title: "手机号", dataIndex: "phone", key: "phone", width: 125 },
@@ -194,6 +222,8 @@ export function EmployeePage() {
         <Title level={4} style={{ margin: 0 }}>员工管理</Title>
         <Space>
           <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+          <Button onClick={() => void fetchEmployees()} loading={loading}>刷新</Button>
+          {isAdmin && <WecomDirectoryImport onImported={fetchEmployees} />}
           <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>导入</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增员工
@@ -256,6 +286,8 @@ export function EmployeePage() {
       <EmployeeFormModal
         open={modalOpen}
         employee={editingEmployee}
+        wecomBinding={editingEmployee ? bindingFor(editingEmployee) : undefined}
+        canManageWecom={isAdmin}
         onClose={handleModalClose}
         onSuccess={handleModalSuccess}
       />

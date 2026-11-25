@@ -4,6 +4,11 @@ import { standardNotificationIdentity } from "./standard-notification-identity.j
 
 initDB();
 
+let listEngineeringPending = () => ({ total: 0, data: [] });
+export function registerEngineeringPending(list) {
+  listEngineeringPending = list;
+}
+
 // 站内通知仅读取轻量 pending 索引，不加载标准详情或发送外部消息。
 export function listNotificationsPage(user) {
   if (!user) return { total: 0, data: [] };
@@ -28,8 +33,9 @@ export function listNotificationsPage(user) {
     id: `user_registration:${item.id}`, type: "user_registration", title: "新用户待审核",
     description: `${item.name} · ${item.username}`, time: item.createdAt, link: "/admin",
   })) : [];
-  return { total: total + recoveries.length + registrations.length,
-    data: [...registrations, ...recoveries, ...data].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 20) };
+  const changes = listEngineeringPending(user);
+  return { total: total + recoveries.length + registrations.length + changes.total,
+    data: [...registrations, ...recoveries, ...data, ...changes.data].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 20) };
 }
 
 // 保持旧调用方的数组返回值；同样限制为轻量首页。

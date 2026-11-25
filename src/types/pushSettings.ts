@@ -1,4 +1,4 @@
-export type PushChannel = 'standardPublication' | 'standardReview' | 'production';
+export type PushChannel = 'standardPublication' | 'standardReview' | 'production' | 'engineeringChange';
 export interface PushSettings {
   enabled: boolean;
   standardPublicationEnabled: boolean;

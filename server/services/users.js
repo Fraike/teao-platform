@@ -1,3 +1,5 @@
+import { ENGINEERING_CHANGE_PERMISSION } from '../shared/engineering-change-content.ts';
+import { planWecomDirectoryImport, suggestWecomBinding, validateWecomBinding, writeWecomDirectory } from './wecom-directory.ts';
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -39,14 +41,15 @@ if (isPlaceholderSecret) {
 const SESSION_DURATION_SECONDS = 15 * 24 * 60 * 60;
 
 const DEFAULT_PERMISSIONS = ["business", "production", "tools"];
-const ALL_PERMISSIONS = ["business", "production", "production_import", "production_schedule", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_maintain", "engineering_review", "engineering_retire", "product_drawing_manage", "customer_accounts_view"];
+const ALL_PERMISSIONS = [ENGINEERING_CHANGE_PERMISSION, "business", "production", "production_import", "production_schedule", "hr", "tools", "admin", "basic_data", "engineering", "engineering_submit", "engineering_maintain", "engineering_review", "engineering_retire", "product_drawing_manage", "customer_accounts_view"];
 
 const userMutex = createMutex();
 
-function readUsersUnsafe() {
+function readUsersUnsafe({ strict = false } = {}) {
   try {
-    if (!fs.existsSync(USERS_FILE)) return [];
+    if (!strict && !fs.existsSync(USERS_FILE)) return [];
     const parsed = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+    if (strict && !Array.isArray(parsed.users)) throw new Error("平台账号文件格式无效");
     const users = parsed.users || [];
 
     // migrate: add default permissions to users without them
@@ -65,10 +68,11 @@ function readUsersUnsafe() {
         migrated = true;
       }
     }
-    if (migrated) writeUsersUnsafe(users);
+    if (migrated && !strict) writeUsersUnsafe(users);
 
     return users;
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }
@@ -385,20 +389,79 @@ export function findUserByName(name) {
   return { id: user.id, name: user.name, username: user.username, wecomUserid: user.wecomUserid || "" };
 }
 
-export async function setUserWecomUserid(id, value) {
-  return withUsers(async (users) => {
-    const idx = users.findIndex((u) => u.id === id);
-    if (idx < 0) return { error: "用户不存在" };
-    users[idx].wecomUserid = typeof value === "string" ? value.trim() : "";
-    return { ok: true, wecomUserid: users[idx].wecomUserid };
+export function previewUserWecomImport(members, employees, links) {
+  return planWecomDirectoryImport(members, employees, readUsersUnsafe({ strict: true }), links).summary;
+}
+
+export async function importUserWecomDirectory(members, getEmployees, getLinks, bindingRevision) {
+  return userMutex.run(() => {
+    const users = readUsersUnsafe({ strict: true });
+    const { changes, summary } = planWecomDirectoryImport(members, getEmployees(), users, getLinks());
+    if (bindingRevision !== summary.bindingRevision) {
+      throw Object.assign(new Error('补填名单已变化，请重新预览后确认'), { status: 409 });
+    }
+    if (!changes.length) {
+      writeWecomDirectory(members);
+      return summary;
+    }
+
+    for (const { id, userId } of changes) users.find(user => user.id === id).wecomUserid = userId;
+    const temporary = `${USERS_FILE}.${crypto.randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(temporary, JSON.stringify({ users }, null, 2), { flag: 'wx', mode: 0o600 });
+      writeWecomDirectory(members, () => fs.renameSync(temporary, USERS_FILE));
+    } finally {
+      fs.rmSync(temporary, { force: true });
+    }
+    return summary;
   });
 }
 
-export async function approveUser(id) {
+export function getPendingWecomSuggestion(id, links) {
+  const users = readUsersUnsafe();
+  const user = users.find(row => row.id === id && row.status === 'pending' && row.role !== 'admin');
+  return user ? suggestWecomBinding(user, users, links) : { error: '该账号已处理或不存在' };
+}
+
+export async function setUserWecomUserid(id, value, employeeUpdate) {
+  return userMutex.run(() => {
+    const users = readUsersUnsafe({ strict: true });
+    const user = users.find(row => row.id === id);
+    if (!user) return { error: "用户不存在" };
+    if (user.status === "pending") return { error: "请在注册审核时填写企业微信账号" };
+    if (employeeUpdate && (!employeeUpdate.isCurrent() || user.status !== "active")) {
+      return { error: "员工关联的账号已变化，请刷新后再编辑", status: 409 };
+    }
+    const error = validateWecomBinding(users, id, value);
+    if (error) return { error };
+    user.wecomUserid = value.trim();
+    const temporary = `${USERS_FILE}.${crypto.randomUUID()}.tmp`;
+    let rollback;
+    try {
+      fs.writeFileSync(temporary, JSON.stringify({ users }, null, 2), { flag: "wx", mode: 0o600 });
+      rollback = employeeUpdate?.commit();
+      fs.renameSync(temporary, USERS_FILE);
+    } catch (error) {
+      rollback?.();
+      throw error;
+    } finally {
+      fs.rmSync(temporary, { force: true });
+    }
+    return { ok: true, wecomUserid: user.wecomUserid };
+  });
+}
+
+export async function approveUser(id, wecomUserid) {
   return withUsers(async (users) => {
     const idx = users.findIndex((u) => u.id === id);
     if (idx < 0) return { error: "用户不存在" };
     if (users[idx].role === "admin") return { error: "不能审核管理员" };
+    if (wecomUserid !== undefined) {
+      if (users[idx].status !== 'pending') return { error: '该账号已处理，请刷新后查看' };
+      const error = validateWecomBinding(users, id, wecomUserid);
+      if (error) return { error };
+      users[idx].wecomUserid = wecomUserid.trim();
+    }
     users[idx].status = "active";
     return { ok: true };
   });

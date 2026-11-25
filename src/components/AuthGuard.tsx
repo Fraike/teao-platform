@@ -87,7 +87,7 @@ export function AuthGuard({ children, requireAdmin = false, permission }: AuthGu
     return (
       <Navigate
         to="/login"
-        state={{ from: location.pathname, expiredMode: expiredMode || undefined }}
+        state={{ from: location.pathname + location.search + location.hash, expiredMode: expiredMode || undefined }}
         replace
       />
     );

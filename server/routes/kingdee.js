@@ -1,3 +1,4 @@
+import { matchEngineeringMaterials } from "../services/engineering-change-materials.ts";
 import {
   fetchAllMaterials,
   fetchAllCustomers,
@@ -72,6 +73,13 @@ async function getCachedKingdeeData(cacheKey, fetchData, forceRefresh) {
     if (cached) return { ...cached, stale: true };
     throw error;
   }
+}
+
+export async function searchCachedKingdeeMaterials(search, limit) {
+  const result = await getCachedKingdeeData('materials', fetchAllMaterials, false);
+  /** @type {import('../../src/types/kingdee.ts').KingdeeMaterial[]} */
+  const materials = result.data;
+  return matchEngineeringMaterials(materials, search, limit);
 }
 
 async function respondWithCachedData(res, cacheKey, fetchData, options = {}) {

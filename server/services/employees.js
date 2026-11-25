@@ -171,13 +171,20 @@ export function getEmployee(id) {
   return readEmployeesUnsafe().find((e) => e.id === id) || null;
 }
 
+function workNumber(value) {
+  return typeof value === "string" ? value.normalize("NFKC").trim().toUpperCase() : "";
+}
+
 export async function createEmployee(data) {
   return withEmployees(async (employees) => {
-    if (data.employeeNo && employees.some((e) => e.employeeNo === data.employeeNo)) {
-      return { error: `工号 ${data.employeeNo} 已存在` };
+    const employeeNo = workNumber(data.employeeNo);
+    if (!employeeNo) return { error: "工号为必填项" };
+    if (employees.some(e => workNumber(e.employeeNo) === employeeNo)) {
+      return { error: `工号 ${employeeNo} 已存在` };
     }
     const emp = {
       ...data,
+      employeeNo,
       id: generateId(),
       status: "active",
       createdAt: today(),
@@ -204,20 +211,28 @@ export async function replaceEmployees(records) {
   });
 }
 
-export async function updateEmployee(id, data) {
-  return withEmployees(async (employees) => {
-    const idx = employees.findIndex((e) => e.id === id);
-    if (idx < 0) return null;
-    if (data.employeeNo && employees.some((e) => e.id !== id && e.employeeNo === data.employeeNo)) {
-      return { error: `工号 ${data.employeeNo} 已存在` };
+export async function updateEmployee(id, data, persistEdit) {
+  return empMutex.run(async () => {
+    const employees = readEmployeesUnsafe();
+    const previous = employees.find(e => e.id === id);
+    if (!previous) return null;
+    const employeeNo = workNumber(Object.hasOwn(data, "employeeNo") ? data.employeeNo : previous.employeeNo);
+    if (!employeeNo) return { error: "工号为必填项" };
+    if (employees.some(e => e.id !== id && workNumber(e.employeeNo) === employeeNo)) {
+      return { error: `工号 ${employeeNo} 已存在` };
     }
-    employees[idx] = {
-      ...employees[idx],
-      ...data,
-      id: employees[idx].id,
-      updatedAt: today(),
+    const next = normalizeEmployee({ ...previous, ...data, employeeNo, id, updatedAt: today() });
+    const commit = () => {
+      writeEmployeesUnsafe(employees.map(e => e.id === id ? next : e));
+      return () => writeEmployeesUnsafe(employees);
     };
-    return normalizeEmployee(employees[idx]);
+    if (persistEdit) {
+      const result = await persistEdit(previous, next, commit);
+      if (result.error) return result;
+    } else {
+      commit();
+    }
+    return next;
   });
 }
 

@@ -18,6 +18,8 @@ import { registerProductionEntryRoutes } from "./routes/production-entry.js";
 import { registerProductionEntryInjectionRoutes } from "./routes/production-entry-injection.js";
 import { registerQuotationRoutes } from "./routes/quotations.js";
 import { registerStandardRoutes } from "./routes/standards.js";
+import { registerOrganizationRoutes } from "./routes/organization.ts";
+import { registerEngineeringChangeRoutes } from "./routes/engineering-changes.ts";
 import { registerNotificationRoutes } from "./routes/notifications.js";
 import { registerSystemSettingsRoutes } from "./routes/system-settings.js";
 import { registerCustomerAccountRoutes } from "./routes/customer-system-accounts.ts";
@@ -30,6 +32,8 @@ import { productionRecoveryLock } from "./middleware/production-recovery-lock.js
 const app = express();
 const assemblySchedulingAvailable = process.env.NODE_ENV === "development";
 registerCustomerAccountRoutes(app);
+// Warehouse confirmation can include two base64-encoded 8 MB files.
+app.post("/api/engineering-changes/:id/actions", express.json({ limit: "24mb" }));
 app.use(express.json({ limit: "20mb" }));
 app.use(productionQueryMetrics);
 app.use(productionRecoveryLock);
@@ -49,6 +53,8 @@ registerProductionEntryRoutes(app);
 registerProductionEntryInjectionRoutes(app);
 registerStandardRoutes(app);
 registerNotificationRoutes(app);
+const engineeringChangeWorker = registerEngineeringChangeRoutes(app);
+registerOrganizationRoutes(app);
 registerFeedbackRoutes(app);
 registerSystemSettingsRoutes(app);
 const productServices = registerProductRoutes(app);
@@ -86,5 +92,7 @@ const standardPublicationWorker = createPublicationWorker(getStandardDB(), readC
     productServices.start(cron);
     standardReviewReminders.start(cron);
     standardPublicationWorker.start(cron);
+    engineeringChangeWorker.wake();
+    cron.schedule("* * * * *", engineeringChangeWorker.wake);
   });
 })();

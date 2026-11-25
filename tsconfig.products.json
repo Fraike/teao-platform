@@ -16,6 +16,7 @@
   "include": [
     "server/routes/products.ts",
     "server/routes/assembly-scheduling.ts",
+    "server/routes/engineering-changes.ts",
     "server/services/product-*.ts",
     "src/types/product.ts",
     "server/services/wecom-app.ts"

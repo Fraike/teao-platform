@@ -1,0 +1,508 @@
+.stack {
+  width: 100%;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 195px), 1fr));
+  gap: 0 16px;
+}
+
+.materialSelect {
+  min-width: min(320px, 65vw);
+}
+
+.referenceSelect {
+  min-width: 116px;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.contentText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.attachment, .reviewer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 8px;
+}
+
+.pdfPreview {
+  width: 100%;
+  height: min(70vh, 780px);
+  border: 0;
+}
+
+.imagePreview {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: auto;
+  object-fit: contain;
+}
+
+.applicationHeader .applicationTitle {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.optionalSection {
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.optionalTitle {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.applicationDetails {
+  margin-bottom: 16px;
+}
+
+.copyList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.copyList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 520px) {
+  .applicationHeader {
+    padding-block: 10px;
+  }
+
+  .applicationHeader :global(.ant-card-head-wrapper) {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .applicationHeader .applicationTitle {
+    flex-basis: 100%;
+  }
+
+  .formActions > button {
+    min-height: 44px;
+  }
+}
+
+.flowPage:global(.ant-space) {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1130px;
+  margin-inline: auto;
+  padding-inline: 12px;
+}
+
+.flowLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 310px);
+  align-items: start;
+  gap: 16px;
+}
+
+.flowLayout > * {
+  min-width: 0;
+}
+
+.draftBody :global(.ant-form-item) {
+  margin-block-end: 16px;
+}
+
+.formError {
+  margin-block-end: 16px;
+}
+
+.discardButton {
+  margin-inline-end: auto;
+}
+
+.flowCard {
+  position: sticky;
+  top: 12px;
+}
+
+.flowNodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.flowNode {
+  position: relative;
+  min-height: 34px;
+  padding: 5px 0 9px 20px;
+  overflow-wrap: anywhere;
+}
+
+.flowNode::before {
+  position: absolute;
+  top: 10px;
+  left: 2px;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--ant-color-border, #d9d9d9);
+  border-radius: 50%;
+  background: var(--ant-color-bg-container, #fff);
+  content: '';
+}
+
+.flowNode:not(:last-child)::after {
+  position: absolute;
+  top: 18px;
+  bottom: -10px;
+  left: 6px;
+  width: 1px;
+  background: var(--ant-color-border-secondary, #f0f0f0);
+  content: '';
+}
+
+.flowNode[data-state='current']::before {
+  border-color: var(--ant-color-primary, #1677ff);
+  background: var(--ant-color-primary, #1677ff);
+}
+
+.flowNode[data-state='done']::before {
+  border-color: var(--ant-color-success, #52c41a);
+  background: var(--ant-color-success, #52c41a);
+}
+
+.flowNodeHeading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.flowNode small,
+.flowHistory small {
+  display: block;
+  color: var(--ant-color-text-secondary, #595959);
+}
+
+.flowHistory {
+  margin-block-start: 8px;
+  overflow-wrap: anywhere;
+}
+
+.flowHistory summary {
+  cursor: pointer;
+  padding-block: 4px;
+}
+
+.flowHistory ul {
+  list-style: none;
+  margin: 0;
+  padding-inline: 0;
+}
+
+.flowHistory ul li {
+  padding-block: 8px;
+  border-bottom: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.flowRecords {
+  margin-block-start: 8px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.departmentChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin-inline-end: 4px;
+  background: var(--ant-color-fill-quaternary, #fafafa);
+}
+
+.departmentChip[data-selected] {
+  border-color: var(--ant-color-primary, #1677ff);
+}
+
+.chipButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.chipName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px;
+  margin-inline-start: 3px;
+  border: 0;
+  background: none;
+  color: var(--ant-color-text-secondary, #595959);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.chipIndex {
+  flex: none;
+  color: var(--ant-color-text-secondary, #595959);
+  font-variant-numeric: tabular-nums;
+}
+
+.orderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: -8px 0 14px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .flowLayout { grid-template-columns: minmax(0, 1fr); }
+  .flowCard { position: static; }
+}
+
+.changeHeading,
+.changeState {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.changeState :global(.ant-tag) {
+  margin-inline-end: 0;
+}
+
+.changeState[data-prominent] :global(.ant-tag) {
+  font-size: 13px;
+  font-weight: 600;
+  padding-inline: 8px;
+  line-height: 22px;
+  white-space: normal;
+}
+
+.changeState time {
+  color: var(--ant-color-text-secondary, #595959);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.listCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.listTitle:global(.ant-btn) {
+  height: auto;
+  padding: 0;
+  white-space: normal;
+  text-align: start;
+  font-weight: 600;
+}
+
+.guideSteps {
+  padding-inline-start: 22px;
+}
+
+.guideSteps > li {
+  margin-block-end: 16px;
+}
+
+.detailHeader {
+  margin-block-end: 12px;
+}
+
+.detailHeader .detailTitle {
+  margin-block: 8px 6px;
+  overflow-wrap: anywhere;
+}
+
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.detailActions > :only-child {
+  margin-inline-start: auto;
+}
+
+.detailMetadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 10px 16px;
+  margin: 12px 0 0;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.detailMetadata dt {
+  color: var(--ant-color-text-secondary, #595959);
+  font-size: 12px;
+}
+
+.detailMetadata dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.detailMaterials {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.detailMaterials li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-block: 6px;
+  overflow-wrap: anywhere;
+}
+
+.detailFooter {
+  grid-column: 1 / 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: var(--ant-border-radius-lg, 8px);
+}
+
+.evidenceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 0 16px;
+}
+
+.evidenceCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.evidenceCard :global(.ant-upload-btn) {
+  min-height: 132px;
+}
+
+.evidenceCard :global(.ant-upload-btn) > * {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+.evidenceIcon {
+  font-size: 24px;
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.evidenceThumbnail {
+  width: 100%;
+  max-width: 180px;
+  height: 76px;
+  object-fit: contain;
+}
+
+.scrapRecord,
+.scrapEvidence {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.scrapRecord + .scrapRecord {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.scrapEvidence {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 195px), 1fr));
+}
+
+.scrapEvidence:empty {
+  display: none;
+}
+
+.assessmentImport:global(.ant-btn) {
+  padding-inline: 0;
+}
+
+.assessmentHelp {
+  margin: 0;
+  max-width: min(290px, 70vw);
+  padding-inline-start: 18px;
+}
+
+
+.flowNodeActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.flowNodeActions :global(.ant-tag) {
+  margin-inline-end: 0;
+}
+
+.assessmentExtras summary {
+  cursor: pointer;
+  padding-block: 4px;
+  color: var(--ant-color-text-secondary, #595959);
+}
+
+.scrapToggle {
+  align-self: end;
+}

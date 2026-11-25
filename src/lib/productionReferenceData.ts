@@ -158,7 +158,7 @@ export function formatKingdeeRefreshMessage(result: KingdeeDataRefreshResult): K
 
 export function getEmployeeOptions() {
   return getReferenceOptions("production_employees", async () => {
-    const response = await api.get<Array<{ name: string }>>("/api/employees?status=active");
+    const response = await api.get<Array<{ name: string }>>("/api/employees/active-names");
     return response.map((item) => ({ value: item.name, label: item.name }));
   });
 }
