@@ -18,7 +18,7 @@
     "standards:baseline:verify-output": "node --import ./scripts/standard-source-loader.js scripts/standard-baseline-verify-output.js",
     "test:products": "node --test test/server-lockfile.test.js test/release-static-assets.test.js && node --experimental-strip-types test/semi-product-series.test.ts && node --experimental-strip-types test/product-semi-imports.test.ts && node --experimental-strip-types test/product-import-rollback.test.ts && node --test test/product-pdf-compatibility.test.js && node --experimental-strip-types test/product-pdf-upload.test.ts && node --experimental-strip-types test/product-drawing-inheritance.test.ts && node --experimental-strip-types test/product-business-fields.test.ts && node --experimental-strip-types test/product-drawing-variants.test.ts && node --experimental-strip-types test/product-drawing-selection.test.ts && node --experimental-strip-types test/product-drawing-series.test.ts && node --experimental-strip-types test/product-drawing-status.test.ts && node --experimental-strip-types test/product-drawing-applicability.test.ts && node --experimental-strip-types test/product-imports.test.ts && node --experimental-strip-types test/product-series.test.ts && node --experimental-strip-types test/product-standard-category-names.test.ts && node --experimental-strip-types test/product-categories.test.ts && node --experimental-strip-types test/product-category-filters.test.ts && node --experimental-strip-types test/product-catalog.test.ts && node --experimental-strip-types test/product-catalog-cache.test.ts && node --experimental-strip-types test/product-sync.test.ts && node --experimental-strip-types test/product-drawings.test.ts && node --experimental-strip-types test/product-routes.test.ts && node --experimental-test-module-mocks --import ./test/standard-frontend-loader.js --test --test-force-exit test/product-pdf-failure-cleanup.test.ts test/lazy-page-fallback.test.ts test/product-ui.test.ts test/product-drawing-guide.test.ts test/product-upload-ui.test.ts test/product-pdf-viewer.test.ts test/product-pdf-fullscreen.test.ts test/product-import-ui.test.ts test/product-file-management.test.ts test/product-tab-title.test.ts test/product-drawing-context.test.ts",
     "test:tab-cache": "node --experimental-test-module-mocks --import ./test/standard-frontend-loader.js --test --test-force-exit test/quotation-account-scope.test.ts test/quotation-mold-pricing.test.ts test/quotation-mold-summary.test.tsx test/quotation-management-mold.test.tsx test/quotation-draft-switch.test.ts test/tab-limit.test.ts test/tab-limit-restore.test.ts test/tab-limit-navigation.test.ts test/tab-page-cache.test.ts test/tab-page-host.test.ts test/tab-navigation-state.test.ts test/basic-tab-cache.test.ts test/production-tab-cache.test.ts test/quotation-tab-cache.test.ts test/standard-tab-form-cache.test.ts test/product-pdf-resources.test.ts test/product-pdf-viewer-state.test.ts test/table-scroll-virtual.test.ts test/standard-virtual-list.test.ts test/standard-form-cache-session.test.ts test/tab-hidden-initialization.test.ts",
-    "test:tooling": "node --test test/eslint-file-matching.test.js test/server-startup.test.js",
+    "test:tooling": "node --test test/eslint-file-matching.test.js test/server-startup.test.js test/frontend-monitoring.test.ts",
     "test:production-products": "node --experimental-test-module-mocks --import ./test/standard-frontend-loader.js --test --test-force-exit test/production-product-persistence.test.ts"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
     "@antv/x6": "3.1.8",
     "@antv/x6-react-shape": "3.0.1",
     "@noble/hashes": "2.4.0",
+    "@sentry/react": "11.16.0",
     "antd": "6.6.8",
     "better-sqlite3": "13.0.3",
     "dayjs": "1.11.23",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@sentry/bundler-plugins": "11.16.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/express": "5.0.6",
     "@types/node": "24.19.2",

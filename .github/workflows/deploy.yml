@@ -38,7 +38,14 @@ jobs:
 
       - run: node --test test/release-safety.test.js test/sanitary-migration-cli.test.js
 
-      - run: npm run build
+      - name: Build the frontend
+        run: npm run build
+        env:
+          VITE_APP_RELEASE: ${{ github.sha }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - name: Package reviewed release (no runtime data)
         run: |

@@ -1,3 +1,4 @@
+import { registerStartupDiagnostics } from "./routes/startup-diagnostics.ts";
 import express from "express";
 import { registerProductRoutes } from "./routes/products.ts";
 import cron from "node-cron";
@@ -32,6 +33,7 @@ import { productionRecoveryLock } from "./middleware/production-recovery-lock.js
 const app = express();
 const assemblySchedulingAvailable = process.env.NODE_ENV === "development";
 registerCustomerAccountRoutes(app);
+registerStartupDiagnostics(app);
 // Warehouse confirmation can include two base64-encoded 8 MB files.
 app.post("/api/engineering-changes/:id/actions", express.json({ limit: "24mb" }));
 app.use(express.json({ limit: "20mb" }));

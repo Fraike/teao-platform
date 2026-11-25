@@ -1,3 +1,4 @@
+import { captureReactError } from "./frontendInstrumentation";
 import { StrictMode, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
@@ -13,8 +14,9 @@ function AppEntry() {
 
 createRoot(document.getElementById("root")!, {
   onUncaughtError(error, info) {
-    console.error(error, info.componentStack);
     window.dispatchEvent(new Event("teao:app-crash"));
+    console.error(error, info.componentStack);
+    captureReactError?.(error, info);
   },
 }).render(
   <StrictMode>

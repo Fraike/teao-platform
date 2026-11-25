@@ -15,6 +15,7 @@ dist-ssr
 # Env files (secrets)
 .env
 .env.local
+.env.sentry-build-plugin
 .env.*.local
 
 # Editor directories and files

@@ -36,6 +36,29 @@
         var ready = false;
         var failed = false;
         var timer;
+        var reported = false;
+
+        function reportStartupFailure(reason) {
+          if (reported || ready) return;
+          reported = true;
+          var release = document.querySelector('meta[name="teao-release"]');
+          var route = window.location.pathname;
+          if (route !== '/' && route !== '/login' && route !== '/register') route = '/app';
+          try {
+            var body = JSON.stringify({ reason: reason, route: route, release: release ? release.content : 'unknown' });
+            if (typeof window.fetch === 'function') {
+              window.fetch('/api/diagnostics/startup', {
+                method: 'POST', credentials: 'omit', keepalive: true,
+                headers: { 'Content-Type': 'application/json' }, body: body
+              }).then(null, function () {});
+            } else if (typeof XMLHttpRequest === 'function') {
+              var request = new XMLHttpRequest();
+              request.open('POST', '/api/diagnostics/startup', true);
+              request.setRequestHeader('Content-Type', 'application/json');
+              request.send(body);
+            }
+          } catch (_) { /* Diagnostics must leave recovery available. */ }
+        }
 
         function showFailure(heading, detail) {
           clearTimeout(timer);
@@ -49,6 +72,7 @@
         function crash() {
           failed = true;
           showFailure('页面运行异常', '请重新加载页面。若问题持续，请将页面地址和截图发给系统管理员。');
+          reportStartupFailure('startup_exception');
         }
 
         if (!('noModule' in document.createElement('script')) || typeof Promise !== 'function') {
@@ -72,12 +96,17 @@
           if (event.target && event.target.tagName === 'SCRIPT') {
             failed = true;
             showFailure('页面资源加载失败', '请重新加载页面。若仍无法打开，请更新浏览器或联系系统管理员。');
+            reportStartupFailure('resource_error');
           } else if (event.target === window) {
             crash();
           }
         }, true);
+        window.addEventListener('unhandledrejection', function () {
+          if (!ready && !failed) crash();
+        });
         timer = setTimeout(function () {
           showFailure('页面加载超时', '请检查网络后重新加载。若问题持续，请联系系统管理员。');
+          reportStartupFailure('startup_timeout');
         }, 15000);
       }());
     </script>

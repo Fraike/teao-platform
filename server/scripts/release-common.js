@@ -43,7 +43,7 @@ export function allowedArtifact(name) {
   const parts = name.split(path.sep);
   if (parts.some(p => p.startsWith('.') || /^(?:node_modules|trash_review|private|backups?)$/i.test(p))) return false;
   if (/\.(?:db|sqlite|sqlite3)(?:[-.]|$)|\.env|production-config\.json|users\.json|history\.json/i.test(name)) return false;
-  if (parts[0] === 'dist') return !parts.includes('data') && !/\.(?:xlsx?|xlsm|xlsb|csv|tsv)$/i.test(name);
+  if (parts[0] === 'dist') return !parts.includes('data') && !/\.(?:xlsx?|xlsm|xlsb|csv|tsv|map)$/i.test(name);
   if (parts[0] !== 'server') return false;
   if (parts[1] === 'data') return parts.length === 3 && ['employees-seed.json', 'standard-source-decisions.json'].includes(parts[2]);
   return !parts.slice(1).includes('data') && /\.(?:js|ts|json|service|sh)$/.test(name);
