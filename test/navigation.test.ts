@@ -15,8 +15,13 @@ assert.ok(adminTitles.includes("报价管理"));
 assert.ok(adminTitles.includes("客户商品资料"));
 assert.ok(adminTitles.includes("流程查询"));
 assert.ok(adminTitles.includes("用户管理"));
+assert.ok(adminTitles.includes("工程变更"));
 
 const productionTitles = getVisibleNavigationItems(productionUser).map((item) => item.title);
-assert.deepEqual(productionTitles, ["生产日报汇总", "装配部生产日报", "注塑部生产日报", "商品资料", "产品标准"]);
+assert.deepEqual(productionTitles, ["生产日报汇总", "装配部生产日报", "注塑部生产日报", "组织架构", "商品资料", "产品标准"]);
+
+const authorizedTitles = getVisibleNavigationItems({ ...productionUser, permissions: ["production", "engineering_change"] })
+  .map((item) => item.title);
+assert.deepEqual(authorizedTitles, [...productionTitles, "工程变更"]);
 
 console.log("Navigation tests passed.");

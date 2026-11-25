@@ -48,6 +48,7 @@ for (const name of ['SupplierDataPage', 'CustomerProductPage', 'EmployeePage', '
   api.get = (async (url: string) => {
    calls++;
    if (url.includes('/reminders')) return {expired: [], expiring: []};
+   if (url === '/api/organization/wecom-bindings') return {data: []};
    return url.includes('/kingdee/') ? {ok:true,data:[]} : [];
   }) as typeof api.get;
   let root=createRoot(document.getElementById('root')!);

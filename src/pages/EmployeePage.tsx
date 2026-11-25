@@ -62,13 +62,17 @@ export function EmployeePage() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<Employee[]>("/api/employees");
-      setEmployees(data);
-      const { data: accounts } = await organizationApi.bindings();
-      setBindings(accounts);
-      setLoaded(true);
-    } catch (err) {
-      message.error((err as Error).message);
+      const [roster, accounts] = await Promise.allSettled([
+        api.get<Employee[]>("/api/employees"),
+        organizationApi.bindings(),
+      ]);
+      if (roster.status === "fulfilled") setEmployees(roster.value);
+      else message.error(roster.reason instanceof Error ? roster.reason.message : "员工资料读取失败");
+      if (accounts.status === "fulfilled" && Array.isArray(accounts.value?.data)) {
+        setBindings(accounts.value.data);
+      } else {
+        message.error("企微账号关联读取失败");
+      }
     } finally {
       setLoaded(true);
       setLoading(false);

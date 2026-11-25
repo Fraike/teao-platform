@@ -19,11 +19,18 @@ test('EmployeePage first requests finish while hidden and Host return does not r
  const renderPage=(location:{pathname:string})=>location.pathname==='/employees'?createElement(EmployeePage):createElement('p',null,'other');
  const render=(activeKey:string)=>act(async()=>root.render(createElement(MemoryRouter,null,createElement(TabPageHost,{scope:'hidden-employee',tabs,activeKey,renderPage}))));
  try {
-  await render('employees');assert.equal(requests.length,2);
-  await render('other');
-  await act(async()=>{for(const request of requests)request.resolve(request.url.endsWith('/reminders')?{expired:[],expiring:[]}:[])});
   await render('employees');
-  assert.equal(requests.length,2,'successful hidden completion must prevent both repeated GETs');
+  assert.deepEqual(requests.map(row => row.url).sort(), ['/api/employees','/api/employees/reminders','/api/organization/wecom-bindings']);
+  await render('other');
+  await act(async()=> {
+    for (const request of requests) {
+      if (request.url.endsWith('/reminders')) request.resolve({expired:[],expiring:[]});
+      else if (request.url.endsWith('/wecom-bindings')) request.resolve({data:[]});
+      else request.resolve([]);
+    }
+  });
+  await render('employees');
+  assert.equal(requests.length,3,'successful hidden completion must prevent repeated GETs');
   assert.equal(getTabPage('hidden-employee','employees').snapshot.get('EmployeePage.loading'),false);
  } finally {await act(async()=>root.unmount());api.get=original;clearTabScope('hidden-employee')}
 });
