@@ -65,6 +65,28 @@ test("granting a permission enables the same JWT without another login", async (
   assert.equal(request(token, requireAnyPermission(["hr", "engineering_review"])).allowed, true);
 });
 
+test("manual disable revokes sessions and protects administrators and disabled records", async () => {
+  const { disableUser, refreshToken, loginUser, approveUser, rejectUser } = await import("../server/services/users.js");
+  const administrator = id => ({ ...user, id, username: id, role: "admin" });
+  fs.writeFileSync(usersFile, JSON.stringify({ users: [user, administrator("admin-a"), administrator("admin-b")] }));
+  const token = sign();
+  assert.equal((await disableUser("admin-a", "admin-a")).status, 403);
+  assert.equal((await disableUser("admin-a", "admin-b")).accountStatus, "disabled");
+  assert.equal((await disableUser("admin-b", user.id)).status, 403);
+  assert.equal((await disableUser("admin-a", user.id)).accountStatus, "disabled");
+  assert.equal((await disableUser("admin-a", user.id)).alreadyDisabled, true);
+  assert.equal(request(token).status, 401);
+  assert.equal(isTokenSessionValid(token), false);
+  assert.match(refreshToken(token).error, /已失效/);
+  assert.match((await loginUser({ username: user.username, password: "fixture1" })).error, /已停用/);
+  assert.ok((await approveUser(user.id)).error);
+  assert.ok((await rejectUser(user.id)).error);
+  const [stored] = JSON.parse(fs.readFileSync(usersFile, "utf8")).users;
+  assert.equal(stored.passwordVersion, 1);
+  assert.deepEqual(stored.permissions, user.permissions);
+  assert.equal(stored.deactivation.by, "admin-a");
+});
+
 test("demoting an administrator removes admin access and all permission bypasses", () => {
   user.role = "admin";
   const token = sign();

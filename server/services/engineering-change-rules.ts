@@ -197,7 +197,15 @@ export function actions(change: EngineeringChange, actor: Actor): ChangeAction[]
   const admin: ChangeAction[] = actor.role === 'admin' && tasks(change).some(task => task.key !== 'draft') ? ['reassign'] : [];
   switch (change.status) {
     case 'draft': return change.creator === actor.id && canSubmit(actor) ? ['save', 'submit', 'discard'] : [];
-    case 'assessment': return mine ? ['assess', ...(change.records.length ? [] : ['return' as const]), ...admin] : admin;
+    case 'assessment': {
+      const result: ChangeAction[] = mine ? ['assess', ...(change.records.length ? [] : ['return' as const])] : [];
+      const submission = change.history.findLast(row => row.action === 'submit' || row.action === 'assess');
+      const enteredReview = submission ? submission.action === 'assess' : change.rounds.length > 0;
+      if (change.creator === actor.id && canSubmit(actor) && !change.records.length && !enteredReview) {
+        result.push('withdraw');
+      }
+      return [...result, ...admin];
+    }
     case 'review': return mine ? ['approve', 'return', ...admin] : admin;
     case 'scrap': return mine ? ['record', ...admin] : admin;
     case 'verify': {

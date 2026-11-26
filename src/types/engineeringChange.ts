@@ -88,7 +88,7 @@ export interface ChangeConfig {
 }
 
 export type ChangeStatus = 'draft' | 'assessment' | 'review' | 'scrap' | 'verify' | 'closed' | 'discarded';
-export type ChangeAction = 'save' | 'submit' | 'assess' | 'approve' | 'return' | 'record' | 'recordAndVerify' | 'confirm' | 'difference' | 'correct' | 'reassign' | 'discard';
+export type ChangeAction = 'save' | 'submit' | 'withdraw' | 'assess' | 'approve' | 'return' | 'record' | 'recordAndVerify' | 'confirm' | 'difference' | 'correct' | 'reassign' | 'discard';
 
 export interface ChangeRound {
   number: number;

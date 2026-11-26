@@ -99,8 +99,8 @@ export function EmployeePage() {
   const handleDelete = async (id: string) => {
     setDeleting(true);
     try {
-      await api.delete(`/api/employees/${id}`);
-      message.success("已标记为离职");
+      const result = await api.delete<{ accountStatus: "disabled" | "not_registered" | "already_resigned" }>(`/api/employees/${id}`);
+      message.success(result.accountStatus === "disabled" ? "已登记离职并停用平台账号" : "已标记为离职");
       fetchEmployees();
     } catch (err) {
       message.error((err as Error).message);
@@ -205,9 +205,11 @@ export function EmployeePage() {
           {record.status === "active" && (
             <Popconfirm
               title="确认将该员工标记为离职？"
+              description="如能确认关联的平台账号，将一并停用账号并注销已有会话。"
+              okText="确认离职" cancelText="取消"
               onConfirm={() => handleDelete(record.id)}
             >
-              <Button type="link" danger size="small">离职</Button>
+              <Button type="link" danger size="small" disabled={deleting}>离职</Button>
             </Popconfirm>
           )}
         </Space>

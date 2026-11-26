@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,7 +84,7 @@ test('HR positions route new changes and preserve existing assignments', () => {
   db.close();
 });
 
-test('authenticated organization is public within the platform, employee files stay restricted by HR permission', async () => {
+test('authenticated organization protects employee files and resignation safely deactivates matched accounts', async t => {
   const require = createRequire(new URL('../server/package.json', import.meta.url));
   const express = require('express');
   const jwt = require('jsonwebtoken');
@@ -102,11 +103,13 @@ test('authenticated organization is public within the platform, employee files s
   }));
   const { registerOrganizationRoutes } = await import('../server/routes/organization.ts');
   const { registerEmployeeRoutes } = await import('../server/routes/employees.js');
+  const { registerAdminRoutes } = await import('../server/routes/admin.js');
   const { closeDB } = await import('../server/services/standard-store.js');
   const app = express();
   app.use(express.json());
   registerOrganizationRoutes(app);
   registerEmployeeRoutes(app);
+  registerAdminRoutes(app);
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const url = `http://127.0.0.1:${server.address().port}/api`;
@@ -159,6 +162,48 @@ test('authenticated organization is public within the platform, employee files s
     assert.equal(updated.body.wecomBinding, undefined);
     assert.deepEqual((await call('admin', '/organization/wecom-bindings')).body.data.find(row => row.employeeId === 'hr-file'),
       { employeeId: 'hr-file', employeeNo: 'TA-003', status: 'linked', userId: 'hr', wecomUserid: 'UpdatedWx' });
+
+    const usersFile = join(process.env.DATA_DIR, 'users.json');
+    const employeesFile = join(process.env.DATA_DIR, 'employees.json');
+    const users = () => JSON.parse(fs.readFileSync(usersFile, 'utf8')).users;
+    const account = (id, name, status = 'active') => ({ ...rows[0], id, username: id, name, status });
+    writeFileSync(usersFile, JSON.stringify({ users: [...users(), account('pending', '员工乙', 'pending'),
+      account('duplicate-a', '同名'), account('duplicate-b', '同名'), account('historical', '历史离职')] }));
+    const roster = JSON.parse(fs.readFileSync(employeesFile, 'utf8')).employees;
+    writeFileSync(employeesFile, JSON.stringify({ employees: [...roster, staff('DUP', '同名', '工程部'),
+      staff('ADMIN', 'admin', '工程部'), staff('OLD', '历史离职', '工程部', 'resigned')] }));
+    assert.equal((await call('hr', '/admin/users/ordinary/disable', 'POST')).status, 403);
+    assert.equal((await call('admin', '/admin/users/admin/disable', 'POST')).status, 403);
+    assert.equal((await call('admin', '/admin/users/ordinary/disable', 'POST')).body.accountStatus, 'disabled');
+    assert.equal((await call('ordinary', '/organization')).status, 401);
+    assert.equal((await call('hr', '/employees/employee-DUP', 'DELETE')).status, 409);
+    assert.equal((await call('hr', '/employees/employee-ADMIN', 'DELETE')).status, 409);
+    assert.equal((await call('hr', legacyPath, 'PUT', { status: 'resigned' })).status, 400);
+    assert.equal((await call('hr', legacyPath, 'DELETE')).body.accountStatus, 'not_registered');
+    assert.equal((await call('hr', '/employees/employee-OLD', 'DELETE')).body.accountStatus, 'already_resigned');
+    assert.equal(users().find(row => row.id === 'historical').status, 'active');
+
+    const rename = fs.renameSync;
+    const fault = t.mock.method(fs, 'renameSync', (source, destination) => {
+      if (destination === employeesFile) throw new Error('simulated roster write failure');
+      return rename(source, destination);
+    });
+    try {
+      const failed = await call('admin', '/employees/hr-file', 'DELETE');
+      assert.equal(failed.status, 500);
+      assert.match(failed.body.error, /账号已停用.*重试/);
+      assert.equal((await call('admin', '/employees/hr-file')).body.status, 'active');
+      assert.equal((await call('hr', '/employees')).status, 401);
+    } finally { fault.mock.restore(); }
+
+    assert.equal((await call('admin', '/employees/hr-file', 'DELETE')).body.accountStatus, 'disabled');
+    assert.equal((await call('admin', '/employees/hr-file', 'DELETE')).body.accountStatus, 'already_resigned');
+    const disabled = users().find(row => row.id === 'hr');
+    assert.equal(disabled.passwordVersion, 1);
+    assert.equal(disabled.deactivation.source, 'resignation');
+    assert.equal(disabled.wecomUserid, 'UpdatedWx');
+    assert.equal((await call('admin', `/employees/${created.body.id}`, 'DELETE')).body.accountStatus, 'disabled');
+    assert.equal((await call('admin', '/admin/users/pending/approve', 'POST')).status, 400);
 
   } finally {
     await new Promise(resolve => server.close(resolve));

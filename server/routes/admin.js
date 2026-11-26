@@ -1,4 +1,4 @@
-import { listUsers, approveUser, rejectUser, resetUserPassword, setUserPermission, setUserWecomUserid, reviewUserPasswordRecovery, getPendingWecomSuggestion, previewUserWecomImport, importUserWecomDirectory } from "../services/users.js";
+import { listUsers, approveUser, rejectUser, disableUser, resetUserPassword, setUserPermission, setUserWecomUserid, reviewUserPasswordRecovery, getPendingWecomSuggestion, previewUserWecomImport, importUserWecomDirectory } from "../services/users.js";
 import { organizationStore } from './organization.ts';
 import { listEmployees } from '../services/employees.js';
 import { jwtAuth, adminAuth } from "../middleware/jwt-auth.js";
@@ -15,6 +15,15 @@ export function registerAdminRoutes(app) {
   });
   app.get("/api/admin/users", jwtAuth, adminAuth, (_req, res) => {
     res.json(listUsers());
+  });
+  app.post("/api/admin/users/:id/disable", jwtAuth, adminAuth, async (req, res) => {
+    try {
+      const result = await disableUser(req.user.id, req.params.id);
+      if (result.error) return res.status(result.status).json({ error: result.error });
+      res.json(result);
+    } catch {
+      res.status(500).json({ error: "停用账号失败，请稍后重试" });
+    }
   });
 
   const directoryHandler = action => async (req, res) => {

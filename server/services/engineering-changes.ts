@@ -142,6 +142,7 @@ export function createEngineeringChangeStore(db: Database.Database, lookup: Look
       const reason = ['return', 'difference', 'correct', 'reassign', 'recordAndVerify'].includes(event) && note ? `\n原因：${note.slice(0, 300)}` : '';
       const content = `【${task.title}】\n${change.number} · ${change.title}${reason}`;
       db.prepare('INSERT INTO engineering_change_tasks VALUES(?, ?, ?, ?, ?, ?)').run(change.id, task.key, task.userId, generation, task.title, change.updatedAt);
+      if (event === 'withdraw' && task.key === 'draft') continue;
       db.prepare("INSERT INTO engineering_change_messages VALUES(?, ?, ?, ?, ?, ?, ?, 'queued', ?)")
         .run(key, change.id, task.userId, task.key, generation, event, content, change.updatedAt);
     }

@@ -205,6 +205,7 @@ export function applyAction(change: EngineeringChange, actor: Actor, body: Recor
       change.status = change.status === 'assessment' || body.target === 'engineering' ? 'draft' : 'assessment';
       return row ? `${row.name} · ${note}` : note;
     }
+    case 'withdraw': change.status = 'draft'; break;
     case 'discard': change.status = 'discarded'; break;
     case 'record': registerScrap(change, actor, body, now); break;
     case 'recordAndVerify': return recordAndVerify(change, actor, body, now);

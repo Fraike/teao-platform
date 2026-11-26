@@ -216,6 +216,9 @@ export async function updateEmployee(id, data, persistEdit) {
     const employees = readEmployeesUnsafe();
     const previous = employees.find(e => e.id === id);
     if (!previous) return null;
+    if (Object.hasOwn(data, "status") && data.status !== previous.status) {
+      return { error: "请通过员工管理的离职操作变更员工状态" };
+    }
     const employeeNo = workNumber(Object.hasOwn(data, "employeeNo") ? data.employeeNo : previous.employeeNo);
     if (!employeeNo) return { error: "工号为必填项" };
     if (employees.some(e => e.id !== id && workNumber(e.employeeNo) === employeeNo)) {
@@ -236,14 +239,18 @@ export async function updateEmployee(id, data, persistEdit) {
   });
 }
 
-export async function resignEmployee(id) {
-  return withEmployees(async (employees) => {
-    const idx = employees.findIndex((e) => e.id === id);
-    if (idx < 0) return null;
-    employees[idx].status = "resigned";
-    employees[idx].resignDate = today();
-    employees[idx].updatedAt = today();
-    return normalizeEmployee(employees[idx]);
+export function resignEmployee(id, persistResignation) {
+  return empMutex.run(() => {
+    const employees = readEmployeesUnsafe();
+    const previous = employees.find(row => row.id === id);
+    if (!previous) return null;
+    if (previous.status === "resigned") return { ...previous, accountStatus: "already_resigned" };
+    const date = today();
+    const next = normalizeEmployee({ ...previous, status: "resigned", resignDate: date, updatedAt: date });
+    return persistResignation(previous, employees, () => {
+      writeEmployeesUnsafe(employees.map(row => row.id === id ? next : row));
+      return next;
+    });
   });
 }
 

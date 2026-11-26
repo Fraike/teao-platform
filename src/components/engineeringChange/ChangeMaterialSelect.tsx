@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Alert, Select } from 'antd';
+import { Alert, Select, Tag } from 'antd';
 import { changeApi, errorText } from '../../lib/engineeringChange';
 import type { ChangeMaterial } from '../../types/engineeringChange';
+import styles from './EngineeringChange.module.css';
 
 interface Props {
   id?: string;
@@ -34,12 +35,18 @@ export function ChangeMaterialSelect({ value = [], onChange, assessmentId, id, l
   const options = new Map([...value, ...results].map(item => [item.id, item]));
   return <>
     {error && <Alert type="warning" showIcon title={error} />}
-    <Select id={id} aria-label={label} mode="multiple" showSearch={{ filterOption: false, onSearch: term => {
+    <Select id={id} aria-label={label} className={styles.materialPicker} mode="multiple" virtual={false} showSearch={{ filterOption: false, onSearch: term => {
       setResults([]); setLoading(false); setError(''); setQuery(term);
     } }} placeholder="搜索产品名称或内部料号" loading={loading}
       notFoundContent={loading ? '搜索中…' : query.trim() ? '未找到匹配的物料' : '可搜索成品和半成品'}
+      optionRender={option => <span className={styles.materialResult}>{option.label}</span>}
       value={value.map(row => row.id)} options={[...options.values()].map(row => ({
-        value: row.id, label: [row.code, row.name, row.defaultWarehouse].filter(Boolean).join(' · '),
+        value: row.id,
+        label: <span className={styles.materialOption}>
+          <strong>{row.code}</strong><span className={styles.materialName}>{row.name}</span>
+          {row.defaultWarehouse && <Tag className={styles.materialWarehouse}
+            color={row.defaultWarehouse === '成品仓' ? 'blue' : 'purple'}>{row.defaultWarehouse}</Tag>}
+        </span>,
       }))} onChange={ids => onChange?.(ids.flatMap(id => options.get(id) ?? []))} />
   </>;
 }

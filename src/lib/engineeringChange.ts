@@ -58,7 +58,7 @@ export const changeStatus: Record<ChangeStatus, string> = {
 export const changeAction: Record<ChangeAction | 'create', string> = {
   create: '创建草稿', save: '保存草稿', submit: '提交 PMC 评估', assess: '提交会签', approve: '通过',
   return: '退回', record: '登记报废', recordAndVerify: '登记报废', confirm: '确认报废并结案', difference: '报废数量有差异，退回重审',
-  correct: '退回补正凭证', reassign: '改派', discard: '放弃草稿',
+  correct: '退回补正凭证', reassign: '改派', discard: '放弃草稿', withdraw: '撤回申请',
 };
 
 export const changeTime = (value: string) => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });

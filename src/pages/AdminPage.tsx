@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { Button, Tag, message, Popconfirm, Typography, Tooltip, Modal, Form, Input } from "antd";
 import type { TableColumnsType } from "antd";
 import { api } from "../lib/api";
+import { useAuthStore } from "../lib/authStore";
 import type { User } from "../types/auth";
 import styles from "./AdminPage.module.css";
 import { ResponsiveTable } from "../components/ResponsiveTable";
@@ -13,6 +14,7 @@ import { summarizeUserPermissions } from "../lib/userPermissions";
 const { Title } = Typography;
 
 export function AdminPage() {
+  const ownId = useAuthStore(state => state.user?.id);
   const [users, setUsers] = useTabState<User[]>("AdminPage.users", []);
   const [loaded, setLoaded] = useTabState("AdminPage.loaded", false);
   useTabPageAdapter(loaded);
@@ -88,6 +90,18 @@ export function AdminPage() {
     } finally { setWriting(count => count - 1); }
   };
 
+  const handleDisable = async (id: string) => {
+    setWriting(count => count + 1);
+    try {
+      await api.post(`/api/admin/users/${id}/disable`);
+      setUsers(current => current.map(user => user.id === id ? { ...user, status: "disabled", passwordResetRequest: undefined } : user));
+      message.success("账号已停用");
+      await fetchUsers();
+    } catch (err) {
+      message.error((err as Error).message);
+    } finally { setWriting(count => count - 1); }
+  };
+
   const handleTogglePermission = async (id: string, permission: string, enabled: boolean) => {
     const result = await api.put<{ ok: boolean; permissions: string[] }>(`/api/admin/users/${id}/permissions`, { permission, enabled });
     setUsers(current => current.map(user => user.id === id ? { ...user, permissions: result.permissions } : user));
@@ -136,9 +150,9 @@ export function AdminPage() {
       title: "状态",
       dataIndex: "status",
       key: "status",
-      render: (status: string) => (
-        <Tag color={status === "active" ? "green" : "orange"}>
-          {status === "active" ? "已激活" : "待审核"}
+      render: (status: User["status"]) => (
+        <Tag color={status === "active" ? "green" : status === "pending" ? "orange" : undefined}>
+          {{ active: "已激活", pending: "待审核", disabled: "已停用" }[status]}
         </Tag>
       ),
     },
@@ -147,6 +161,7 @@ export function AdminPage() {
       key: "permissions",
       width: 230,
       render: (_: React.Key, record: User) => {
+        if (record.status === "disabled") return <Tag>已保留</Tag>;
         if (record.role === "admin") return <Tag color="red">全部权限</Tag>;
         if (record.status !== "active") return <Tag>待审核</Tag>;
         const summary = summarizeUserPermissions(record.permissions ?? []);
@@ -164,7 +179,7 @@ export function AdminPage() {
       title: "密码找回申请",
       key: "passwordRecovery",
       width: 210,
-      render: (_: React.Key, record: User) => record.passwordResetRequest ? (
+      render: (_: React.Key, record: User) => record.status === "active" && record.passwordResetRequest ? (
         <div className={styles.recoveryCell}>
           <Tag color="orange">待审核</Tag>
           <span>{new Date(record.passwordResetRequest.requestedAt).toLocaleString("zh-CN", { hour12: false })}</span>
@@ -183,10 +198,10 @@ export function AdminPage() {
       title: "操作",
       key: "action",
       render: (_: React.Key, record: User) => {
-        if (record.role === "admin") return null;
+        if (record.status === "disabled") return null;
         return (
           <div className={styles.actionRow}>
-            {record.status === "pending" ? (
+            {record.role !== "admin" && (record.status === "pending" ? (
               <>
                 <Button type="link" size="small" onClick={() => setApprovalTargetId(record.id)}>通过</Button>
                 <Popconfirm
@@ -202,7 +217,14 @@ export function AdminPage() {
               <Button type="link" size="small" onClick={() => openResetModal(record)}>
                 重置密码
               </Button>
-            )}
+            ))}
+            {record.id !== ownId && <Popconfirm
+              title={`确认停用 ${record.name}（${record.username}）？`}
+              description={`${record.role === "admin" ? "管理员" : "普通用户"}账号，停用后已有会话将失效。`}
+              okText="确认停用" cancelText="取消" onConfirm={() => handleDisable(record.id)}
+            >
+              <Button type="link" size="small" danger disabled={writing > 0}>停用</Button>
+            </Popconfirm>}
           </div>
         );
       },
@@ -213,7 +235,7 @@ export function AdminPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <Title level={4}>用户管理</Title>
-        {users.some(user => user.passwordResetRequest) && <Tag color="orange">{users.filter(user => user.passwordResetRequest).length} 条密码找回待审核</Tag>}
+        {users.some(user => user.status === "active" && user.passwordResetRequest) && <Tag color="orange">{users.filter(user => user.status === "active" && user.passwordResetRequest).length} 条密码找回待审核</Tag>}
         <Button size="small" loading={loading} onClick={() => void fetchUsers()}>刷新</Button>
       </div>
       <ResponsiveTable

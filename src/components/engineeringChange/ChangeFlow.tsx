@@ -81,9 +81,12 @@ function detailNodes(detail: ChangeDetail): FlowNode[] {
       : !round && record?.warehouseResult === 'difference' ? 'returned'
         : !round ? 'conditional' : !scrapRequired ? 'skipped' : 'pending';
   const submittedAt = change.submittedAt ?? history.find(row => row.action === 'submit')?.at;
+  const latestSubmissionAction = history.findLast(row => ['submit', 'return', 'withdraw'].includes(row.action));
+  const withdrawal = status === 'draft' && latestSubmissionAction?.action === 'withdraw' ? latestSubmissionAction : undefined;
   return [
     { title: '提交申请', state: submittedAt ? 'done' : status === 'discarded' ? 'skipped' : 'current',
       person: name(change.creator), at: submittedAt },
+    ...(withdrawal ? [{ title: '撤回申请', state: 'done' as const, person: withdrawal.name || name(withdrawal.actor), at: withdrawal.at }] : []),
     ...(status === 'draft' && submittedAt ? [{ title: '修改并重新提交', state: 'current' as const, person: name(change.creator), task: 'draft' }] : []),
     { title: 'PMC 评估', state: status === 'assessment' ? 'current' : round ? 'done' : 'pending',
       person: name(assignment?.pmc), at: round?.at, task: 'assessment' },

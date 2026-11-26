@@ -129,7 +129,7 @@ export function ChangeDetailPanel({ detail, viewDeliveries, busy, error, onActio
     {availableActions.length > 0 && <footer className={styles.detailFooter} aria-label="单据办理">
       {availableActions.map(action => <Button key={action}
         type={['approve', 'confirm', 'record', 'recordAndVerify'].includes(action) ? 'primary' : 'default'}
-        disabled={busy} onClick={() => onAction(action)}>{changeAction[action]}</Button>)}
+        danger={action === 'withdraw'} disabled={busy} onClick={() => onAction(action)}>{changeAction[action]}</Button>)}
     </footer>}
   </div>;
 }

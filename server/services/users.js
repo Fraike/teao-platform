@@ -212,6 +212,7 @@ export async function loginUser({ username, password, rememberLogin = false }) {
   return withUsers(async (users) => {
     const user = users.find((u) => u.username === username);
     if (!user) return { error: "用户名或密码错误" };
+    if (user.status === "disabled") return { error: "账号已停用，请联系管理员" };
     if (user.status !== "active") return { error: "账号尚未通过审核，请联系管理员" };
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return { error: "用户名或密码错误" };
@@ -451,11 +452,65 @@ export async function setUserWecomUserid(id, value, employeeUpdate) {
   });
 }
 
+function persistDeactivation(users, user, actorId, source) {
+  const alreadyDisabled = user.status === "disabled";
+  if (!alreadyDisabled) {
+    user.status = "disabled";
+    user.passwordVersion = (user.passwordVersion || 0) + 1;
+    user.deactivation = { by: actorId, at: new Date().toISOString(), source };
+    const temporary = `${USERS_FILE}.${crypto.randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(temporary, JSON.stringify({ users }, null, 2), { flag: "wx", mode: 0o600 });
+      fs.renameSync(temporary, USERS_FILE);
+    } finally {
+      fs.rmSync(temporary, { force: true });
+    }
+  }
+  return { ok: true, accountStatus: "disabled", alreadyDisabled };
+}
+
+export function disableUser(actorId, targetId) {
+  return userMutex.run(() => {
+    const users = readUsersUnsafe({ strict: true });
+    const actor = users.find(row => row.id === actorId);
+    if (actor?.role !== "admin" || actor.status !== "active") return { error: "仅有效管理员可以停用账号", status: 403 };
+    if (actorId === targetId) return { error: "不能停用当前登录的管理员账号", status: 403 };
+    const target = users.find(row => row.id === targetId);
+    if (!target) return { error: "用户不存在", status: 404 };
+    if (target.role === "admin" && target.status === "active" &&
+      !users.some(row => row.id !== targetId && row.role === "admin" && row.status === "active")) {
+      return { error: "不能停用最后一个有效管理员", status: 403 };
+    }
+    return persistDeactivation(users, target, actorId, "manual");
+  });
+}
+
+export function disableEmployeeAccount(actorId, resolveAccount, recordResignation) {
+  return userMutex.run(() => {
+    const users = readUsersUnsafe({ strict: true });
+    const actor = users.find(row => row.id === actorId && row.status === "active");
+    if (!actor || (actor.role !== "admin" && !actor.permissions.includes("hr"))) {
+      return { error: "没有办理离职的权限", status: 403 };
+    }
+    const target = resolveAccount(users);
+    if (target?.role === "admin" && target.status !== "disabled") {
+      return { error: "该员工关联管理员账号，请先由另一位有效管理员在用户管理中停用", status: 409 };
+    }
+    const deactivation = target ? persistDeactivation(users, target, actorId, "resignation") : null;
+    try {
+      return { ...recordResignation(), accountStatus: deactivation?.accountStatus ?? "not_registered" };
+    } catch {
+      return { error: target ? "平台账号已停用，离职资料保存失败，请重试确认离职" : "离职资料保存失败，请重试确认离职", status: 500 };
+    }
+  });
+}
+
 export async function approveUser(id, wecomUserid) {
   return withUsers(async (users) => {
     const idx = users.findIndex((u) => u.id === id);
     if (idx < 0) return { error: "用户不存在" };
     if (users[idx].role === "admin") return { error: "不能审核管理员" };
+    if (users[idx].status === "disabled") return { error: "账号已停用" };
     if (wecomUserid !== undefined) {
       if (users[idx].status !== 'pending') return { error: '该账号已处理，请刷新后查看' };
       const error = validateWecomBinding(users, id, wecomUserid);
@@ -472,6 +527,7 @@ export async function rejectUser(id) {
     const idx = users.findIndex((u) => u.id === id);
     if (idx < 0) return { error: "用户不存在" };
     if (users[idx].role === "admin") return { error: "不能驳回管理员" };
+    if (users[idx].status === "disabled") return { error: "账号已停用" };
     users.splice(idx, 1);
     return { ok: true };
   });

@@ -182,6 +182,28 @@ export function createOrganizationStore(db: Database.Database, readEmployees: ()
     };
   }
 
+  function resignationAccount(employee: Staff, roster: Staff[], accounts: Account[]) {
+    const identifier = (row: Staff) => normalize(row.employeeNo).toUpperCase();
+    const employeeNo = identifier(employee);
+    const name = normalize(employee.name);
+    const associations = links();
+    const confirmed = employeeNo ? associations.find(row => row.employeeNo === employeeNo) : undefined;
+    if (confirmed) {
+      const account = accounts.find(row => row.id === confirmed.userId);
+      if (confirmed.name !== name || !account || roster.filter(row => identifier(row) === employeeNo).length !== 1) {
+        fail(409, '员工账号关联有冲突，请先在组织架构中核对');
+      }
+      return account;
+    }
+    const matches = name ? accounts.filter(row => normalize(row.name) === name) : [];
+    if (!matches.length) return;
+    if (matches.length !== 1 || roster.filter(row => normalize(row.name) === name).length !== 1 ||
+      associations.some(row => row.userId === matches[0].id)) {
+      fail(409, '无法唯一确认员工的平台账号，请先在组织架构中核对并关联');
+    }
+    return matches[0];
+  }
+
   function reconcile(): OrganizationReconciliation[] {
     const state = snapshot();
     const employeeNames = state.staffNames;
@@ -225,7 +247,7 @@ export function createOrganizationStore(db: Database.Database, readEmployees: ()
   }
 
   return {
-    view, departments, link, reconcile, bindings, routingConfig, confirmedLinks: links, commitEmployeeEdit,
+    view, departments, link, reconcile, bindings, routingConfig, confirmedLinks: links, commitEmployeeEdit, resignationAccount,
     employeeAccount: (id: string) => {
       const state = snapshot();
       const employee = state.active.find(row => row.id === id);

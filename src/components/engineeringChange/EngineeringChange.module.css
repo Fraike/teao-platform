@@ -506,3 +506,35 @@
 .scrapToggle {
   align-self: end;
 }
+
+.materialOption {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.materialName {
+  min-width: 0;
+}
+
+.materialOption .materialWarehouse {
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+}
+
+.materialPicker {
+  width: 100%;
+}
+
+.materialResult > .materialOption {
+  display: flex;
+}
+
+.materialPicker :global(.ant-select-selection-item-content) {
+  white-space: normal;
+}

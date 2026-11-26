@@ -2,7 +2,7 @@ import {
   listEmployees, getEmployee, createEmployee,
   updateEmployee, resignEmployee, getContractReminders, replaceEmployees,
 } from "../services/employees.js";
-import { setUserWecomUserid } from "../services/users.js";
+import { disableEmployeeAccount, setUserWecomUserid } from "../services/users.js";
 import { organizationStore } from "./organization.ts";
 import { jwtAuth, requirePermission, requireAnyPermission } from "../middleware/jwt-auth.js";
 
@@ -81,8 +81,16 @@ export function registerEmployeeRoutes(app) {
   });
 
   app.delete("/api/employees/:id", jwtAuth, hrAuth, async (req, res) => {
-    const emp = await resignEmployee(req.params.id);
-    if (!emp) return res.status(404).json({ error: "员工不存在" });
-    res.json(emp);
+    try {
+      const organization = organizationStore();
+      const emp = await resignEmployee(req.params.id, (employee, roster, save) =>
+        disableEmployeeAccount(req.user.id, users => organization.resignationAccount(employee, roster, users), save));
+      if (!emp) return res.status(404).json({ error: "员工不存在" });
+      if (emp.error) return res.status(emp.status).json({ error: emp.error });
+      res.json(emp);
+    } catch (error) {
+      const status = error.status === 409 ? 409 : 500;
+      res.status(status).json({ error: status === 409 ? error.message : "确认离职失败，请稍后重试" });
+    }
   });
 }

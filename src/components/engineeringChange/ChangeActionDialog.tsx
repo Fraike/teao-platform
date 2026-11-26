@@ -123,6 +123,8 @@ export function ChangeActionDialog({ action, detail, busy, error, onClose, onSub
         </Form.Item>
       </>}
       {action === 'discard' && <Alert type="warning" showIcon title="放弃后不能继续编辑，本单原有审批和操作记录会保留。" />}
+      {action === 'withdraw' && <Alert type="warning" showIcon title="确认撤回这笔申请？"
+        description="撤回后单据回到草稿，当前 PMC 待办将取消。你可以修改后重新提交，也可以放弃草稿。" />}
       {action === 'confirm' && <Alert type="info" showIcon title="请核对报废凭证、实际数量和适用批次。确认后结案。" />}
       {(legacyProof || combined) && <div className={styles.evidenceGrid}>
         <ChangeEvidenceInput name="verificationPhoto" label="报废现场照片" required={needsEvidence} photoOnly />

@@ -42,6 +42,39 @@ function assess(act, quantity, stock = '10', semi = '3', wip = '2') {
   return act(pmc, 'assess', { materials: [engineeringMaterial], note: '现场确认', lines: [{ materialId: 'm1', warehouseScope: '半成品仓', warehouse: '一仓', batch: 'A', stock, semi, wip, scrap: quantity, sourceKind: '现场盘点', source: '实点', checkedAt: '2026-11-24T01:00:00.000Z', disposition: '按原用途继续使用' }] });
 }
 
+test('withdrawal invalidates the PMC task and a new submission creates a new generation', () => {
+  const { store, act, current } = fixture();
+  const original = current();
+  const notification = store.claimMessage();
+  assert.equal(notification.userId, pmc.id);
+  assert.throws(() => act(admin, 'withdraw'), { status: 403 });
+  const draft = act(eng, 'withdraw');
+  assert.equal(draft.status, 'draft');
+  assert.equal(draft.number, original.number);
+  assert.equal(draft.history.at(-1).action, 'withdraw');
+  assert.equal(store.pending(pmc).total, 0);
+  assert.equal(store.messageCurrent(notification), false);
+  assert.throws(() => store.act(pmc, draft.id, { action: 'assess', version: original.version }), { status: 409 });
+  act(eng, 'save', { draft: { ...draft.draft, content: '修改变更说明' }, uploads: [proof.verificationPhoto] });
+  act(eng, 'submit');
+  assert.equal(store.pending(pmc).total, 1);
+  assert.equal(store.messageCurrent(notification), false);
+  assert.equal(store.messageCurrent(store.claimMessage()), true);
+  const file = current().draft.attachments[0];
+  const withdrawn = act(eng, 'withdraw');
+  assert.equal(withdrawn.draft.attachments[0].id, file.id);
+  assert.equal(store.attachment(eng, withdrawn.id, file.id).bytes.toString('base64'), proof.verificationPhoto.base64);
+  const beforeReview = act(eng, 'submit');
+  assess(act, '0');
+  assert.throws(() => store.act(eng, beforeReview.id, { action: 'withdraw', version: beforeReview.version }), { status: 409 });
+  assert.throws(() => act(eng, 'withdraw'), { status: 403 });
+  assert.equal(act(qa, 'return', { target: 'pmc', note: '确认剩余用量' }).status, 'assessment');
+  assert.throws(() => act(eng, 'withdraw'), { status: 403 });
+  assert.equal(act(pmc, 'return', { target: 'engineering', note: '补充工艺信息' }).status, 'draft');
+  act(eng, 'submit');
+  assert.equal(act(eng, 'withdraw').status, 'draft');
+});
+
 test('all departments must approve before no-scrap closure', () => {
   const { store, act, current } = fixture();
   assert.throws(() => store.get(wh, current().id), { status: 404 });

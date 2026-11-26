@@ -3,7 +3,7 @@ export interface User {
   name: string;
   username: string;
   role: "admin" | "user";
-  status: "active" | "pending";
+  status: "active" | "pending" | "disabled";
   permissions: string[];
   wecomUserid?: string;
   createdAt?: string;
